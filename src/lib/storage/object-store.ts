@@ -13,8 +13,8 @@
 //   - objects MUST be private: nothing here is meant to be reachable by a public URL. The
 //     app serves them through its own routes only (see docs/storage.md, "What is public").
 //
-// Nothing in this file talks to the network. See docs/storage.md for why no vendor backend
-// ships yet and what the 40-line adapter for Vercel Blob looks like.
+// Nothing in this file talks to the network. The Vercel Blob backend is blob-object-store.ts;
+// docs/storage.md says how to switch it on.
 
 export interface StoredObject {
   bytes: Buffer;

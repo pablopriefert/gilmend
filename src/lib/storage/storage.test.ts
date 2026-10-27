@@ -46,9 +46,16 @@ describe("which storage the app runs on", () => {
     expect(sharedObjects({ DAMAGE_DESK_STORAGE: " File " })).toBeNull();
   });
 
+  it("picks Vercel Blob for DAMAGE_DESK_STORAGE=blob, once per process", () => {
+    const store = sharedObjects({ DAMAGE_DESK_STORAGE: "blob" });
+    expect(store?.name).toBe("blob");
+    expect(store?.supportsConditionalWrites).toBe(true);
+    expect(sharedObjects({ DAMAGE_DESK_STORAGE: " Blob " })).toBe(store);
+  });
+
   it("fails loudly for a backend this build does not have, instead of silently keeping files", () => {
-    expect(() => sharedObjects({ DAMAGE_DESK_STORAGE: "blob" })).toThrow(/Only "file" is available/);
-    expect(() => sharedObjects({ DAMAGE_DESK_STORAGE: "blob" })).toThrow(/docs\/storage\.md/);
+    expect(() => sharedObjects({ DAMAGE_DESK_STORAGE: "s3" })).toThrow(/Unknown DAMAGE_DESK_STORAGE "s3"/);
+    expect(() => sharedObjects({ DAMAGE_DESK_STORAGE: "s3" })).toThrow(/docs\/storage\.md/);
   });
 
   it("can be overridden by a test, and goes back to the environment", () => {

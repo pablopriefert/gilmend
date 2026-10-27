@@ -12,7 +12,7 @@ Two things address it:
 1. **The showcase** (`data/showcase/`, committed): six real Muse Spark 1.3 + SAM 3.1 runs recorded
    on 27 Oct 2026, always present on every instance. This is what a judge sees first, and it never
    depends on temporary storage. See `data/showcase/README.md`.
-2. **A storage seam** for the cases people file themselves: `ObjectStore`
+2. **A shared store** for the cases people file themselves: `ObjectStore`
    (`src/lib/storage/object-store.ts`). With nothing configured the app runs exactly as before, on
    local files. A shared backend is one adapter.
 
@@ -21,7 +21,7 @@ Two things address it:
 | Piece | File | Role |
 |---|---|---|
 | `ObjectStore` | `src/lib/storage/object-store.ts` | Bytes in, bytes out, safe keys, optional conditional write |
-| Selection by environment | `src/lib/storage/index.ts` | `DAMAGE_DESK_STORAGE` unset or `file`: local files. Any other value: an error, never a silent fallback |
+| Selection by environment | `src/lib/storage/index.ts` | `DAMAGE_DESK_STORAGE` unset or `file`: local files; `blob`: Vercel Blob. Any other value: an error, never a silent fallback |
 | Cases on an object store | `src/lib/store/object-case-store.ts` | One JSON object per case under `cases/` |
 | Files on an object store | `src/lib/storage/runtime-files.ts` | Local disk stays the working copy; each file is copied out after it is written and copied back when another instance asks for it |
 | Showcase under any store | `src/lib/store/layered-store.ts` | Recorded runs are listed with the stored cases; the first change to one stores a copy |
@@ -30,88 +30,24 @@ Two things address it:
 `src/app/api/shared-storage.test.ts` runs the real routes against that fake: a report filed on one
 instance, then the case, its photo and its claim PDF opened on a second instance with an empty disk.
 
-## Why no vendor backend ships yet (Vercel Blob)
+## Vercel Blob (`DAMAGE_DESK_STORAGE=blob`)
 
-The plan was Vercel Blob through its REST API with `fetch`, no dependency. Checked on 27 Oct 2026:
+`src/lib/storage/blob-object-store.ts` implements the store with the official SDK, `@vercel/blob`
+pinned to 2.8.1 (published 6 Oct 2026, so it passes the 14-day dependency rule; installed with
+`--before=2026-10-13` so its own dependencies do too). The raw REST protocol was not used: Vercel
+documents writes and listing only through the SDK (https://vercel.com/docs/vercel-blob/using-blob-sdk),
+and the SDK source calls its raw commands internal.
 
-| Operation | Documented as plain HTTP? | Source |
-|---|---|---|
-| Read a private blob | **Yes**: `GET https://<store-id>.private.blob.vercel-storage.com/<pathname>` with `Authorization: Bearer <token>` | https://vercel.com/docs/vercel-blob/private-storage ("Accessing without the SDK") |
-| Write, overwrite, conditional write | **No.** Only through the SDK (`put`) or a presigned URL, and a presigned URL is made by `issueSignedToken` + `presignUrl` | https://vercel.com/docs/vercel-blob/using-blob-sdk, https://vercel.com/docs/vercel-blob/vercel-signed-urls |
-| List by prefix | **No.** Only `list()` in the SDK | https://vercel.com/docs/vercel-blob/using-blob-sdk |
+To switch it on for the deployment:
 
-The wire protocol can be read in the SDK source: `PUT https://vercel.com/api/blob/?pathname=...` with
-`x-api-version: 13`, `x-vercel-blob-store-id`, `x-vercel-blob-access`, `x-allow-overwrite`, `x-if-match`
-headers, the store id parsed out of the token (`https://raw.githubusercontent.com/vercel/storage/main/packages/blob/src/api.ts`,
-`.../helpers.ts`, `.../put-helpers.ts`, `.../put.ts`, all under `packages/blob/src/`). `helpers.ts` calls its raw commands "not meant to be used
-directly", and `api.ts` says `x-api-version` lets the server change its behaviour, such as the response format. Calling it
-from `fetch` would mean copying an internal, versioned protocol that the docs do not promise, against a
-service we cannot try without creating a store. A wrong guess would break every request of the demo
-the judges open, so the adapter is not written against it.
-
-What would be safe, and what it needs: the official SDK `@vercel/blob` (documented, private storage
-needs version 2.3 or later). That is **a new dependency**, so it is left as a decision for the
-project owner (versions are pinned exactly in `package.json`; see the 14-day rule in `next.config.ts`).
-Once it is installed:
-
-1. Create the store **private** (the access mode cannot be changed afterwards):
-   `vercel blob create-store damage-desk --access private --yes` from the linked project. Vercel then
-   adds `BLOB_STORE_ID` and an OIDC token to the project; `BLOB_READ_WRITE_TOKEN` is only for code
-   running outside Vercel.
-2. Add `src/lib/storage/blob-object-store.ts`:
-
-   ```ts
-   import { BlobPreconditionFailedError, get, list, put } from "@vercel/blob";
-   import { assertSafeObjectKey, PreconditionFailedError, type ObjectStore } from "./object-store";
-
-   export function createBlobObjectStore(): ObjectStore {
-     return {
-       name: "blob",
-       supportsConditionalWrites: true,
-       async get(key) {
-         // useCache:false = read the latest write, not the CDN copy (up to 60 s stale after an overwrite).
-         const result = await get(assertSafeObjectKey(key), { access: "private", useCache: false });
-         if (!result || result.statusCode !== 200) return null;
-         return {
-           bytes: Buffer.from(await new Response(result.stream).arrayBuffer()),
-           contentType: result.blob.contentType,
-           etag: result.blob.etag,
-         };
-       },
-       async put(key, bytes, { contentType, ifMatch }) {
-         try {
-           const blob = await put(assertSafeObjectKey(key), bytes, {
-             access: "private",
-             allowOverwrite: true,
-             addRandomSuffix: false,
-             contentType,
-             ...(ifMatch ? { ifMatch } : {}),
-           });
-           return { etag: blob.etag };
-         } catch (error) {
-           if (error instanceof BlobPreconditionFailedError) throw new PreconditionFailedError(key);
-           throw error;
-         }
-       },
-       async list(prefix) {
-         const keys: string[] = [];
-         let cursor: string | undefined;
-         do {
-           const page = await list({ prefix, cursor, limit: 1000 });
-           keys.push(...page.blobs.map((blob) => blob.pathname));
-           cursor = page.hasMore ? page.cursor : undefined;
-         } while (cursor);
-         return keys;
-       },
-     };
-   }
-   ```
-
-   This snippet follows the SDK reference and has **not been run** against a real store. Check the
-   return shapes of `get` and `list` against https://vercel.com/docs/vercel-blob/using-blob-sdk first.
-3. In `src/lib/storage/index.ts` add `case "blob": return (blobStore ??= createBlobObjectStore());`
-   (and a module-level `let blobStore`), then set `DAMAGE_DESK_STORAGE=blob` in Vercel.
-4. Run the two-instance test against the real store once before relying on it.
+1. Create the store **private** (the access mode cannot be changed afterwards), from the linked
+   project: `vercel blob create-store damage-desk --access private --yes`. Vercel adds
+   `BLOB_STORE_ID` and an OIDC token to the project; `BLOB_READ_WRITE_TOKEN` is only needed for
+   code running outside Vercel.
+2. Set `DAMAGE_DESK_STORAGE=blob` in the Vercel project.
+3. Before relying on it, file one report on the deployed URL and open its case, photo and PDF from
+   a second browser (a different instance may answer): the adapter is tested against a fake SDK
+   only (`blob-object-store.test.ts`) and has **not run against a real store yet**.
 
 ## Guarantees, per backend
 

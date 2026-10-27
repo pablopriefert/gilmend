@@ -198,7 +198,9 @@ describe("VoiceRecorder", () => {
     expect(onBusyChange).toHaveBeenLastCalledWith(false);
     start();
     await screen.findByRole("button", { name: "Stop recording" });
-    expect(onBusyChange).toHaveBeenLastCalledWith(true);
+    // The busy signal is sent from an effect, which can land a tick after the button under a
+    // loaded test run (seen failing once in the full suite on 27 Oct 2026).
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(true));
     stop();
     await screen.findByRole("button", { name: "Record a voice message" });
     await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
