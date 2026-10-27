@@ -69,13 +69,36 @@ describe("Insights: per carrier", () => {
     expect(within(rows[1]).getByText("€120")).toBeInTheDocument();
     expect(within(rows[2]).getByText("€34.50")).toBeInTheDocument();
     expect(within(rows[0]).getByText("Claim window: 3 days after delivery")).toBeInTheDocument();
-    expect(within(rows[2]).getByText("Claim window: 365 days after the order")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("Claim window: 365 days after shipment (counted from the order date, the safe side)")).toBeInTheDocument();
     expect(screen.getByTestId("insights-total")).toHaveTextContent("€179.50");
   });
 
   it("says 'No open claim' for a carrier with nothing, without a zero euro that looks like a result", () => {
     render(section([claimCase("mr", "mondial_relay", 25, 30)]));
     expect(within(screen.getByTestId("carrier-colissimo")).getByText("No open claim")).toBeInTheDocument();
+  });
+
+  it("sets 'No open claim' in the muted ink: gold is for money", () => {
+    render(section([claimCase("mr", "mondial_relay", 25, 30)]));
+    const none = within(screen.getByTestId("carrier-colissimo")).getByText("No open claim");
+    expect(none).toHaveClass("text-muted");
+    expect(none).not.toHaveClass("text-gold-ink");
+  });
+
+  it("says in one sentence that no claim is open, instead of three empty gold tracks and a 0 EUR total", () => {
+    // Recorded runs only, with the switch turned off: the live view has no case at all.
+    render(section(recorded()));
+    fireEvent.click(screen.getByRole("switch", { name: "Include recorded runs" }));
+    expect(screen.getByTestId("carriers-empty")).toHaveTextContent("No claim open.");
+    expect(screen.queryByTestId("insights-total")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("carrier-mondial_relay")).not.toBeInTheDocument();
+  });
+
+  it("says its scope: every open claim of any month, while the counter above counts this month", () => {
+    render(section(live()));
+    expect(screen.getByRole("region", { name: "Money still claimable, by carrier" })).toHaveTextContent(
+      "every open claim of any month (the counter above counts this month only)",
+    );
   });
 
   it("draws the money bars in gold and hides them from assistive technology: the rows say it all", () => {
@@ -134,6 +157,29 @@ describe("Insights: deadline timeline", () => {
     expect(chart).toHaveAttribute("aria-hidden", "true");
     expect(chart).toHaveTextContent("Now");
     expect(chart).toHaveTextContent("14 d");
+  });
+
+  it("labels day 0 'Recording' when every event is a recorded run, and never paints one as urgent", () => {
+    render(section(recorded()));
+    const chart = screen.getByTestId("timeline-chart");
+    expect(chart).toHaveTextContent("Recording");
+    expect(chart).not.toHaveTextContent("Now");
+    const event = screen.getByTestId("deadline-rec-claim");
+    // 52 h after its recording would be "under 3 days" for a live case.
+    expect(event).toHaveTextContent("2 d 4 h after the recording");
+    expect(event).not.toHaveTextContent("under 3 days");
+    expect(event.querySelector(".text-warning")).toBeNull();
+    expect(event.querySelector(".border-warning")).toBeNull();
+    expect(screen.queryByRole("list", { name: "Legend" })).not.toHaveTextContent("from now");
+  });
+
+  it("keeps 'Now' and the urgent styling for live events when recorded runs are mixed in, and the recorded ones stay hollow and calm", () => {
+    render(section([...live(), ...recorded()]));
+    fireEvent.click(screen.getByRole("switch", { name: "Include recorded runs" }));
+    expect(screen.getByTestId("timeline-chart")).toHaveTextContent("Now");
+    expect(screen.getByTestId("deadline-mr-claim")).toHaveTextContent("under 3 days");
+    expect(screen.getByTestId("deadline-rec-claim")).not.toHaveTextContent("under 3 days");
+    expect(screen.getByRole("list", { name: "Legend" })).toHaveTextContent("Under 3 days from now");
   });
 
   it("says when nothing closes in the next 14 days, and points at the claims that close later", () => {

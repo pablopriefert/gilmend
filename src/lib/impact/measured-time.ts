@@ -1,7 +1,7 @@
 import type { CaseRecord } from "../types";
 
 // How long the agent really took, read from the recorded runs (data/showcase/, six real runs of
-// Muse Spark 1.3 + SAM 3.1 made on 27 Oct 2026). The ROI page uses this for the "with Gilmend"
+// Muse Spark 1.3 made on 27 Oct 2026, five of them with a SAM 3.1 outline). The ROI page uses this for the "with Gilmend"
 // time per case, so that number is a measurement, not a promise: it is the span between the
 // first and the last step of each run's trace.
 //
@@ -18,6 +18,12 @@ export interface MeasuredRun {
   seconds: number;
   /** What the agent decided in that run (nothing to claim runs are shorter). */
   decision: string | null;
+  /**
+   * Whether a SAM 3.1 outline was drawn in this run. A run that stops at "ask for better photos"
+   * never calls SAM, so its time does not include one (27 Oct 2026 review: the page said all six
+   * runs included the outline).
+   */
+  withSam: boolean;
 }
 
 export interface MeasuredTime {
@@ -57,6 +63,7 @@ export function measureAgentTime(cases: CaseRecord[]): MeasuredTime | null {
       orderId: c.order?.id ?? c.report.orderNumber,
       seconds,
       decision: c.decision?.decision ?? null,
+      withSam: c.evidence.some((e) => e.method === "sam-3.1"),
     });
     days.push(c.recorded.recordedOn);
   }

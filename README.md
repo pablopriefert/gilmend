@@ -159,12 +159,14 @@ and change.
 
 **Insights** (Cases page, under the header band), computed by `src/lib/impact/insights.ts`:
 
-- *Money still claimable, by carrier*: the maximum compensation of every claim still open, per
-  carrier, with the carrier's window (3 days after delivery for Mondial Relay and Chronopost, the
-  ones that expire unnoticed; 365 days after the order for Colissimo).
+- *Money still claimable, by carrier*: the maximum compensation of every claim still open (any
+  month: the counter above counts this month only), per carrier, with the carrier's window (3 days
+  after delivery for Mondial Relay and Chronopost, the ones that expire unnoticed; 365 days after
+  shipment for Colissimo, counted from the order date, the safe side).
 - *Deadlines in the next 14 days*: one strip per carrier, plus a list with the same events as text,
-  soonest first. It shows the claim deadline and, when it closes at another moment, the reserve
-  window (Colissimo's 72 h window only warns and is marked "prudential").
+  soonest first. Day 0 is "Now" for live cases and "Recording" when only recorded runs are drawn;
+  a recorded run is never painted urgent, since its distance counts from its recording day. It
+  shows the claim deadline and, when it closes at another moment, the reserve window (Colissimo's 72 h window only warns and is marked "prudential").
 - *What the agent decided*: reship, refund, ask for photos, no action, and how many cases were
   handed to a human.
 - Recorded runs are left out of these numbers, like in the header counter, unless the **Include
@@ -180,8 +182,8 @@ filed late by hand loses against one filed with Gilmend, and the time per case.
 | What | Where it comes from |
 |---|---|
 | Carrier amounts and deadlines | The app's own `computeClaim` and `data/carriers.json`, run on a synthetic order built from your inputs. The result is a ceiling, like every amount in the app, not a promise of payment. |
-| Agent time per case | **Measured** on the six recorded runs (first to last step of each trace): 27 s on average, from 16 s to 35 s. Six scripted scenarios with generated photos, one run each: a measure, not a benchmark. |
-| Damage rate, share of damaged parcels that qualify, when the customer writes in, when a claim is filed by hand and with Gilmend, minutes per case by hand, your review time | **Assumptions**, labelled as such next to each field, with a default that is an example and not a statistic. |
+| Agent time per case | **Measured** on the six recorded runs (first to last step of each trace): 27 s on average, from 16 s to 35 s; five of the six drew a SAM 3.1 outline (the blurry-photo run stops at "ask for better photos" and calls no SAM), and the page counts them. Six scripted scenarios with generated photos, one run each: a measure, not a benchmark. |
+| Damage rate, share of damaged parcels that qualify, share of Mondial Relay parcels refused at delivery (it pays nothing for an accepted one; we know of no rate, the default is 20%), when the customer writes in, when a claim is filed by hand and with Gilmend, minutes per case by hand, your review time | **Assumptions**, labelled as such next to each field, with a default that is an example and not a statistic. |
 | Orders, item value, weight, carrier mix | Your figures (the defaults are examples). |
 
 What the public record says is on the page and not used as an input: a DS Smith and Opinium survey
@@ -486,7 +488,7 @@ Storage, the Blob store).
 - Colissimo pays on the purchase value of the content; the order only carries the sale price, so the
   computed maximum may be higher than the real indemnity.
 - **The Impact numbers are an estimate.** The calculator is only as good as the merchant's inputs: the
-  damage rate, the share of parcels that qualify and the delays are assumptions, not measures, and
+  damage rate, the share of parcels that qualify, the share of Mondial Relay parcels refused at delivery and the delays are assumptions, not measures, and
   its amounts are ceilings under the public standard terms. The agent time is six runs. The
   Insights page was checked in a browser preview of its components (desktop and 375 px wide); the
   built Next.js page was not opened.

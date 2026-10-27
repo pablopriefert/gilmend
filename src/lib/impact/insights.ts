@@ -110,12 +110,25 @@ function toCents(eur: number): number {
   return Math.round(eur * 100);
 }
 
-/** "3 days after delivery" / "365 days after the order": what the rules say, not a copy of it. */
+/**
+ * "3 days after delivery" / "365 days after shipment (counted from the order date, the safe
+ * side)": what the rules say, not a copy of it. The carrier's own wording for Colissimo is after
+ * shipment (27 Oct 2026 review: a label saying "after the order" misquoted the terms); the app
+ * only counts from the order date because the order has no pick-up date, which closes the window
+ * earlier than the real one.
+ */
 export function windowLabel(carrier: CarrierId): string {
+  const short = windowLabelShort(carrier);
+  return getCarrierRulesDetailed(carrier).claimDeadlineFrom === "delivery"
+    ? short
+    : `${short} (counted from the order date, the safe side)`;
+}
+
+/** The carrier's own wording, without the note on how the app counts it ("365 days after shipment"). */
+export function windowLabelShort(carrier: CarrierId): string {
   const rules = getCarrierRulesDetailed(carrier);
   const days = rules.claimDeadlineDays;
-  const from = rules.claimDeadlineFrom === "delivery" ? "delivery" : "the order";
-  return `${days} ${days === 1 ? "day" : "days"} after ${from}`;
+  return `${days} ${days === 1 ? "day" : "days"} after ${rules.claimDeadlineFrom === "delivery" ? "delivery" : "shipment"}`;
 }
 
 export function reserveLabel(carrier: CarrierId): string {

@@ -38,7 +38,8 @@ describe("Impact page", () => {
     render(await ImpactPage());
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("What a damaged parcel costs, and what a deadline takes");
     const summary = screen.getByTestId("measured-summary").textContent ?? "";
-    expect(summary).toMatch(/over \d+ real runs of Muse Spark 1\.3 and SAM 3\.1 recorded on 27 Oct 2026/);
+    // The blurry-photo run stops at "ask for better photos" and never calls SAM: the page counts it.
+    expect(summary).toMatch(/over 6 real runs of Muse Spark 1\.3, 5 of them with a SAM 3\.1 outline, recorded on 27 Oct 2026/);
     // The time in the calculator is that same mean, to the second.
     const mean = Number(/Mean (\d+(?:\.\d)?) s/.exec(summary)?.[1]);
     expect(mean).toBeGreaterThan(5);

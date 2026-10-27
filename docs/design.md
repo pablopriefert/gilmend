@@ -60,12 +60,19 @@ No chart library: bars and strips are HTML/CSS, drawn from the same numbers the 
    with every window, its date and its countdown). Nothing exists only in a picture.
 3. **Shape, ring and words before colour.** The timeline marks a claim deadline with a circle and a
    reserve window with a diamond, a recorded run with a hollow ring, and anything closing within 3
-   days with the `warning` token plus a clock icon and the words "under 3 days".
+   days with the `warning` token plus a clock icon and the words "under 3 days". Urgency is about
+   the clock on the wall: a recorded run, counted from its own recording day, never wears it (day 0
+   reads "Recording" when only recorded runs are drawn, "Now" otherwise).
 4. **Honest scope in the chart.** Recorded runs are counted only when the switch says so, are
    labelled in the list and the legend, and are read as of their recording day. A chart with nothing
-   to show says so in a sentence instead of drawing empty bars.
+   to show says so in a sentence instead of drawing empty bars (`DecisionMix`: "No decision yet",
+   `CarrierBreakdown`: "No claim open"). A panel names its scope when a figure nearby counts
+   something else (every open claim of any month, against the counter's current month).
 5. **Estimates say they are estimates.** On /impact every input carries a badge: *Your figure* (an
    example the merchant replaces) or *Assumption*. A number nobody measured never wears a source's
    authority; the one measured number (the agent's time) comes from the recorded runs and links
-   back to them.
+   back to them (each run in the table is a link to its case, with whether it drew a SAM outline).
+   An assumption sits in the form with its badge and in the "Assumed" list, never hard-coded in the
+   maths (the share of Mondial Relay parcels refused at delivery was, once). A negative result is
+   said in words ("Less recovered…", "Extra time per case…"), not printed with a minus sign.
 

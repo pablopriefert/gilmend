@@ -13,10 +13,22 @@ export const INPUT_CLASS =
   "hover:border-border-strong focus:border-ink " +
   "aria-[invalid=true]:border-danger aria-[invalid=true]:bg-danger-soft/40";
 
-/** An error line: icon + words (never colour alone), announced when it appears. */
-export function FieldError({ id, children }: { id: string; children: ReactNode }) {
+/**
+ * An error line: icon + words (never colour alone), announced when it appears. `live` is "alert"
+ * (assertive) for a form that validates on submit; a field validated on every keystroke (the ROI
+ * calculator) passes "status" so a half-typed number is not shouted at the screen reader.
+ */
+export function FieldError({
+  id,
+  children,
+  live = "alert",
+}: {
+  id: string;
+  children: ReactNode;
+  live?: "alert" | "status";
+}) {
   return (
-    <p id={id} role="alert" className="flex items-start gap-1.5 text-sm text-danger">
+    <p id={id} role={live} className="flex items-start gap-1.5 text-sm text-danger">
       <CircleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
       <span>{children}</span>
     </p>

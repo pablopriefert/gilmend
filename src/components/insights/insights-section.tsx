@@ -75,7 +75,7 @@ export function InsightsSection({
               <span
                 className={cn(
                   "absolute top-0.5 h-[18px] w-[18px] rounded-full shadow-card transition-[left,background-color] duration-150",
-                  includeRecorded ? "left-[18px] bg-white" : "left-0.5 bg-ink",
+                  includeRecorded ? "left-[18px] bg-surface" : "left-0.5 bg-ink",
                 )}
               />
             </span>

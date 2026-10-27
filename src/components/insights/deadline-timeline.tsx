@@ -4,7 +4,7 @@ import {
   CARRIER_ORDER,
   formatCountdown,
   URGENT_DAYS,
-  windowLabel,
+  windowLabelShort,
   type Insights,
   type TimelineEvent,
 } from "@/lib/impact/insights";
@@ -26,9 +26,19 @@ function position(days: number, horizonDays: number): string {
   return `calc(10px + (100% - 20px) * ${f})`;
 }
 
+/**
+ * Urgency is a statement about the clock on the wall. A recorded run sits on the axis counted from
+ * its own recording day (27 Oct 2026 review: "Mondial Relay, under 2 days" read as a live alarm
+ * when it was a snapshot), so it never wears the warning colour: its hollow ring and the words
+ * "after the recording" say what it is.
+ */
+function isUrgent(event: TimelineEvent): boolean {
+  return event.urgent && event.recordedOn === null;
+}
+
 function Glyph({ event, className }: { event: TimelineEvent; className?: string }) {
   const recorded = event.recordedOn !== null;
-  const tone = event.urgent ? "warning" : "ink";
+  const tone = isUrgent(event) ? "warning" : "ink";
   return (
     <span
       aria-hidden="true"
@@ -67,8 +77,15 @@ function LegendItem({ children, swatch }: { children: string; swatch: React.Reac
   );
 }
 
+/** The label of day 0: "Now" for live cases, "Recording" when every event is a recorded run. */
+export function axisOriginLabel(events: TimelineEvent[]): string {
+  return events.length > 0 && events.every((e) => e.recordedOn !== null) ? "Recording" : "Now";
+}
+
 export function DeadlineTimeline({ timeline }: { timeline: Insights["timeline"] }) {
   const { horizonDays, events, later } = timeline;
+  const hasLiveEvent = events.some((e) => e.recordedOn === null);
+  const hasLiveUrgent = events.some(isUrgent);
   return (
     <Panel
       id="insights-timeline"
@@ -89,13 +106,15 @@ export function DeadlineTimeline({ timeline }: { timeline: Insights["timeline"] 
                 <div key={carrier} className="grid gap-1.5 sm:grid-cols-[9.5rem_minmax(0,1fr)] sm:items-center sm:gap-4">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-ink">{CARRIER_LABEL[carrier]}</p>
-                    <p className="hidden text-xs text-muted sm:block">{windowLabel(carrier)}</p>
+                    <p className="hidden text-xs text-muted sm:block">{windowLabelShort(carrier)}</p>
                   </div>
                   <div className="relative h-9 rounded-lg bg-surface-muted ring-1 ring-border">
-                    <div
-                      className="absolute inset-y-0 left-0 rounded-l-lg bg-warning-soft"
-                      style={{ width: `calc(10px + (100% - 20px) * ${URGENT_DAYS / horizonDays})` }}
-                    />
+                    {hasLiveEvent && (
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-l-lg bg-warning-soft"
+                        style={{ width: `calc(10px + (100% - 20px) * ${URGENT_DAYS / horizonDays})` }}
+                      />
+                    )}
                     {TICKS.filter((t) => t > 0 && t < horizonDays).map((t) => (
                       <span
                         key={t}
@@ -125,7 +144,7 @@ export function DeadlineTimeline({ timeline }: { timeline: Insights["timeline"] 
                     className={cn("tabular absolute top-0 whitespace-nowrap", t === horizonDays ? "-translate-x-full" : "-translate-x-1/2")}
                     style={{ left: position(t, horizonDays) }}
                   >
-                    {t === 0 ? "Now" : `${t} d`}
+                    {t === 0 ? axisOriginLabel(events) : `${t} d`}
                   </span>
                 ))}
               </div>
@@ -142,9 +161,11 @@ export function DeadlineTimeline({ timeline }: { timeline: Insights["timeline"] 
             <LegendItem swatch={<span aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-ink bg-surface" />}>
               Recorded run (counted from its recording day)
             </LegendItem>
-            <LegendItem swatch={<span aria-hidden="true" className="h-3 w-3 rounded-full bg-warning" />}>
-              {`Under ${URGENT_DAYS} days`}
-            </LegendItem>
+            {hasLiveUrgent && (
+              <LegendItem swatch={<span aria-hidden="true" className="h-3 w-3 rounded-full bg-warning" />}>
+                {`Under ${URGENT_DAYS} days from now`}
+              </LegendItem>
+            )}
           </ul>
 
           <ol aria-label={`Windows closing in the next ${horizonDays} days, soonest first`} className="flex flex-col divide-y divide-border">
@@ -164,10 +185,10 @@ export function DeadlineTimeline({ timeline }: { timeline: Insights["timeline"] 
                   </p>
                   <p className="text-sm text-ink-soft">{kindText(e)}</p>
                   <p className="tabular mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-                    <span className={cn(e.urgent && "inline-flex items-center gap-1 font-semibold text-warning")}>
-                      {e.urgent && <Clock3 aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />}
+                    <span className={cn(isUrgent(e) && "inline-flex items-center gap-1 font-semibold text-warning")}>
+                      {isUrgent(e) && <Clock3 aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2} />}
                       {when(e)}
-                      {e.urgent && `, under ${URGENT_DAYS} days`}
+                      {isUrgent(e) && `, under ${URGENT_DAYS} days`}
                     </span>
                     <span>{formatDateTime(e.at)}</span>
                     {e.recordedOn !== null && (

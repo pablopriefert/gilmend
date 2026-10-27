@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleAlert, Clock3, RotateCcw, TriangleAlert, UserRound } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { windowLabel } from "@/lib/impact/insights";
 import type { MeasuredTime } from "@/lib/impact/measured-time";
 import {
@@ -34,8 +34,7 @@ function formatCount(n: number): string {
 }
 
 function formatMinutes(n: number): string {
-  const abs = Math.abs(n);
-  return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: abs < 10 ? 1 : 0 }).format(n)} min`;
+  return `${new Intl.NumberFormat("en-GB", { maximumFractionDigits: Math.abs(n) < 10 ? 1 : 0 }).format(n)} min`;
 }
 
 function formatHours(n: number): string {
@@ -62,6 +61,22 @@ function KindBadge({ kind }: { kind: FieldMeta["kind"] }) {
   );
 }
 
+/** The value, but only once it has stopped changing for `ms`: keeps a live region from announcing every keystroke. */
+function useSettled<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return settled;
+}
+
+/** Announcements wait this long after the last keystroke. */
+const ANNOUNCE_DELAY_MS = 900;
+
+/** The id of a field's input, so the invalid-fields list can send the focus to it. */
+const fieldId = (key: FieldKey) => `roi-field-${key}`;
+
 function NumberField({
   meta,
   value,
@@ -73,7 +88,7 @@ function NumberField({
   error?: string;
   onChange: (value: string) => void;
 }) {
-  const id = useId();
+  const id = fieldId(meta.key);
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
   return (
@@ -104,7 +119,11 @@ function NumberField({
       <p id={hintId} className="text-xs leading-5 text-muted">
         {meta.hint}
       </p>
-      {error && <FieldError id={errorId}>{error}</FieldError>}
+      {error && (
+        <FieldError id={errorId} live="status">
+          {error}
+        </FieldError>
+      )}
     </div>
   );
 }
@@ -181,6 +200,8 @@ function outcomeText(c: CarrierRoi): string | null {
       return "The window closes before the claim is filed by hand";
     case "late_report":
       return "The customer reports after the window: nothing to claim";
+    case "refusal_needed":
+      return "Only a parcel refused at delivery is paid, and none is assumed refused: nothing to claim";
     default:
       return null;
   }
@@ -199,8 +220,8 @@ function CarrierTable({ result }: { result: RoiResult }) {
     >
       <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
         <caption className="sr-only">
-          Per carrier, per year: share of parcels, the maximum of one claim, what a claim filed by hand and one filed with
-          Gilmend can recover, and what a deadline takes.
+          Per carrier, per year: share of parcels, the maximum of one claim the carrier pays, what a claim filed by hand and
+          one filed with Gilmend can recover, and what a deadline takes.
         </caption>
         <thead>
           <tr className="border-b border-border text-xs uppercase tracking-wide text-muted">
@@ -224,6 +245,8 @@ function CarrierTable({ result }: { result: RoiResult }) {
                     {binding === null
                       ? `Window: ${windowLabel(c.carrier)}. The short reserve window only warns.`
                       : `Closes ${binding} h after delivery. Filed at ${Math.round(handAt)} h by hand, ${Math.round(gilmendAt)} h with Gilmend.`}
+                    {c.payableSharePct < 100 &&
+                      ` Pays only the ${formatCount(c.payableSharePct)}% of parcels refused at delivery.`}
                   </span>
                   {note && (
                     <span className="mt-1 flex items-start gap-1 text-xs font-medium leading-5 text-warning">
@@ -233,7 +256,7 @@ function CarrierTable({ result }: { result: RoiResult }) {
                   )}
                 </th>
                 <td className="tabular px-3 py-3 text-right text-ink-soft">{formatCount(c.sharePct)}%</td>
-                <td className="tabular px-3 py-3 text-right text-ink-soft">{formatEur(c.perClaimAvailableEur)}</td>
+                <td className="tabular px-3 py-3 text-right text-ink-soft">{formatEur(c.perClaimIfPaidEur)}</td>
                 <td className="tabular px-3 py-3 text-right font-semibold text-gold-ink">{formatEur(c.byHandEur)}</td>
                 <td className="tabular px-3 py-3 text-right font-semibold text-gold-ink">{formatEur(c.withGilmendEur)}</td>
                 <td className={cn("tabular py-3 pl-3 text-right", c.lostByHandEur > 0 ? "font-semibold text-ink" : "text-muted")}>
@@ -251,9 +274,11 @@ function CarrierTable({ result }: { result: RoiResult }) {
 function Results({ result, measured }: { result: RoiResult; measured: MeasuredTime | null }) {
   const { time, inputs } = result;
   const agentText = time.agentSecondsPerCase === null ? null : formatSeconds(time.agentSecondsPerCase);
+  // Like the money gain, a negative saving is said as such instead of printed with a minus sign.
+  const timeLost = time.savedMinutesPerCase < 0;
   return (
     <div className="flex flex-col gap-6">
-      <p data-testid="roi-summary" aria-live="polite" className="text-sm leading-6 text-ink-soft">
+      <p data-testid="roi-summary" className="text-sm leading-6 text-ink-soft">
         A shop with {formatCount(result.damagedPerYear)} damaged parcels a year has up to{" "}
         <strong className="tabular font-semibold text-gold-ink">{formatEur(result.availableEur)}</strong> of carrier
         compensation within reach. Filed by hand after {formatCount(inputs.manualFilingDelayDays)}{" "}
@@ -342,10 +367,20 @@ function Results({ result, measured }: { result: RoiResult; measured: MeasuredTi
                 : `Your ${formatMinutes(time.reviewMinutesPerCase)} (assumption). The agent's own time is not measured here: no recorded run was found on this server, so it is left out.`
             }
           />
-          <Stat testId="roi-time-saved" label="Saved per case" value={formatMinutes(time.savedMinutesPerCase)} />
+          <Stat
+            testId="roi-time-saved"
+            label={timeLost ? "Extra time per case with Gilmend" : "Saved per case"}
+            value={formatMinutes(Math.abs(time.savedMinutesPerCase))}
+            note={
+              timeLost
+                ? "Your review time and the agent's time add up to more than the time by hand: with these numbers Gilmend does not save time."
+                : undefined
+            }
+          />
         </dl>
         <p data-testid="roi-time-year" className="tabular mt-3 text-sm text-ink-soft">
-          {formatHours(time.savedHoursPerYear)} saved a year, over {formatCount(result.damagedPerYear)} damaged parcels.
+          {formatHours(Math.abs(time.savedHoursPerYear))} {timeLost ? "more" : "saved"} a year, over{" "}
+          {formatCount(result.damagedPerYear)} damaged parcels.
         </p>
       </div>
 
@@ -366,7 +401,8 @@ export function RoiCalculator({ measured }: { measured: MeasuredTime | null }) {
     [validation, measured],
   );
   const errors = validation.ok ? {} : validation.errors;
-  const errorCount = Object.keys(errors).length;
+  const invalidKeys = FIELDS.map((f) => f.key).filter((k) => errors[k] !== undefined);
+  const errorCount = invalidKeys.length;
   const isDefault = FIELDS.every((f) => raw[f.key] === defaultRaw()[f.key]);
 
   const shareTotal = (() => {
@@ -374,12 +410,25 @@ export function RoiCalculator({ measured }: { measured: MeasuredTime | null }) {
     return parts.every((n) => Number.isFinite(n)) ? parts.reduce((a, b) => a + b, 0) : null;
   })();
 
+  // One polite live region for the whole calculator, read once the person stops typing. The visible
+  // summary and the invalid-fields box are not live themselves: they would be re-announced on every
+  // keystroke.
+  const announcement = useSettled(
+    result
+      ? `With these numbers: up to ${formatEur(result.withGilmendEur)} a year recovered with Gilmend, up to ${formatEur(result.byHandEur)} by hand.`
+      : `${errorCount} ${errorCount === 1 ? "number is" : "numbers are"} not valid.`,
+    ANNOUNCE_DELAY_MS,
+  );
+
   function set(key: FieldKey, value: string) {
     setRaw((r) => ({ ...r, [key]: value }));
   }
 
   return (
     <div className="flex flex-col gap-8">
+      <p data-testid="roi-announcement" role="status" className="sr-only">
+        {announcement}
+      </p>
       <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)]">
         <form
           aria-label="Your numbers"
@@ -440,15 +489,29 @@ export function RoiCalculator({ measured }: { measured: MeasuredTime | null }) {
               <Results result={result} measured={measured} />
             ) : (
               <div
-                role="alert"
                 data-testid="roi-invalid"
                 className="flex items-start gap-3 rounded-xl border border-danger/40 bg-danger-soft px-4 py-3 text-danger"
               >
                 <CircleAlert aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0" strokeWidth={1.75} />
-                <p className="text-sm font-medium leading-relaxed">
-                  {errorCount === 1 ? "One number is not valid" : `${errorCount} numbers are not valid`}: fix{" "}
-                  {errorCount === 1 ? "it" : "them"} on the left to see the results.
-                </p>
+                <div className="min-w-0 text-sm leading-relaxed">
+                  <p className="font-medium">
+                    {errorCount === 1 ? "One number is not valid" : `${errorCount} numbers are not valid`}: fix{" "}
+                    {errorCount === 1 ? "it" : "them"} in the form to see the results.
+                  </p>
+                  <ul aria-label="Fields to fix" className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+                    {invalidKeys.map((key) => (
+                      <li key={key}>
+                        <button
+                          type="button"
+                          onClick={() => document.getElementById(fieldId(key))?.focus()}
+                          className="rounded font-semibold underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        >
+                          {FIELDS.find((f) => f.key === key)?.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             )}
           </div>

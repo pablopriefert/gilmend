@@ -8,6 +8,7 @@ import {
   reserveLabel,
   TIMELINE_HORIZON_DAYS,
   windowLabel,
+  windowLabelShort,
 } from "./insights";
 
 const HOUR = 3_600_000;
@@ -89,7 +90,9 @@ describe("buildInsights: carriers", () => {
   it("states each carrier's window from the rules, not from a copy", () => {
     expect(windowLabel("mondial_relay")).toBe("3 days after delivery");
     expect(windowLabel("chronopost")).toBe("3 days after delivery");
-    expect(windowLabel("colissimo")).toBe("365 days after the order");
+    expect(windowLabel("colissimo")).toBe("365 days after shipment (counted from the order date, the safe side)");
+    expect(windowLabelShort("colissimo")).toBe("365 days after shipment");
+    expect(windowLabelShort("chronopost")).toBe("3 days after delivery");
     expect(reserveLabel("mondial_relay")).toBe("72 h reserve window");
     expect(reserveLabel("colissimo")).toBe("72 h reserve window (prudential)");
     expect(CARRIER_ORDER).toHaveLength(3);

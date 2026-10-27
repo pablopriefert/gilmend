@@ -3,6 +3,7 @@ import {
   bindingWindowHours,
   claimValueEur,
   computeRoi,
+  expectedClaimValueEur,
   DEFAULT_INPUTS,
   defaultRaw,
   FIELDS,
@@ -34,6 +35,13 @@ describe("ROI fields", () => {
       expect(f.hint.length).toBeGreaterThan(10);
       expect(f.min).toBeLessThan(f.max);
     }
+  });
+
+  it("shows the Mondial Relay refusal share as an assumption, with a default well below 100% and a hint that says no rate is known", () => {
+    const f = fieldMeta("mondialRelayRefusedPct");
+    expect(f.kind).toBe("assumption");
+    expect(DEFAULT_INPUTS.mondialRelayRefusedPct).toBeLessThan(50);
+    expect(f.hint).toMatch(/no rate/);
   });
 
   it("calls the damage rate an assumption and never dresses it as a statistic", () => {
@@ -119,6 +127,22 @@ describe("claimValueEur: the real rule code on a synthetic order", () => {
     expect(claimValueEur("colissimo", i, 24, 24 * 400)).toBe(0);
   });
 
+  it("pays Mondial Relay nothing for a parcel the customer accepted: the claim is refused outright", () => {
+    expect(claimValueEur("mondial_relay", i, 24, 12, true)).toBe(25);
+    expect(claimValueEur("mondial_relay", i, 24, 12, false)).toBe(0);
+    // A carrier without that rule is not affected by it.
+    expect(claimValueEur("chronopost", i, 24, 12, false)).toBe(60);
+    expect(claimValueEur("colissimo", i, 24, 12, false)).toBe(34.5);
+  });
+
+  it("weights Mondial Relay by the share refused at delivery, and only Mondial Relay", () => {
+    expect(expectedClaimValueEur("mondial_relay", inputs({ mondialRelayRefusedPct: 20 }), 24, 12)).toBeCloseTo(5, 9);
+    expect(expectedClaimValueEur("mondial_relay", inputs({ mondialRelayRefusedPct: 100 }), 24, 12)).toBe(25);
+    expect(expectedClaimValueEur("mondial_relay", inputs({ mondialRelayRefusedPct: 0 }), 24, 12)).toBe(0);
+    expect(expectedClaimValueEur("chronopost", inputs({ mondialRelayRefusedPct: 0 }), 24, 12)).toBe(60);
+    expect(expectedClaimValueEur("colissimo", inputs({ mondialRelayRefusedPct: 0 }), 24, 12)).toBe(34.5);
+  });
+
   it("recovers nothing from a report made after the window, however fast the claim is filed", () => {
     expect(claimValueEur("mondial_relay", i, 100, 0)).toBe(0);
     expect(claimValueEur("chronopost", i, 100, 0)).toBe(0);
@@ -137,20 +161,42 @@ describe("computeRoi: the money", () => {
     expect(by.colissimo.withGilmendEur).toBe(1391.04);
     expect(by.colissimo.byHandEur).toBe(1391.04);
     expect(by.colissimo.outcome).toBe("in_time");
-    // Mondial Relay 25%: 16.8 claims x 25 EUR, lost when filed 4 days after the report.
-    expect(by.mondial_relay.withGilmendEur).toBe(420);
+    // Mondial Relay 25%: 16.8 claims, 20% of them refused at delivery (3.36) x 25 EUR; lost when
+    // filed 4 days after the report.
+    expect(by.mondial_relay.payableSharePct).toBe(20);
+    expect(by.mondial_relay.perClaimIfPaidEur).toBe(25);
+    expect(by.mondial_relay.withGilmendEur).toBe(84);
     expect(by.mondial_relay.byHandEur).toBe(0);
-    expect(by.mondial_relay.lostByHandEur).toBe(420);
+    expect(by.mondial_relay.lostByHandEur).toBe(84);
     expect(by.mondial_relay.lostWithGilmendEur).toBe(0);
     expect(by.mondial_relay.outcome).toBe("late_filing");
     // Chronopost 15%: 10.08 claims x 60 EUR.
     expect(by.chronopost.withGilmendEur).toBe(604.8);
     expect(by.chronopost.lostByHandEur).toBe(604.8);
-    expect(r.availableEur).toBe(2415.84);
-    expect(r.withGilmendEur).toBe(2415.84);
+    // 1391.04 + 84 + 604.80
+    expect(r.availableEur).toBe(2079.84);
+    expect(r.withGilmendEur).toBe(2079.84);
     expect(r.byHandEur).toBe(1391.04);
-    expect(r.lostByHandEur).toBe(1024.8);
+    expect(r.lostByHandEur).toBe(688.8);
     expect(r.lostWithGilmendEur).toBe(0);
+    expect(r.gainEur).toBe(688.8);
+  });
+
+  it("puts Mondial Relay at 0 EUR within reach when no parcel is refused at delivery, and says why", () => {
+    const r = computeRoi(inputs({ mondialRelayRefusedPct: 0 }), MEASURED);
+    const mr = r.carriers.find((c) => c.carrier === "mondial_relay")!;
+    expect(mr.availableEur).toBe(0);
+    expect(mr.withGilmendEur).toBe(0);
+    expect(mr.lostByHandEur).toBe(0);
+    expect(mr.outcome).toBe("refusal_needed");
+    expect(mr.payableSharePct).toBe(0);
+    expect(r.availableEur).toBe(1995.84);
+    expect(r.gainEur).toBe(604.8);
+  });
+
+  it("counts every Mondial Relay parcel when all are refused, the old hard-coded assumption, now a choice", () => {
+    const r = computeRoi(inputs({ mondialRelayRefusedPct: 100 }), MEASURED);
+    expect(r.carriers.find((c) => c.carrier === "mondial_relay")?.withGilmendEur).toBe(420);
     expect(r.gainEur).toBe(1024.8);
   });
 

@@ -26,6 +26,7 @@ export type FieldKey =
   | "shareMondialRelayPct"
   | "shareChronopostPct"
   | "qualifyingSharePct"
+  | "mondialRelayRefusedPct"
   | "customerReportHours"
   | "manualFilingDelayDays"
   | "gilmendApprovalHours"
@@ -133,7 +134,7 @@ export const FIELDS: readonly FieldMeta[] = [
     max: 100,
     step: 1,
     kind: "yours",
-    hint: "Example value. Mondial Relay only pays a parcel the customer refused at delivery: the calculator assumes it was.",
+    hint: "Example value. Mondial Relay only pays a parcel the customer refused at delivery: see the share refused, under How claims go.",
   },
   {
     key: "shareChronopostPct",
@@ -156,6 +157,17 @@ export const FIELDS: readonly FieldMeta[] = [
     step: 1,
     kind: "assumption",
     hint: "Assumption. A claim needs the carrier at fault, damaged goods (not just a crushed box) and usable photos. Our recorded runs are scenarios chosen to show each case, so their share of claims is not a rate.",
+  },
+  {
+    key: "mondialRelayRefusedPct",
+    group: "claims",
+    label: "Damaged Mondial Relay parcels refused at delivery",
+    unit: "%",
+    min: 0,
+    max: 100,
+    step: 1,
+    kind: "assumption",
+    hint: "Assumption: we know of no rate. Mondial Relay pays nothing for a damaged parcel the customer accepted, so only this share of its qualifying claims counts. The report delay below is applied to all of them, refused ones included.",
   },
   {
     key: "customerReportHours",
@@ -223,6 +235,7 @@ export const DEFAULT_INPUTS: RoiInputs = {
   shareMondialRelayPct: 25,
   shareChronopostPct: 15,
   qualifyingSharePct: 70,
+  mondialRelayRefusedPct: 20,
   customerReportHours: 24,
   manualFilingDelayDays: 4,
   gilmendApprovalHours: 12,
@@ -333,21 +346,51 @@ const CLEAR_DAMAGE: DamageAssessment = {
 /**
  * Maximum compensation of one clear claim, when the customer reports `reportHours` after delivery
  * and the claim is filed `filedAfterHours` after that report. 0 when the rules refuse it.
- * Calls the real computeClaim: the amounts and the deadlines are the ones of the app.
+ * `refusedAtDelivery` says whether the customer refused the parcel at the counter, which only
+ * matters to a carrier that pays refused parcels alone (Mondial Relay). Calls the real
+ * computeClaim: the amounts and the deadlines are the ones of the app.
  */
 export function claimValueEur(
   carrier: CarrierId,
   inputs: RoiInputs,
   reportHours: number,
   filedAfterHours: number,
+  refusedAtDelivery = true,
 ): number {
   const delivered = Date.parse(REFERENCE_DELIVERY);
   const reportAt = new Date(delivered + reportHours * HOUR_MS);
   const now = new Date(reportAt.getTime() + filedAfterHours * HOUR_MS);
   const claim = computeClaim(syntheticOrder(carrier, inputs), CLEAR_DAMAGE, reportAt.toISOString(), now, {
-    parcelRefusedAtDelivery: true,
+    parcelRefusedAtDelivery: refusedAtDelivery,
   });
   return claim.eligible ? claim.maxCompensationEur : 0;
+}
+
+/**
+ * The share (0 to 1) of a carrier's qualifying claims that its rules can pay: the share refused at
+ * delivery for a carrier that pays refused parcels alone, 1 for the others. Read from the rules,
+ * not from a carrier name.
+ */
+export function payableShare(carrier: CarrierId, inputs: RoiInputs): number {
+  return getCarrierRulesDetailed(carrier).requiresRefusal ? inputs.mondialRelayRefusedPct / 100 : 1;
+}
+
+/**
+ * Expected compensation of one qualifying claim: the claim of a refused parcel and the claim of
+ * an accepted one (0 where the carrier refuses it), weighted by the share refused at delivery.
+ * For a carrier without that rule the two are equal and the weight changes nothing.
+ */
+export function expectedClaimValueEur(
+  carrier: CarrierId,
+  inputs: RoiInputs,
+  reportHours: number,
+  filedAfterHours: number,
+): number {
+  const refused = claimValueEur(carrier, inputs, reportHours, filedAfterHours, true);
+  if (!getCarrierRulesDetailed(carrier).requiresRefusal) return refused;
+  const accepted = claimValueEur(carrier, inputs, reportHours, filedAfterHours, false);
+  const p = payableShare(carrier, inputs);
+  return p * refused + (1 - p) * accepted;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -361,6 +404,8 @@ export type HandOutcome =
   | "late_filing"
   /** The customer reported after the window: no way of working recovers it (even filed at once). */
   | "late_report"
+  /** The carrier pays refused parcels alone and none is assumed refused: nothing to claim there. */
+  | "refusal_needed"
   /** Nothing to claim at all (no parcels, or a 0 share). */
   | "none";
 
@@ -371,6 +416,17 @@ export interface CarrierRoi {
   damagedPerYear: number;
   /** Damaged parcels that qualify for a claim. */
   claimsPerYear: number;
+  /**
+   * Share (0 to 100) of the qualifying claims the carrier's rules can pay: the share refused at
+   * delivery for Mondial Relay, 100 for the others. The per-claim amounts below already count it.
+   */
+  payableSharePct: number;
+  /**
+   * Maximum of one claim the carrier pays (a parcel refused at delivery, for Mondial Relay), filed
+   * the moment the customer reports. The three amounts below are weighted by `payableSharePct`
+   * instead: they are the expected value of one qualifying claim.
+   */
+  perClaimIfPaidEur: number;
   /** Maximum of one claim filed the moment the customer reports: what the rules allow at best. */
   perClaimAvailableEur: number;
   /** Maximum of one claim filed within `gilmendApprovalHours` of the report. */
@@ -454,14 +510,21 @@ export function computeRoi(inputs: RoiInputs, measured: MeasuredTime | null): Ro
     const sharePct = totalShare > 0 ? (pickShare(inputs, carrier) / totalShare) * 100 : 0;
     const carrierDamaged = (damagedPerYear * sharePct) / 100;
     const carrierClaims = (claimsPerYear * sharePct) / 100;
-    const perAvailable = claimValueEur(carrier, inputs, inputs.customerReportHours, 0);
-    const perWith = claimValueEur(carrier, inputs, inputs.customerReportHours, inputs.gilmendApprovalHours);
-    const perHand = claimValueEur(carrier, inputs, inputs.customerReportHours, inputs.manualFilingDelayDays * 24);
+    const payable = payableShare(carrier, inputs);
+    const perAvailable = expectedClaimValueEur(carrier, inputs, inputs.customerReportHours, 0);
+    const perWith = expectedClaimValueEur(carrier, inputs, inputs.customerReportHours, inputs.gilmendApprovalHours);
+    const perHand = expectedClaimValueEur(
+      carrier,
+      inputs,
+      inputs.customerReportHours,
+      inputs.manualFilingDelayDays * 24,
+    );
     const availableEur = cents(carrierClaims * perAvailable);
     const withGilmendEur = cents(carrierClaims * perWith);
     const byHandEur = cents(carrierClaims * perHand);
     let outcome: HandOutcome;
     if (carrierClaims === 0) outcome = "none";
+    else if (payable === 0) outcome = "refusal_needed";
     else if (perAvailable === 0) outcome = "late_report";
     else if (perHand < perAvailable) outcome = "late_filing";
     else outcome = "in_time";
@@ -470,6 +533,8 @@ export function computeRoi(inputs: RoiInputs, measured: MeasuredTime | null): Ro
       sharePct,
       damagedPerYear: carrierDamaged,
       claimsPerYear: carrierClaims,
+      payableSharePct: payable * 100,
+      perClaimIfPaidEur: claimValueEur(carrier, inputs, inputs.customerReportHours, 0, true),
       perClaimAvailableEur: perAvailable,
       perClaimWithGilmendEur: perWith,
       perClaimByHandEur: perHand,

@@ -62,4 +62,14 @@ describe("measureAgentTime", () => {
     expect(m.recordedOn).toBe("2026-10-29");
     expect(m.runs[0].decision).toBe("reship");
   });
+
+  it("tells a run that drew a SAM outline from one that did not", () => {
+    const withOutline = makeCase().evidence;
+    expect(withOutline.some((e) => e.method === "sam-3.1")).toBe(true);
+    const m = measureAgentTime([run("sam", 30, { evidence: withOutline }), run("nosam", 16, { evidence: [] })])!;
+    expect(m.runs.map((r) => [r.id, r.withSam])).toEqual([
+      ["nosam", false],
+      ["sam", true],
+    ]);
+  });
 });

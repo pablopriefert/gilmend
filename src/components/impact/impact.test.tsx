@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { MeasuredTime } from "@/lib/impact/measured-time";
 import { FIELDS } from "@/lib/impact/roi";
 import { RoiCalculator } from "./roi-calculator";
@@ -10,9 +10,9 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePat
 
 const MEASURED: MeasuredTime = {
   runs: [
-    { id: "a", orderId: "#1001", seconds: 32.1, decision: "reship" },
-    { id: "b", orderId: "#1002", seconds: 18.6, decision: "no_action" },
-    { id: "c", orderId: "#1003", seconds: 40, decision: null },
+    { id: "a", orderId: "#1001", seconds: 32.1, decision: "reship", withSam: true },
+    { id: "b", orderId: "#1002", seconds: 18.6, decision: "no_action", withSam: true },
+    { id: "c", orderId: "#1003", seconds: 40, decision: null, withSam: false },
   ],
   meanSeconds: 30.2,
   medianSeconds: 32.1,
@@ -53,14 +53,14 @@ describe("ROI calculator: results", () => {
   it("works the example numbers through, in a sentence and in figures", () => {
     render(<RoiCalculator measured={MEASURED} />);
     expect(text("roi-summary")).toContain("96 damaged parcels a year");
-    expect(text("roi-summary")).toContain("€2,415.84");
+    expect(text("roi-summary")).toContain("€2,079.84");
     expect(text("roi-summary")).toContain("€1,391.04");
     expect(text("roi-damaged")).toBe("96");
     expect(text("roi-goods")).toBe("€5,760");
-    expect(text("roi-available")).toBe("up to €2,415.84");
-    expect(text("roi-gain")).toBe("+€1,024.80");
+    expect(text("roi-available")).toBe("up to €2,079.84");
+    expect(text("roi-gain")).toBe("+€688.80");
     expect(text("roi-bar-hand")).toContain("up to €1,391.04");
-    expect(text("roi-bar-hand")).toContain("Lost to deadlines: €1,024.80");
+    expect(text("roi-bar-hand")).toContain("Lost to deadlines: €688.80");
     expect(text("roi-bar-gilmend")).toContain("Lost to deadlines: €0");
   });
 
@@ -71,7 +71,7 @@ describe("ROI calculator: results", () => {
     expect(text("roi-bar-hand")).toContain("Lost to deadlines: €0");
     type("Orders per month", "800");
     expect(text("roi-damaged")).toBe("192");
-    expect(text("roi-available")).toBe("up to €4,831.68");
+    expect(text("roi-available")).toBe("up to €4,159.68");
   });
 
   it("says in the table why a carrier is lost: its window closes before a manual claim", () => {
@@ -79,7 +79,10 @@ describe("ROI calculator: results", () => {
     const mr = screen.getByTestId("roi-carrier-mondial_relay");
     expect(mr).toHaveTextContent("Closes 72 h after delivery. Filed at 120 h by hand, 36 h with Gilmend.");
     expect(mr).toHaveTextContent("The window closes before the claim is filed by hand");
-    expect(mr).toHaveTextContent("€420");
+    expect(mr).toHaveTextContent("Pays only the 20% of parcels refused at delivery.");
+    // One claim a refused parcel is paid: the full 25 EUR; the year counts 20% of them (16.8 claims x 25 x 20%).
+    expect(mr).toHaveTextContent("€25");
+    expect(mr).toHaveTextContent("€84");
     const colissimo = screen.getByTestId("roi-carrier-colissimo");
     expect(colissimo).toHaveTextContent("The short reserve window only warns.");
     expect(colissimo).not.toHaveTextContent("before the claim is filed");
@@ -132,6 +135,22 @@ describe("ROI calculator: time", () => {
   });
 });
 
+describe("ROI calculator: a time that is not saved", () => {
+  it("says it is extra time, with the absolute value and a sentence, instead of a minus sign", () => {
+    render(<RoiCalculator measured={MEASURED} />);
+    type("Time per case by hand", "2");
+    type("Your review time per case with Gilmend", "5");
+    const saved = block("roi-time-saved");
+    expect(saved).toContain("Extra time per case with Gilmend");
+    expect(saved).not.toContain("Saved per case");
+    // 2 min by hand against 30.2 s of agent plus 5 min of review: 3.5 min more, shown without a sign.
+    expect(text("roi-time-saved")).toBe("3.5 min");
+    expect(saved).toContain("Gilmend does not save time");
+    expect(text("roi-time-year")).toBe("5.6 h more a year, over 96 damaged parcels.");
+    expect(document.body.textContent).not.toMatch(/-\d+(\.\d)? (min|h)\b/);
+  });
+});
+
 describe("ROI calculator: bad input", () => {
   it("names the bad field, hides the results, and brings them back when it is fixed", () => {
     render(<RoiCalculator measured={MEASURED} />);
@@ -144,6 +163,27 @@ describe("ROI calculator: bad input", () => {
     type("Damage rate", "3");
     expect(field("Damage rate")).not.toHaveAttribute("aria-invalid");
     expect(text("roi-damaged")).toBe("144");
+  });
+
+  it("points at the form, not 'on the left' (a phone shows the results first), and names each bad field", () => {
+    render(<RoiCalculator measured={MEASURED} />);
+    type("Damage rate", "abc");
+    type("Parcel weight", "0");
+    const box = screen.getByTestId("roi-invalid");
+    expect(box).toHaveTextContent("in the form");
+    expect(box).not.toHaveTextContent("on the left");
+    const buttons = within(within(box).getByRole("list", { name: "Fields to fix" })).getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual(["Damage rate", "Parcel weight"]);
+    fireEvent.click(buttons[1]);
+    expect(field("Parcel weight")).toHaveFocus();
+  });
+
+  it("does not shout on every keystroke: no assertive alert from the box, the per-field error is a polite status", () => {
+    render(<RoiCalculator measured={MEASURED} />);
+    type("Orders per month", "");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByTestId("roi-invalid")).not.toHaveAttribute("role");
+    expect(screen.getByText("Enter a number.").closest("[role]")).toHaveAttribute("role", "status");
   });
 
   it("counts several bad fields and refuses an empty one", () => {
@@ -168,6 +208,33 @@ describe("ROI calculator: bad input", () => {
   });
 });
 
+describe("ROI calculator: announcements", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("announces a short summary once the person stops typing, not on every keystroke, and keeps the long summary silent", () => {
+    vi.useFakeTimers();
+    render(<RoiCalculator measured={MEASURED} />);
+    const live = screen.getByTestId("roi-announcement");
+    expect(live).toHaveAttribute("role", "status");
+    expect(live).toHaveTextContent("up to €2,079.84 a year recovered with Gilmend, up to €1,391.04 by hand");
+    expect(screen.getByTestId("roi-summary")).not.toHaveAttribute("aria-live");
+    type("Orders per month", "8");
+    type("Orders per month", "80");
+    type("Orders per month", "800");
+    // Still the old text: nothing was announced during the typing.
+    expect(live).toHaveTextContent("€2,079.84 a year");
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(live).toHaveTextContent("up to €4,159.68 a year recovered with Gilmend");
+    type("Orders per month", "");
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(live).toHaveTextContent("1 number is not valid.");
+  });
+});
+
 describe("Sources section", () => {
   it("lists the measured runs with their time and the summary the calculator uses", () => {
     render(<SourcesSection measured={MEASURED} />);
@@ -176,6 +243,13 @@ describe("Sources section", () => {
     expect(within(table).getByText("32.1 s")).toBeInTheDocument();
     expect(within(table).getByText("No decision")).toBeInTheDocument();
     expect(text("measured-summary")).toContain("Mean 30.2 s, median 32.1 s, from 18.6 s to 40.0 s, over 3 real runs");
+    // Two of the three drew a SAM outline: the summary says so instead of crediting SAM to every run.
+    expect(text("measured-summary")).toContain("of Muse Spark 1.3, 2 of them with a SAM 3.1 outline");
+    expect(screen.getByText(/the SAM outline when one was drawn/)).toBeInTheDocument();
+    expect(within(table).getAllByText("Yes")).toHaveLength(2);
+    expect(within(table).getAllByText("No")).toHaveLength(1);
+    // Each run links back to its case.
+    expect(within(table).getByRole("link", { name: "#1001" })).toHaveAttribute("href", "/cases/a");
     expect(screen.getByText(/What this is not: a benchmark/)).toBeInTheDocument();
   });
 
@@ -189,6 +263,8 @@ describe("Sources section", () => {
     render(<SourcesSection measured={null} />);
     expect(screen.getByTestId("rules-mondial_relay")).toHaveTextContent("€25 per parcel, capped at €25");
     expect(screen.getByTestId("rules-mondial_relay")).toHaveTextContent("3 days after delivery");
+    // Colissimo's terms say after shipment; the app counts from the order date only as the safe side.
+    expect(screen.getByTestId("rules-colissimo")).toHaveTextContent("365 days after shipment (counted from the order date, the safe side)");
     expect(screen.getByTestId("rules-colissimo")).toHaveTextContent("€23 per kg, capped at €690");
     expect(screen.getByTestId("rules-colissimo")).toHaveTextContent("72 h reserve window (prudential)");
     // How sure we are of each figure is kept, not rounded up to a flat claim.

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ExternalLink, FlaskConical, History, ShieldCheck, TriangleAlert, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { windowLabel, reserveLabel, CARRIER_ORDER } from "@/lib/impact/insights";
@@ -56,6 +57,7 @@ function describePay(carrier: CarrierId): string {
 }
 
 function MeasuredBlock({ measured }: { measured: MeasuredTime | null }) {
+  const samRuns = measured ? measured.runs.filter((r) => r.withSam).length : 0;
   return (
     <Block
       id="src-measured"
@@ -75,16 +77,25 @@ function MeasuredBlock({ measured }: { measured: MeasuredTime | null }) {
               <tr className="border-b border-border text-xs uppercase tracking-wide text-muted">
                 <th scope="col" className="py-2 pr-3 font-semibold">Recorded run</th>
                 <th scope="col" className="px-3 py-2 font-semibold">Decision</th>
+                <th scope="col" className="px-3 py-2 font-semibold">SAM outline</th>
                 <th scope="col" className="py-2 pl-3 text-right font-semibold">Time</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {measured.runs.map((r) => (
                 <tr key={r.id}>
-                  <th scope="row" className="py-2 pr-3 font-medium text-ink">{r.orderId}</th>
+                  <th scope="row" className="py-2 pr-3 font-medium text-ink">
+                    <Link
+                      href={`/cases/${r.id}`}
+                      className="rounded underline decoration-border-strong underline-offset-2 hover:decoration-ink"
+                    >
+                      {r.orderId}
+                    </Link>
+                  </th>
                   <td className="px-3 py-2 text-ink-soft">
                     {r.decision && r.decision in DECISION_LABEL ? DECISION_LABEL[r.decision as keyof typeof DECISION_LABEL] : "No decision"}
                   </td>
+                  <td className="px-3 py-2 text-ink-soft">{r.withSam ? "Yes" : "No"}</td>
                   <td className="tabular py-2 pl-3 text-right text-ink">{r.seconds.toFixed(1)} s</td>
                 </tr>
               ))}
@@ -92,13 +103,14 @@ function MeasuredBlock({ measured }: { measured: MeasuredTime | null }) {
           </table>
           <p data-testid="measured-summary" className="tabular mt-4 text-sm text-ink-soft">
             Mean {measured.meanSeconds.toFixed(1)} s, median {measured.medianSeconds.toFixed(1)} s, from{" "}
-            {measured.minSeconds.toFixed(1)} s to {measured.maxSeconds.toFixed(1)} s, over {measured.runs.length} real runs of
-            Muse Spark 1.3 and SAM 3.1 recorded on {formatDate(`${measured.recordedOn}T12:00:00Z`)}.
+            {measured.minSeconds.toFixed(1)} s to {measured.maxSeconds.toFixed(1)} s, over {measured.runs.length} real{" "}
+            {measured.runs.length === 1 ? "run" : "runs"} of Muse Spark 1.3, {samRuns} of them with a SAM 3.1 outline,
+            recorded on {formatDate(`${measured.recordedOn}T12:00:00Z`)}.
           </p>
           <p className="mt-2 max-w-3xl text-xs leading-5 text-muted">
             What this is not: a benchmark. Scripted scenarios with generated photos, one run each, recorded on one day. Real
-            photos, a busy API and a long thread will take longer. It includes the model calls and the SAM outline, not the
-            time you spend reading the case.
+            photos, a busy API and a long thread will take longer. It includes the model calls and the SAM outline when one was
+            drawn, not the time you spend reading the case.
           </p>
         </>
       )}
