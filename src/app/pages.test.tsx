@@ -130,6 +130,18 @@ describe("Layout and the Muse Model License", () => {
     expect(await footer()).toContain("Built with Muse Spark Open.");
   });
 
+  it("says it too when the OpenRouter test engine is set to Muse Spark Open", async () => {
+    vi.stubEnv("OPEN_WEIGHTS_PROVIDER", "");
+    vi.stubEnv("OPEN_WEIGHTS_BASE_URL", "");
+    vi.stubEnv("OPEN_WEIGHTS_MODEL", "");
+    vi.stubEnv("OPENROUTER_API_KEY", "fake-key-for-test");
+    vi.stubEnv("OPENROUTER_MODEL", "meta/muse-spark-open");
+    expect(await footer()).toContain("Built with Muse Spark Open.");
+    // The model id alone is not enough: without the key the engine cannot run.
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    expect(await footer()).not.toContain("Built with Muse Spark Open");
+  });
+
   it("does not claim it for another model or when nothing is configured", async () => {
     vi.stubEnv("OPEN_WEIGHTS_PROVIDER", "");
     vi.stubEnv("OPEN_WEIGHTS_BASE_URL", "https://w--g.modal.run/v1");

@@ -267,6 +267,15 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
       }
 
       case "compute_claim": {
+        if (photosNotRead) {
+          // Same lock as assess_photos: compute_claim also accepts an inline assessment, and one
+          // written without the photos would show on screen as "what the agent saw" and feed a claim.
+          // Checked before args.assessment is read: neither `assessment` nor `claim` may change.
+          return {
+            error:
+              "You were not shown the photos, so there is no reading to compute a claim from. Do not guess: call finish_case with needsHuman=true.",
+          };
+        }
         if (!order) {
           return { error: "No order is loaded. Call get_order first; if it found nothing, finish_case with needsHuman=true." };
         }

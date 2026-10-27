@@ -26,7 +26,7 @@ export function assertStandardModel(modelId: string): string {
 export const BASETEN_BASE_URL = "https://inference.baseten.co/v1";
 // Slug given by the hackathon guide. Baseten's public docs list `meta-models/muse-spark-open`
 // (no date suffix) on 27 Oct 2026, so the slug is overridable (BASETEN_MODEL) and
-// scripts/check-baseten.ts asks Baseten's /v1/models whether the configured one exists.
+// scripts/probe-engine.ts (npm run probe -- open-weights --models) asks Baseten's /v1/models whether the configured one exists.
 export const BASETEN_MUSE_SPARK_OPEN_MODEL = "meta-models/muse-spark-open-1026";
 
 // OpenRouter, OpenAI-compatible. The "test" engine for cheap bulk runs: it is neither open
@@ -80,6 +80,13 @@ function openWeightsDetail(model: string, host: EngineHost): EngineDetail {
 }
 
 export interface OpenWeightsSetup {
+  /**
+   * Which sampling and request shape the model gets. Fixed by how the engine was configured, not
+   * by the host: Muse Glimmer on a dedicated Baseten deployment (generic path, a *.baseten.co URL)
+   * has host "baseten" for the label but must keep Glimmer's settings.
+   */
+  preset: "baseten" | "generic";
+  /** Only for labels; never choose a request shape from it (see `preset`). */
   host: EngineHost;
   baseURL: string;
   model: string;
@@ -109,6 +116,7 @@ export function resolveOpenWeights(env: Env = process.env): OpenWeightsSetup | n
     if (!apiKey) return null;
     const model = env.BASETEN_MODEL?.trim() || BASETEN_MUSE_SPARK_OPEN_MODEL;
     return {
+      preset: "baseten",
       host: "baseten",
       baseURL: BASETEN_BASE_URL,
       model,
@@ -123,6 +131,7 @@ export function resolveOpenWeights(env: Env = process.env): OpenWeightsSetup | n
   if (!baseURL || !model) return null;
   const host = hostOfUrl(baseURL);
   return {
+    preset: "generic",
     host,
     baseURL,
     model,

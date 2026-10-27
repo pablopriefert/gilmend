@@ -93,6 +93,25 @@ describe("getProvider", () => {
     }
   });
 
+  it("keeps Glimmer's settings on a generic *.baseten.co address (the preset follows the configuration, not the host)", async () => {
+    const fetchMock = okFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const p = getProvider("open-weights", {
+        OPEN_WEIGHTS_BASE_URL: "https://model-x.api.baseten.co/environments/production/sync/v1",
+        OPEN_WEIGHTS_MODEL: "muse-glimmer",
+        OPEN_WEIGHTS_API_KEY: "placeholder-not-a-key",
+      });
+      expect(p.detail).toMatchObject({ host: "baseten" });
+      await p.chat({ messages: [{ role: "user", content: "hi" }] });
+      const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+      expect(body).toMatchObject({ temperature: 1, top_p: 0.95, top_k: 64 });
+      expect(body).not.toHaveProperty("reasoning_effort");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("refuses a Contributor model id on every real engine", () => {
     expect(() =>
       getProvider("open-weights", {

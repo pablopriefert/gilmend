@@ -111,7 +111,7 @@ export function getProvider(engine: Engine, env: Env = process.env): Provider {
         supportsImages: setup.supportsImages,
         detail: setup.detail,
       };
-      if (setup.host === "baseten") {
+      if (setup.preset === "baseten") {
         // Muse Spark Open always reasons. Baseten's default depth is xhigh, which can take
         // minutes over eight tool turns with photos; "medium" keeps a run inside the 90 s budget
         // we budget for (untested against the live endpoint, override with

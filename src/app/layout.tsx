@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { AppHeader } from "@/components/app-header";
-import { resolveOpenWeights } from "@/lib/config";
+import { hasOpenRouterKey, openRouterModel, resolveOpenWeights } from "@/lib/config";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +17,10 @@ export const dynamic = "force-dynamic";
 // offline and in CI.
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   // The Muse Model License asks every product that uses Muse Spark Open to say so in its UI.
-  const builtWithSparkOpen = /muse-spark-open/i.test(resolveOpenWeights()?.model ?? "");
+  // The OpenRouter test engine can serve it too (OPENROUTER_MODEL=meta/muse-spark-open).
+  const builtWithSparkOpen =
+    /muse-spark-open/i.test(resolveOpenWeights()?.model ?? "") ||
+    (hasOpenRouterKey() && /muse-spark-open/i.test(openRouterModel()));
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">

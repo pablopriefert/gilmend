@@ -57,7 +57,7 @@ describe("markDamage and the engine of the case", () => {
   // DEMO MODE case must neither spend credits nor claim a SAM annotation.
   for (const [engine, wording] of [
     ["open-weights", /private run/],
-    ["openrouter", /OpenRouter test engine/],
+    ["openrouter", /OpenRouter test engine.*photos still go to OpenRouter/],
     ["demo-mock", /DEMO MODE/],
   ] as const) {
     it(`does not call SAM for a ${engine} case, even when a key is configured`, async () => {

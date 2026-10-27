@@ -58,6 +58,31 @@ describe("runAgent: a model that cannot read the photos", () => {
     expect(c.document).toBeNull();
   });
 
+  it("refuses an assessment passed inline to compute_claim: no reading, no claim, a human", async () => {
+    // compute_claim also takes an `assessment` argument: it must not become a way around the lock.
+    const turns = () => [
+      { calls: [["get_order", { orderNumber: "#1001" }]] as [string, unknown][] },
+      { calls: [["compute_claim", { assessment: ASSESSMENT_BROKEN }]] as [string, unknown][] },
+      { calls: [["finish_case", decisionArgs()]] as [string, unknown][] },
+    ];
+    const check = (c: Awaited<ReturnType<typeof runAgent>>) => {
+      expect(c.assessment).toBeNull();
+      expect(c.claim).toBeNull();
+      const step = c.trace.find((t) => t.tool === "compute_claim");
+      expect(JSON.stringify(step?.output)).toMatch(/not shown the photos/);
+      expect(c.decision).toMatchObject({ carrierClaim: false, needsHuman: true });
+      expect(c.document).toBeNull();
+    };
+
+    // OPEN_WEIGHTS_VISION=0
+    const provider = withoutImages(scriptedProvider(turns()));
+    check(await runAgent(makeReport(), { engine: "open-weights", provider, deps: fakeDeps(), now: NOW }));
+
+    // The server refuses the photos (HTTP 400): same lock after the retry without them.
+    const refusing = refusingFirst(400, turns());
+    check(await runAgent(makeReport(), { engine: "open-weights", provider: refusing, deps: fakeDeps(), now: NOW }));
+  });
+
   it("still sends the photos to a model that reads images (the default)", async () => {
     const provider = scriptedProvider([{ calls: [["finish_case", decisionArgs({ carrierClaim: false })]] }]);
     await runAgent(makeReport(), { engine: "muse-spark-1.3", provider, deps: fakeDeps(), now: NOW });
@@ -65,26 +90,26 @@ describe("runAgent: a model that cannot read the photos", () => {
   });
 });
 
-describe("runAgent: a server that refuses the photos", () => {
-  /** First request (with images) answers HTTP `status`; then it plays the script. */
-  function refusingFirst(status: number) {
-    const inner = scriptedProvider(claimTurns());
-    const sent: ChatParams[] = [];
-    let calls = 0;
-    const provider: Provider & { sent: ChatParams[] } = {
-      engine: "open-weights",
-      model: "fake",
-      isMock: false,
-      sent,
-      async chat(params: ChatParams, options?: { timeoutMs?: number }): Promise<ChatCompletion> {
-        sent.push({ ...params, messages: structuredClone(params.messages) as ChatCompletionMessageParam[] });
-        if (calls++ === 0) throw Object.assign(new Error(`${status} image input is not supported`), { status });
-        return inner.chat(params, options);
-      },
-    };
-    return provider;
-  }
+/** First request (with images) answers HTTP `status`; then it plays the script. */
+function refusingFirst(status: number, turns: ReturnType<typeof claimTurns> = claimTurns()) {
+  const inner = scriptedProvider(turns);
+  const sent: ChatParams[] = [];
+  let calls = 0;
+  const provider: Provider & { sent: ChatParams[] } = {
+    engine: "open-weights",
+    model: "fake",
+    isMock: false,
+    sent,
+    async chat(params: ChatParams, options?: { timeoutMs?: number }): Promise<ChatCompletion> {
+      sent.push({ ...params, messages: structuredClone(params.messages) as ChatCompletionMessageParam[] });
+      if (calls++ === 0) throw Object.assign(new Error(`${status} image input is not supported`), { status });
+      return inner.chat(params, options);
+    },
+  };
+  return provider;
+}
 
+describe("runAgent: a server that refuses the photos", () => {
   it("retries once without the photos, out loud, and sends the case to a human", async () => {
     const provider = refusingFirst(400);
     const c = await runAgent(makeReport(), { engine: "open-weights", provider, deps: fakeDeps(), now: NOW });
