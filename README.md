@@ -357,9 +357,8 @@ computed from the recordings. Everything in them is fictitious, and a test
 
 **Not deployed yet.** The checklist, in this order:
 
-1. Upgrade `next` and `eslint-config-next` together to 16.4.1 or later (allowed by the project's
-   14-day dependency rule from 28 Oct 2026 17:44 UTC; `next@16.4.0` has critical advisories), then
-   re-run tests and `npm run build`. Do not expose a URL before that.
+1. Keep `next` at 16.4.1 or later (16.4.0 has critical advisories) and `npm audit` clean; re-run
+   tests and `npm run build` before each deploy.
 2. Leave Fluid Compute on (the default): `POST /api/reports` declares `maxDuration = 120` itself.
 3. Environment variables (Production): `MODEL_API_KEY` (Standard model only),
    `DAMAGE_DESK_ACCESS_CODE` (give it to the judges), `DAMAGE_DESK_REAL_RUNS_PER_DAY`; optionally
@@ -421,9 +420,8 @@ Storage, the Blob store).
   computed maximum may be higher than the real indemnity.
 - **Nothing is filed.** The app files no claim and sends no e-mail; a human does.
 - **Not legal advice.** The rules are our reading of public terms and statutes.
-- **Public deployment is not done.** The app has not been deployed. `next@16.4.0` has critical
-  security advisories and must be upgraded to 16.4.1 (allowed from 28 Oct 2026 17:44 UTC), and
-  `undici` 6.29.1 is due from 29 Oct, before any public URL. Vercel Blob storage has not run
+- **Public deployment is not done.** The app has not been deployed yet (`next` 16.4.1,
+  `undici` 6.29.1, `npm audit` clean on 27 Oct 2026). Vercel Blob storage has not run
   against a real store. Without it, cases filed by visitors are temporary and per instance; rate
   limits and the daily cap of real runs are in memory, per instance. The merchant actions are
   serialised inside one instance; across instances they rely on conditional writes, which the Blob

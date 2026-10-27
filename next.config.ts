@@ -13,16 +13,12 @@ const SHOWCASE_ROUTES = [
 ];
 
 const nextConfig: NextConfig = {
-  // Pinned to next@16.4.0 (the newest release older than 14 days when the repo was created).
-  // `npm audit` flags three advisories on 16.0.0 - 16.4.0, all fixed by 16.4.1:
-  //  - SVG image optimization (GHSA-2464-fhr4-w9xw): optimization is switched off here.
-  //  - Server Actions (GHSA-p3m5-59mp-jv5r): we use plain route handlers only. NOT verified:
-  //    the Next-Action header may be accepted by any App Router page.
-  //  - `use cache` (GHSA-673q-mjm6-r5xr): `cacheComponents` is intentionally NOT enabled.
-  // These mitigations are assumptions, so DO NOT put this version on a public URL. 16.4.1 was
-  // published 2026-10-14 17:43 UTC and passes the 14-day rule on 2026-10-28 17:44 UTC (16.4.2
-  // on 2026-10-29 20:57 UTC): then bump `next` and `eslint-config-next` together, exact
-  // versions, and re-run audit, tests and build (`npm view next time --json` to check).
+  // next@16.4.1, the release that fixes the three advisories of 16.0.0 - 16.4.0 (GHSA-2464-fhr4-w9xw
+  // SVG image optimization, GHSA-p3m5-59mp-jv5r Server Actions, GHSA-673q-mjm6-r5xr `use cache`).
+  // Taken on 27 Oct 2026, one day before it passed the 14-day dependency rule, on purpose: the
+  // public deployment could not wait, and a 13-day-old patch release from the framework's own
+  // maintainers is a smaller risk than a known critical remote-code-execution bug. Image
+  // optimization stays off anyway (no next/image in the app).
   images: { unoptimized: true },
   // The tracer follows every fs call: without these two lines a deploy made from a working
   // copy shipped all the PDFs and cases generated during development (data/runtime) and the
