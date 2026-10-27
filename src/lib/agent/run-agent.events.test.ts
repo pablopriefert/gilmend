@@ -49,7 +49,7 @@ const ends = (events: AgentEvent[]) =>
 describe("runAgent events: the happy path", () => {
   it("emits the run, each model turn and each tool in the order they really happen", async () => {
     const { events } = await run();
-    expect(events[0]).toMatchObject({ type: "run_started", engine: "muse-spark-1.3", model: "fake", mock: false, photos: 1 });
+    expect(events[0]).toMatchObject({ type: "run_started", engine: "muse-spark-1.3", model: "fake", mock: false, photos: 1, photosSent: 1 });
     // Every turn is announced before its tools, and closed once the model has answered.
     const compact = events.map((e) =>
       e.type === "thinking" ? `thinking:${e.turn}:${e.phase}` : e.type === "tool_start" || e.type === "tool_end" ? `${e.type}:${e.tool}` : e.type,
@@ -204,7 +204,9 @@ describe("runAgent events: when things go wrong", () => {
     const { events } = await run({ provider: scriptedProvider(turns) });
     const guardrails = events.filter((e): e is Extract<AgentEvent, { type: "guardrail" }> => e.type === "guardrail");
     expect(guardrails.length).toBeGreaterThan(0);
-    expect(guardrails[0].message).toMatch(/needsHuman/);
+    // Plain English for the person watching, not the guardrail's internal wording (needsHuman forced...).
+    expect(guardrails[0].message).toBe("Sent to a human: confidence 0.30 is below 0.7.");
+    expect(guardrails.map((g) => g.message).join(" ")).not.toMatch(/needsHuman|carrierClaim|compute_claim/);
     // The guardrail comes while finish_case is running, before it ends.
     const at = events.indexOf(guardrails[0]);
     const startAt = events.findIndex((e) => e.type === "tool_start" && e.tool === "finish_case");

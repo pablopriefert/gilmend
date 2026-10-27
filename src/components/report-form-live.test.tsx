@@ -92,7 +92,7 @@ describe("the live timeline on the report page", () => {
 
     await act(async () => {
       stream.line(accepted());
-      stream.line(ev({ type: "run_started", engine: "muse-spark-1.3", model: "muse-spark", label: "Muse Spark 1.3 (Meta Model API)", mock: false, photos: 1 }));
+      stream.line(ev({ type: "run_started", engine: "muse-spark-1.3", model: "muse-spark", label: "Muse Spark 1.3 (Meta Model API)", mock: false, photos: 1, photosSent: 1 }));
       stream.line(ev({ type: "thinking", t: 20, turn: 1, phase: "start" }));
     });
     const panel = screen.getByTestId("live-run");
@@ -172,7 +172,7 @@ describe("the live timeline on the report page", () => {
           result: { tool: "compute_claim", eligible: true, maxCompensationEur: 32.2, claimDeadline: "2026-11-15T12:00:00.000Z", daysLeft: 19 },
         }),
       );
-      stream.line(ev({ type: "guardrail", t: 30_000, message: "needsHuman forced: the confidence is below 0.7" }));
+      stream.line(ev({ type: "guardrail", t: 30_000, message: "Sent to a human: confidence 0.52 is below 0.7." }));
     });
     const claim = await within(panel).findByLabelText("Claim");
     // The figure is read by assistive tech as plain text, and it is the code's number.
@@ -181,7 +181,7 @@ describe("the live timeline on the report page", () => {
     expect(claim).toHaveTextContent("Claim by 15 Nov 2026 · 19 days left");
     expect(claim).toHaveTextContent(/Worked out by code/);
     const guardrail = panel.querySelector('[data-step="guardrail"]')!;
-    expect(guardrail).toHaveTextContent("needsHuman forced: the confidence is below 0.7");
+    expect(guardrail).toHaveTextContent("Sent to a human: confidence 0.52 is below 0.7.");
     stream.end();
   });
 
@@ -202,8 +202,13 @@ describe("the live timeline on the report page", () => {
     expect(panel).toHaveTextContent("Confidence 90%");
     const open = within(panel).getByRole("button", { name: "Open the case" });
     expect(open).toHaveFocus();
-    // The timeline stays (the fields do not come back under it) and the button cannot be pressed twice.
-    expect(screen.getByRole("button", { name: /Investigating/ })).toBeDisabled();
+    // The timeline stays (the fields do not come back under it), and the footer no longer talks about a
+    // run in progress: no spinning "Investigating..." button, no "can take a little while" line.
+    expect(screen.queryByRole("button", { name: /Investigating/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send report" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "File another report" })).toBeEnabled();
+    expect(screen.getByRole("form", { name: "Damage report" })).toHaveAttribute("aria-busy", "false");
+    expect(document.body).not.toHaveTextContent(/little while|looking up the order/);
     fireEvent.click(open);
     expect(push).toHaveBeenCalledWith("/cases/case_abc");
   });
@@ -254,7 +259,7 @@ describe("the live timeline on the report page", () => {
     await screen.findByTestId("live-run");
     await act(async () => {
       stream.line(accepted("demo-mock"));
-      stream.line(ev({ type: "run_started", engine: "demo-mock", model: "demo-mock", label: "DEMO MODE: deterministic mock, not Muse", mock: true, photos: 1 }));
+      stream.line(ev({ type: "run_started", engine: "demo-mock", model: "demo-mock", label: "DEMO MODE: deterministic mock, not Muse", mock: true, photos: 1, photosSent: 1 }));
       stream.line(ev({ type: "thinking", t: 2, turn: 1, phase: "start" }));
       stream.line(ev({ type: "tool_start", t: 3, tool: "mark_damage", turn: 1, calledBy: "model" }));
       stream.line(
@@ -275,6 +280,8 @@ describe("the live timeline on the report page", () => {
     expect(panel).toHaveTextContent("DEMO MODE: deterministic mock, not Muse");
     expect(await within(panel).findByText(/The scripted mock starts its script \(it reads no image\)/)).toBeInTheDocument();
     expect(panel).not.toHaveTextContent(/\+\d\.\d s/);
+    // No clock either: a DEMO MODE run lasts milliseconds, and the page's own timer would only be browser time.
+    expect(panel).not.toHaveTextContent(/since you sent it|\d s on the server/);
     expect(panel.querySelector('[data-step="mark_damage"]')).toHaveTextContent("No outline: the claim keeps the raw photo.");
     expect(within(panel).queryByRole("img")).not.toBeInTheDocument();
     stream.end();
@@ -299,6 +306,106 @@ describe("the live timeline on the report page", () => {
   });
 });
 
+describe("the footer and the end of a run", () => {
+  it("says what really runs, not what the form expected, after a fallback to DEMO MODE", async () => {
+    const stream = liveResponse();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.res));
+    send(MUSE);
+    await screen.findByTestId("live-run");
+    await act(async () => {
+      // The form asked for Muse; the daily ceiling made the server answer with the scripted mock.
+      stream.line({ ...accepted("demo-mock"), requestedEngine: "muse-spark-1.3", fellBack: true, fellBackReason: "daily_limit" } as StreamEvent);
+      stream.line(ev({ type: "run_started", engine: "demo-mock", model: "demo-mock", label: "DEMO MODE: deterministic mock, not Muse", mock: true, photos: 1, photosSent: 1 }));
+    });
+    const panel = screen.getByTestId("live-run");
+    expect(await within(panel).findByTestId("live-run-mode")).toHaveTextContent("DEMO MODE (scripted)");
+    // No line built from the expected engine: it would have promised a real run that "can take a little while".
+    expect(document.body).not.toHaveTextContent(/little while/);
+    await act(async () => {
+      stream.line(done("demo-mock"));
+      stream.end();
+    });
+    await screen.findByRole("heading", { name: "The case is ready" });
+    expect(document.body).not.toHaveTextContent(/little while/);
+    expect(screen.queryByRole("button", { name: /Investigating/ })).not.toBeInTheDocument();
+  });
+
+  it("lets the person file another report after the case is ready, with the form empty and sendable", async () => {
+    const stream = liveResponse();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.res));
+    send();
+    await screen.findByTestId("live-run");
+    await act(async () => {
+      stream.line(accepted());
+      stream.line(done());
+      stream.end();
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "File another report" }));
+    expect(screen.queryByTestId("live-run")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Order number")).toHaveValue("");
+    expect(screen.getByLabelText("E-mail used for the order")).toHaveValue("");
+    expect(screen.getByLabelText("Message from the customer")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Send report" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "File another report" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText("Order number")).toHaveFocus());
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("says in the polite status region that the case will open by itself, and that staying stopped it", async () => {
+    const stream = liveResponse();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.res));
+    send();
+    await screen.findByTestId("live-run");
+    await act(async () => {
+      stream.line(accepted());
+      stream.line(done());
+      stream.end();
+    });
+    const panel = await screen.findByTestId("live-run");
+    const status = within(panel).getAllByRole("status")[0];
+    expect(status).toHaveTextContent("It opens in 5 seconds; choose Stay on this page to stop.");
+    fireEvent.click(within(panel).getByRole("button", { name: "Stay on this page" }));
+    expect(status).toHaveTextContent("Staying on this page. Open the case when you are ready.");
+    expect(status).not.toHaveTextContent(/It opens in/);
+    expect(within(panel).getByRole("button", { name: "Open the case" })).toHaveFocus();
+  });
+
+  it("labels its two clocks: the browser's while it runs, the server's once it is over", async () => {
+    const stream = liveResponse();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.res));
+    send();
+    const panel = await screen.findByTestId("live-run");
+    expect(panel).toHaveTextContent(/\d+\.\d s since you sent it/);
+    expect(panel).not.toHaveTextContent(/\d s on the server/);
+    await act(async () => {
+      stream.line(accepted());
+      stream.line(done("muse-spark-1.3", 41_200));
+      stream.end();
+    });
+    await screen.findByRole("heading", { name: "The case is ready" });
+    expect(panel).toHaveTextContent("41.2 s on the server");
+    expect(panel).not.toHaveTextContent("since you sent it");
+  });
+
+  it("does not say the model read photos it was not shown", async () => {
+    const stream = liveResponse();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.res));
+    send();
+    await screen.findByTestId("live-run");
+    await act(async () => {
+      stream.line(accepted());
+      stream.line(ev({ type: "notice", t: 5, code: "photos_withheld", message: "The photos were not read by the model (configured without image input)." }));
+      stream.line(ev({ type: "run_started", engine: "muse-spark-1.3", model: "m", label: "Muse Spark 1.3 (Meta Model API)", mock: false, photos: 1, photosSent: 0 }));
+      stream.line(ev({ type: "thinking", t: 20, turn: 1, phase: "start" }));
+      stream.line(ev({ type: "thinking", t: 3000, turn: 1, phase: "end", ok: true, toolCalls: 1, ms: 2980 }));
+    });
+    const panel = screen.getByTestId("live-run");
+    expect(await within(panel).findByText("Muse read the report (photos not shown to it)")).toBeInTheDocument();
+    expect(panel).not.toHaveTextContent("the report and the photos");
+    stream.end();
+  });
+});
+
 describe("when the stream does not end well", () => {
   it("returns to the form with the reason and a link to the stored case on an error event", async () => {
     const stream = liveResponse();
@@ -319,7 +426,7 @@ describe("when the stream does not end well", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
-  it("says the connection dropped, and links to the case that is being finished, when the stream just ends", async () => {
+  it("keeps the timeline when the stream drops after the case was stored, and says not to send it again", async () => {
     const stream = liveResponse();
     vi.stubGlobal("fetch", vi.fn(async () => stream.res));
     send();
@@ -329,9 +436,33 @@ describe("when the stream does not end well", () => {
       stream.line(ev({ type: "tool_start", t: 100, tool: "get_order", turn: 1, calledBy: "model" }));
       stream.end();
     });
-    expect(await screen.findByText(/The connection dropped before the agent finished/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open the saved case" })).toHaveAttribute("href", "/cases/case_abc");
+    const panel = await screen.findByTestId("live-run");
+    const alert = within(panel).getByRole("alert");
+    expect(alert).toHaveTextContent("The connection dropped before the agent finished.");
+    expect(alert).toHaveTextContent(/do not send it again/);
+    // Said as what should happen, not as a certainty (keeping the function alive was not verified on Vercel).
+    expect(alert).toHaveTextContent(/should finish on the server/);
+    expect(within(alert).getByRole("link", { name: "Open the saved case" })).toHaveAttribute("href", "/cases/case_abc");
+    // The row that was running stopped spinning, and nothing invites a second submission.
+    expect(panel.querySelector('[data-step="get_order"]')).toHaveTextContent("(failed)");
+    expect(screen.queryByRole("button", { name: "Send report" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Investigating/ })).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent(/press Send report again/);
+    expect(screen.getByRole("button", { name: "File another report" })).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("goes back to the form, with a hint to check Cases, when the stream drops before anything was stored", async () => {
+    const stream = liveResponse();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.res));
+    send();
+    await screen.findByTestId("live-run");
+    await act(async () => {
+      stream.end();
+    });
+    expect(await screen.findByText(/before the server confirmed the report/)).toBeInTheDocument();
+    expect(screen.queryByTestId("live-run")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send report" })).toBeEnabled();
   });
 
   it("ignores pings and lines it cannot read, and still finishes", async () => {

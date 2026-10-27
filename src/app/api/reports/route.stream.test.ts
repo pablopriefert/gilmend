@@ -59,7 +59,7 @@ beforeEach(async () => {
   runAgent.mockReset();
   saveCase.mockReset();
   runAgent.mockImplementation(async (report, { engine, caseId, onEvent }) => {
-    onEvent?.(event("run_started", { engine, model: "fake", label: "Fake", mock: engine === "demo-mock", photos: 1 }));
+    onEvent?.(event("run_started", { engine, model: "fake", label: "Fake", mock: engine === "demo-mock", photos: 1, photosSent: 1 }));
     onEvent?.(event("tool_start", { tool: "get_order", turn: 1, calledBy: "model" }));
     onEvent?.(event("tool_end", { tool: "get_order", turn: 1, calledBy: "model", ok: true, ms: 12, result: null }));
     return makeCase({ id: caseId, report, engine: engine as CaseRecord["engine"] });
@@ -206,7 +206,7 @@ describe("POST /api/reports as NDJSON: the client leaves", () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
     runAgent.mockImplementation(async (report, { engine, caseId, onEvent }) => {
-      onEvent?.(event("run_started", { engine, model: "fake", label: "Fake", mock: false, photos: 1 }));
+      onEvent?.(event("run_started", { engine, model: "fake", label: "Fake", mock: false, photos: 1, photosSent: 1 }));
       await gate;
       // The listener is still called after the browser left: it must not throw into the agent.
       onEvent?.(event("tool_start", { tool: "get_order", turn: 1, calledBy: "model" }));

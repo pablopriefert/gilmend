@@ -320,14 +320,16 @@ describe("the agent working state", () => {
     expect(within(panel).getByTestId("live-run-mode")).toHaveTextContent("Live");
     expect(within(panel).getByRole("list", { name: /What the agent is doing, live/ })).toBeInTheDocument();
     expect(within(panel).getAllByRole("listitem")).toHaveLength(1);
-    expect(within(panel).getByText("Sending the report", { exact: false })).toBeInTheDocument();
+    expect(within(within(panel).getByRole("list", { name: /live/ })).getByText("Sending the report", { exact: false })).toBeInTheDocument();
     // Nothing is claimed that has not happened, and no illustration is shown.
     expect(screen.queryByTestId("agent-working")).not.toBeInTheDocument();
     expect(panel).not.toHaveTextContent(/not live progress/);
     // The fields give way to the timeline; the button says it is busy and cannot be pressed twice.
     expect(screen.getByLabelText("Order number")).not.toBeVisible();
     expect(screen.getByRole("button", { name: /Investigating/ })).toBeDisabled();
-    expect(screen.getAllByRole("status").map((n) => n.textContent).join(" ")).toMatch(/The agent is looking up the order and reading the photos/);
+    // One polite region speaks for the page, and it is the timeline's: it says what is really happening
+    // (the upload), not what the form expected the agent to do.
+    expect(screen.getAllByRole("status").map((n) => n.textContent).join(" ")).toMatch(/Sending the report/);
   });
 
   it("falls back to the step list as an illustration, said in words, when nothing is streamed", async () => {

@@ -15,6 +15,7 @@ import { effectiveEngine, type EngineAvailability } from "./engine-choice";
 import { EngineSwitch } from "./engine-switch";
 import { prepareImage } from "./image-prep";
 import { NDJSON_CONTENT_TYPE, readStreamEvents } from "@/lib/agent/events";
+import { BUTTON_QUIET } from "./case/ui";
 import { AgentWorking } from "./report/agent-working";
 import { LiveRun } from "./report/live-run";
 import { initialLiveRun, loseLiveRun, reduceLiveRun, type LiveRunState } from "./report/live-run-state";
@@ -279,7 +280,7 @@ export function ReportForm({
         signal: abort.signal,
       });
       if (res.ok && res.body && (res.headers?.get?.("content-type") ?? "").includes("ndjson")) {
-        finished = await followRun(res.body, abort.signal);
+        finished = (await followRun(res.body, abort.signal)) !== "failed";
         return;
       }
       const data = (await res.json().catch(() => null)) as {
@@ -307,11 +308,13 @@ export function ReportForm({
   }
 
   /**
-   * Read the run's NDJSON stream into the live timeline. Returns true when the case is done (the
-   * timeline then stays, with its "Open the case" button); false when the run failed or the
-   * connection dropped (the form comes back with the reason and, when the case was stored, a link to it).
+   * Read the run's NDJSON stream into the live timeline. Returns "done" when the case is done (the
+   * timeline then stays, with its "Open the case" button), "lost" when the connection dropped after the
+   * server had stored the report (the timeline stays too, with a link to the case and a warning not to
+   * send the report again: its run is still going on the server), and "failed" when the run failed or
+   * nothing was confirmed (the form comes back with the reason and, when the case was stored, a link to it).
    */
-  async function followRun(body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<boolean> {
+  async function followRun(body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<"done" | "lost" | "failed"> {
     let state = initialLiveRun();
     const show = (next: LiveRunState) => {
       state = next;
@@ -325,31 +328,74 @@ export function ReportForm({
         if (state.mock && demoPaceMs > 0 && PACED_EVENTS.has(event.type)) await sleep(demoPaceMs / 2);
       }
     } catch {
-      if (signal.aborted) return false;
+      if (signal.aborted) return "failed";
       // A read error mid-stream is a dropped connection: handled below like a stream that just ended.
     }
-    if (state.phase === "done") return true;
+    if (state.phase === "done") return "done";
     if (state.phase === "error") {
       setServerError(state.error ?? "The report could not be processed.");
-    } else {
-      show(loseLiveRun(state));
-      setServerError(
-        "The connection dropped before the agent finished. The report is stored and the run goes on: the case shows up in Cases when it ends.",
-      );
+      if (state.caseId) setSavedCaseId(state.caseId);
+      return "failed";
     }
-    if (state.caseId) setSavedCaseId(state.caseId);
-    return false;
+    show(loseLiveRun(state));
+    // Dropped before the server said it stored anything: not known to exist, so sending again is fair.
+    if (!state.caseId) {
+      setServerError(
+        "The connection dropped before the server confirmed the report. It may not have been stored: look at the Cases page before sending it again.",
+      );
+      return "failed";
+    }
+    // Stored: the timeline stays and says so. No generic "press Send report again" here, that would
+    // file the same report twice (a second case, a second real run, a second slot of the daily cap).
+    return "lost";
   }
 
   // The live timeline replaces the form's fields while a report is sent, unless the server stays
   // silent so long that the answer is evidently not streamed (then the illustration below stands in).
-  const showLive = submitting && live !== null && !(silent && live.phase === "sending");
+  // It stays after the end ("done"), and after a dropped connection once the case is known to be stored
+  // ("lost"): it is the page's answer then, not the form.
+  const showLive =
+    live !== null &&
+    (live.phase === "done" ||
+      (live.phase === "lost" && live.caseId !== null) ||
+      (submitting && (live.phase === "running" || (live.phase === "sending" && !silent))));
+  // The run is over, one way or the other, and the footer must say nothing about a run in progress.
+  const ended = showLive && live !== null && (live.phase === "done" || live.phase === "lost");
+  const working = submitting && !ended;
 
-  const statusLine = submitting
-    ? `The agent is looking up the order and reading the photos (${runsAs === "demo-mock" ? "demo mode" : "this can take a little while"}).`
-    : loadedDemo
-      ? `Demo case loaded: ${loadedDemo}. Review it, then send.`
-      : "";
+  /** Back to an empty form after a finished (or lost) run. Otherwise the only way out was to reload. */
+  function fileAnother(): void {
+    setLive(null);
+    setSubmitting(false);
+    setSilent(false);
+    setServerError(null);
+    setSavedCaseId(null);
+    // Emptied, not kept: the same report sent twice would be two cases and two real runs.
+    setOrderNumber("");
+    setEmail("");
+    setMessage("");
+    setLanguage("auto");
+    setVoice([]);
+    setFiles([]);
+    setSeedItems(undefined);
+    setDropzoneKey((k) => k + 1);
+    setErrors({});
+    setLoadedDemo(null);
+    setLoadedDemoId(null);
+    formRef.current?.scrollIntoView?.({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    requestAnimationFrame(() => orderRef.current?.focus());
+  }
+
+  // While the timeline shows, it has its own polite status region (what each step found), and it knows
+  // what really runs: a line here built from what the form expected would contradict it (it said "can take
+  // a little while" over a DEMO MODE panel after a fallback). The line is for the fallback illustration only.
+  const statusLine = showLive
+    ? ""
+    : submitting
+      ? `The agent is looking up the order and reading the photos (${runsAs === "demo-mock" ? "demo mode" : "this can take a little while"}).`
+      : loadedDemo
+        ? `Demo case loaded: ${loadedDemo}. Review it, then send.`
+        : "";
 
   return (
     <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_21.5rem] xl:gap-10">
@@ -363,13 +409,13 @@ export function ReportForm({
         </a>
 
         {/* The agent's working state: the whole card is ringed by a gold beam while it runs. */}
-        <BorderBeam reveal={submitting} color="var(--gold-bright)" thickness={2} length={18} speed={4} className="rounded-2xl">
+        <BorderBeam reveal={working} color="var(--gold-bright)" thickness={2} length={18} speed={4} className="rounded-2xl">
           <form
             ref={formRef}
             onSubmit={onSubmit}
             noValidate
             aria-label="Damage report"
-            aria-busy={submitting}
+            aria-busy={working}
             className="relative scroll-mt-6 md:scroll-mt-24 rounded-2xl border border-border bg-surface shadow-card"
           >
             {availability.accessCodeRequired && (
@@ -559,36 +605,47 @@ export function ReportForm({
                   </div>
                 </div>
               )}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 flex-col gap-1">
-                  <p role="status" className="text-sm text-foreground">
-                    {statusLine}
-                  </p>
+              {ended ? (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-xs leading-5 text-muted">
                     Nothing is sent to a customer or a carrier. You review the case, then approve it.
                   </p>
+                  <button type="button" onClick={fileAnother} className={BUTTON_QUIET}>
+                    File another report
+                  </button>
                 </div>
-                <ShimmerButton
-                  type="submit"
-                  disabled={submitting}
-                  aria-busy={submitting}
-                  shimmerColor="var(--gold-bright)"
-                  shimmerDuration="3.2s"
-                  background="var(--ink)"
-                  borderRadius="0.75rem"
-                  className={cn(
-                    "min-h-12 gap-2 px-7 text-[0.9375rem] font-semibold tracking-tight shadow-raised",
-                    "enabled:hover:-translate-y-px disabled:cursor-wait disabled:opacity-80",
-                    "motion-reduce:[&>div:first-of-type]:hidden",
-                  )}
-                >
-                  {submitting ? (
-                    <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" strokeWidth={2} />
-                  ) : null}
-                  {submitting ? "Investigating…" : "Send report"}
-                  {!submitting && <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2} />}
-                </ShimmerButton>
-              </div>
+              ) : (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <p role="status" className="text-sm text-foreground">
+                      {statusLine}
+                    </p>
+                    <p className="text-xs leading-5 text-muted">
+                      Nothing is sent to a customer or a carrier. You review the case, then approve it.
+                    </p>
+                  </div>
+                  <ShimmerButton
+                    type="submit"
+                    disabled={submitting}
+                    aria-busy={submitting}
+                    shimmerColor="var(--gold-bright)"
+                    shimmerDuration="3.2s"
+                    background="var(--ink)"
+                    borderRadius="0.75rem"
+                    className={cn(
+                      "min-h-12 gap-2 px-7 text-[0.9375rem] font-semibold tracking-tight shadow-raised",
+                      "enabled:hover:-translate-y-px disabled:cursor-wait disabled:opacity-80",
+                      "motion-reduce:[&>div:first-of-type]:hidden",
+                    )}
+                  >
+                    {submitting ? (
+                      <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" strokeWidth={2} />
+                    ) : null}
+                    {submitting ? "Investigating…" : "Send report"}
+                    {!submitting && <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2} />}
+                  </ShimmerButton>
+                </div>
+              )}
             </div>
 
             {/* The illustration is only the fallback: when no stream is arriving. It says it is one. */}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ChatCompletion, ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { describeEngine } from "../config";
 import type { ChatParams, Provider } from "../providers";
+import type { AgentEvent } from "./events";
 import { runAgent } from "./run-agent";
 import { ASSESSMENT_BROKEN, NOW, decisionArgs, fakeDeps, makeReport, scriptedProvider } from "./test-helpers";
 
@@ -137,5 +138,60 @@ describe("runAgent: the case says which model and host ran it", () => {
     const c = await runAgent(makeReport(), { engine: "open-weights", provider, deps: fakeDeps(), now: NOW });
     expect(c.engineDetail).toMatchObject({ host: "baseten", label: "Muse Spark Open (open weights, served by Baseten)" });
     expect(c.trace[0].step).toBe("Engine: open-weights (Muse Spark Open (open weights, served by Baseten))");
+  });
+});
+
+// What the live timeline is told about the photos (review of 28 Oct 2026): the page words "reading the
+// photos" from run_started.photosSent and the photos_withheld notice, so they must be true.
+describe("runAgent events: how many photos the model was really shown", () => {
+  const collect = (): { events: AgentEvent[]; onEvent: (e: AgentEvent) => void } => {
+    const events: AgentEvent[] = [];
+    return { events, onEvent: (e) => events.push(e) };
+  };
+  const startedOf = (events: AgentEvent[]) => events.find((e) => e.type === "run_started") as Extract<AgentEvent, { type: "run_started" }>;
+  const finishOnly = () => [{ calls: [["finish_case", decisionArgs({ carrierClaim: false })]] as [string, unknown][] }];
+
+  it("says every photo was sent when the model reads images", async () => {
+    const { events, onEvent } = collect();
+    await runAgent(makeReport(), { engine: "muse-spark-1.3", provider: scriptedProvider(finishOnly()), deps: fakeDeps(), now: NOW, onEvent });
+    expect(startedOf(events)).toMatchObject({ photos: 1, photosSent: 1 });
+    expect(events.some((e) => e.type === "notice")).toBe(false);
+  });
+
+  it("says none was sent to a text-only model, and says so in a notice that comes with it", async () => {
+    const { events, onEvent } = collect();
+    const provider = withoutImages(scriptedProvider(claimTurns()));
+    await runAgent(makeReport(), { engine: "open-weights", provider, deps: fakeDeps(), now: NOW, onEvent });
+    expect(startedOf(events)).toMatchObject({ photos: 1, photosSent: 0 });
+    const notice = events.find((e) => e.type === "notice");
+    expect(notice).toMatchObject({ code: "photos_withheld" });
+    // Both are known before the first model turn starts.
+    const first = events.findIndex((e) => e.type === "thinking");
+    expect(events.indexOf(notice!)).toBeLessThan(first);
+    expect(events.indexOf(startedOf(events))).toBeLessThan(first);
+  });
+
+  it("counts only the photos that could be read, and notices the one that could not", async () => {
+    const { events, onEvent } = collect();
+    const report = makeReport({ photos: ["data:image/png;base64,AAAA", "data/this-photo-does-not-exist.png"] });
+    await runAgent(report, { engine: "muse-spark-1.3", provider: scriptedProvider(finishOnly()), deps: fakeDeps(), now: NOW, onEvent });
+    expect(startedOf(events)).toMatchObject({ photos: 2, photosSent: 1 });
+    expect(events.find((e) => e.type === "notice")).toMatchObject({ code: "photo_unreadable" });
+  });
+
+  it("starts with the photos sent, then withholds them in the middle of turn 1 when the server refuses the images", async () => {
+    const { events, onEvent } = collect();
+    await runAgent(makeReport(), { engine: "open-weights", provider: refusingFirst(400), deps: fakeDeps(), now: NOW, onEvent });
+    // The first request really carried the photo, so run_started says 1...
+    expect(startedOf(events)).toMatchObject({ photos: 1, photosSent: 1 });
+    // ...and the notice lands between the start and the end of the same turn: the page must reword that row.
+    const types = events.map((e) => (e.type === "thinking" ? `thinking:${e.turn}:${e.phase}` : e.type));
+    const start = types.indexOf("thinking:1:start");
+    const notice = types.indexOf("notice");
+    const end = types.indexOf("thinking:1:end");
+    expect(start).toBeGreaterThan(-1);
+    expect(notice).toBeGreaterThan(start);
+    expect(end).toBeGreaterThan(notice);
+    expect(events[notice]).toMatchObject({ code: "photos_withheld" });
   });
 });

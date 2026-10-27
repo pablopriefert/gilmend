@@ -3,6 +3,7 @@ import {
   CONFIDENCE_THRESHOLD,
   HIGH_VALUE_EUR,
   applyGuardrails,
+  describeGuardrailNote,
   extractDates,
   findUngroundedFigures,
   parseAmount,
@@ -256,5 +257,25 @@ describe("applyGuardrails: photos the model never saw", () => {
   it("changes nothing when the photos were read", () => {
     const r = applyGuardrails(raw(), ctx());
     expect(r.decision).toMatchObject({ carrierClaim: true, needsHuman: false });
+  });
+});
+
+describe("applyGuardrails: the plain-English notes of the live timeline", () => {
+  it("words each adjustment for the person who filed the report, without field names", () => {
+    const r = applyGuardrails(raw({ confidence: 0.4, decision: "ask_more_photos" }), ctx({ claim: null }));
+    const said = r.notes.map(describeGuardrailNote);
+    expect(said).toContain("No carrier claim: a “ask more photos” decision cannot carry a claim.");
+    expect(said).toContain("Sent to a human: confidence 0.40 is below 0.7.");
+    expect(said.join(" ")).not.toMatch(/needsHuman|carrierClaim|compute_claim|eligible=true/);
+    // The trace keeps the internal wording, one note per adjustment, in the same order.
+    expect(r.adjustments).toHaveLength(r.notes.length);
+  });
+
+  it("says a claim was not computed as eligible, and a human that was already needed", () => {
+    const r = applyGuardrails(raw({ needsHuman: true }), ctx({ claim: null }));
+    const said = r.notes.map(describeGuardrailNote);
+    expect(said).toContain("No carrier claim: the claim was not computed as eligible for a found order.");
+    const again = applyGuardrails(raw({ needsHuman: true, confidence: 0.2 }), ctx());
+    expect(again.notes.map(describeGuardrailNote)).toContain("Still needs a human: confidence 0.20 is below 0.7.");
   });
 });

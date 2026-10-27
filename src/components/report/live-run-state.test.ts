@@ -7,6 +7,7 @@ import {
   loseLiveRun,
   reduceLiveRun,
   thinkingLabel,
+  photosShown,
   type LiveRunState,
 } from "./live-run-state";
 
@@ -29,14 +30,15 @@ const accepted = (engine: "muse-spark-1.3" | "demo-mock" = "muse-spark-1.3"): St
   fellBack: engine !== "muse-spark-1.3",
   fellBackReason: engine === "demo-mock" ? "no_credentials" : null,
 });
-const started = (mock = false): AgentEvent => ({
+const started = (mock = false, photos = 1, photosSent = photos): AgentEvent => ({
   type: "run_started",
   t: 3,
   engine: mock ? "demo-mock" : "muse-spark-1.3",
   model: "m",
   label: mock ? "DEMO MODE: deterministic mock, not Muse" : "Muse Spark 1.3 (Meta Model API)",
   mock,
-  photos: 1,
+  photos,
+  photosSent,
 });
 const toolStart = (tool: string, t: number, calledBy: "model" | "code" = "model"): AgentEvent => ({ type: "tool_start", t, tool, turn: 1, calledBy });
 const toolEnd = (tool: string, t: number, result: ToolResult | null, over: Partial<Extract<AgentEvent, { type: "tool_end" }>> = {}): AgentEvent => ({
@@ -146,6 +148,61 @@ describe("reduceLiveRun", () => {
       { type: "thinking", t: 900, turn: 1, phase: "end", ok: false, toolCalls: 0, ms: 890 },
     ]);
     expect(failed.steps.at(-1)).toMatchObject({ state: "failed", detail: "The model call failed." });
+  });
+
+  describe("what the model is said to have read (review of 28 Oct 2026)", () => {
+    const turn1 = (from: LiveRunState, endAt?: number) =>
+      play(
+        [
+          { type: "thinking", t: 10, turn: 1, phase: "start" },
+          ...(endAt ? ([{ type: "thinking", t: endAt, turn: 1, phase: "end", ok: true, toolCalls: 1, ms: endAt - 10 }] as StreamEvent[]) : []),
+        ],
+        from,
+      );
+
+    it("says the photos were read when every one was shown", () => {
+      const s = turn1(play([accepted(), started()]), 4000);
+      expect(s.steps.at(-1)?.label).toBe("Muse read the report and the photos");
+    });
+
+    it("never says the photos were read by a model that was configured without image input", () => {
+      // The route sends the notice, then run_started with photosSent 0, before the first turn.
+      const withheld: StreamEvent = { type: "notice", t: 2, code: "photos_withheld", message: "The photos were not read by the model." };
+      const open = play([accepted(), withheld, { ...(started(false, 1, 0) as Extract<AgentEvent, { type: "run_started" }>), engine: "open-weights" }]);
+      expect(open.photos).toEqual({ sent: 0, total: 1 });
+      const running = turn1(open);
+      expect(running.steps.at(-1)?.label).toBe("The open-weights model is reading the report (photos not shown to it)");
+      const finished = turn1(open, 5000);
+      expect(finished.steps.at(-1)?.label).toBe("The open-weights model read the report (photos not shown to it)");
+    });
+
+    it("rewords turn 1 when the images are refused in the middle of it (HTTP 400, then a retry without them)", () => {
+      const mid = turn1(play([accepted(), started()]));
+      expect(mid.steps.at(-1)?.label).toBe("Muse is reading the report and the photos");
+      const refused = reduceLiveRun(mid, { type: "notice", t: 900, code: "photos_withheld", message: "The photos were not read by the model (HTTP 400)." });
+      // The row that is on screen is corrected at once, and the warning row comes after it.
+      const thinking = refused.steps.find((r) => r.kind === "thinking")!;
+      expect(thinking).toMatchObject({ state: "running", label: "Muse is reading the report (photos not shown to it)" });
+      expect(refused.steps.at(-1)).toMatchObject({ kind: "notice", warning: true });
+      const ended = reduceLiveRun(refused, { type: "thinking", t: 6000, turn: 1, phase: "end", ok: true, toolCalls: 1, ms: 5990 });
+      expect(ended.steps.find((r) => r.kind === "thinking")?.label).toBe("Muse read the report (photos not shown to it)");
+      expect(ended.photos).toEqual({ sent: 0, total: 1 });
+    });
+
+    it("says only some of the photos were read when one could not be read", () => {
+      const s = turn1(play([accepted(), started(false, 2, 1)]), 3000);
+      expect(photosShown(s.photos)).toBe("some");
+      expect(s.steps.at(-1)?.label).toBe("Muse read the report and some of the photos");
+    });
+
+    it("words the three cases, and leaves later turns and the mock alone", () => {
+      expect(thinkingLabel("muse-spark-1.3", 1, "running", "none")).toBe("Muse is reading the report (photos not shown to it)");
+      expect(thinkingLabel("muse-spark-1.3", 1, "done", "some")).toBe("Muse read the report and some of the photos");
+      expect(thinkingLabel("muse-spark-1.3", 2, "done", "none")).toBe("Muse decided the next step");
+      expect(thinkingLabel("demo-mock", 1, "done", "none")).toBe("The scripted mock started its script (it read no image)");
+      expect(photosShown(null)).toBe("all");
+      expect(photosShown({ sent: 0, total: 0 })).toBe("all");
+    });
   });
 
   it("draws guardrails and notices as warnings", () => {

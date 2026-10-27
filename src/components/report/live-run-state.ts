@@ -64,6 +64,12 @@ export interface LiveRunState {
   label: string | null;
   /** True when the model is the scripted mock (DEMO MODE). */
   mock: boolean;
+  /**
+   * How many photos the model was really shown, out of how many were filed (from run_started, and
+   * brought to 0 by a photos_withheld notice even in the middle of a turn). null until the run starts.
+   * The wording of "reading the photos" depends on it: never say the model read what it was not shown.
+   */
+  photos: { sent: number; total: number } | null;
   caseId: string | null;
   steps: LiveStep[];
   order: OrderSummary | null;
@@ -83,6 +89,7 @@ export function initialLiveRun(): LiveRunState {
     engine: null,
     label: null,
     mock: false,
+    photos: null,
     caseId: null,
     steps: [{ id: "s0", kind: "intake", label: "Sending the report", state: "running", atMs: 0 }],
     order: null,
@@ -113,14 +120,32 @@ export function actorName(engine: Engine | null): string {
   }
 }
 
-/** What a model turn is doing, said with the right subject (the mock reads no image and says so). */
-export function thinkingLabel(engine: Engine | null, turn: number, phase: "running" | "done"): string {
+/** How much of the photos the model was shown, for the wording of its first turn. */
+export type PhotosShown = "all" | "some" | "none";
+
+export function photosShown(photos: LiveRunState["photos"]): PhotosShown {
+  if (!photos) return "all";
+  if (photos.sent <= 0 && photos.total > 0) return "none";
+  return photos.sent < photos.total ? "some" : "all";
+}
+
+/**
+ * What a model turn is doing, said with the right subject (the mock reads no image and says so). The
+ * first turn says what the model was really given: a text-only model, a server that refused the images
+ * or an unreadable photo each change it (review of 28 Oct 2026: it used to say "read the photos" always).
+ */
+export function thinkingLabel(engine: Engine | null, turn: number, phase: "running" | "done", shown: PhotosShown = "all"): string {
   const actor = actorName(engine);
   if (engine === "demo-mock") {
     if (turn === 1) return phase === "running" ? `${actor} starts its script (it reads no image)` : `${actor} started its script (it read no image)`;
     return phase === "running" ? `${actor} picks the next step` : `${actor} picked the next step`;
   }
-  if (turn === 1) return phase === "running" ? `${actor} is reading the report and the photos` : `${actor} read the report and the photos`;
+  if (turn === 1) {
+    const verb = phase === "running" ? "is reading" : "read";
+    if (shown === "none") return `${actor} ${verb} the report (photos not shown to it)`;
+    if (shown === "some") return `${actor} ${verb} the report and some of the photos`;
+    return `${actor} ${verb} the report and the photos`;
+  }
   return phase === "running" ? `${actor} is deciding the next step` : `${actor} decided the next step`;
 }
 
@@ -228,7 +253,14 @@ export function reduceLiveRun(state: LiveRunState, event: StreamEvent): LiveRunS
     }
 
     case "run_started":
-      return { ...next, phase: "running", engine: event.engine, label: event.label, mock: event.mock };
+      return {
+        ...next,
+        phase: "running",
+        engine: event.engine,
+        label: event.label,
+        mock: event.mock,
+        photos: { sent: event.photosSent, total: event.photos },
+      };
 
     case "thinking": {
       if (event.phase === "start") {
@@ -237,7 +269,7 @@ export function reduceLiveRun(state: LiveRunState, event: StreamEvent): LiveRunS
           steps: push(state.steps, {
             kind: "thinking",
             turn: event.turn,
-            label: thinkingLabel(state.engine, event.turn, "running"),
+            label: thinkingLabel(state.engine, event.turn, "running", photosShown(state.photos)),
             state: "running",
             atMs: event.t,
           }),
@@ -249,7 +281,7 @@ export function reduceLiveRun(state: LiveRunState, event: StreamEvent): LiveRunS
         ...next,
         steps: replaceAt(state.steps, at, {
           state: event.ok ? "done" : "failed",
-          label: event.ok ? thinkingLabel(state.engine, event.turn, "done") : state.steps[at].label,
+          label: event.ok ? thinkingLabel(state.engine, event.turn, "done", photosShown(state.photos)) : state.steps[at].label,
           ms: event.ms,
           detail: event.ok ? undefined : "The model call failed.",
         }),
@@ -308,18 +340,31 @@ export function reduceLiveRun(state: LiveRunState, event: StreamEvent): LiveRunS
         }),
       };
 
-    case "notice":
+    case "notice": {
+      // The images were refused (or never sent): from here on the model has seen none of them, even if
+      // its first turn is already on screen as "reading the photos". Its row is reworded right away.
+      const withheld = event.code === "photos_withheld";
+      const photos = withheld ? { sent: 0, total: state.photos?.total ?? 0 } : state.photos;
+      const reworded = withheld
+        ? state.steps.map((s) =>
+            s.kind === "thinking" && s.turn === 1 && s.state === "running"
+              ? { ...s, label: thinkingLabel(state.engine, 1, "running", photosShown(photos)) }
+              : s,
+          )
+        : state.steps;
       return {
         ...next,
-        steps: push(state.steps, {
+        photos,
+        steps: push(reworded, {
           kind: "notice",
-          label: event.code === "photos_withheld" ? "Photos not read by the model" : "Heads up",
+          label: withheld ? "Photos not read by the model" : "Heads up",
           detail: event.message,
           state: "done",
           atMs: event.t,
           warning: true,
         }),
       };
+    }
 
     case "run_finished":
       return {

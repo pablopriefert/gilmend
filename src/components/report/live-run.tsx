@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import Link from "next/link";
 import {
   Calculator,
   Check,
@@ -80,15 +81,28 @@ export function LiveRun({
   const running = state.phase === "sending" || state.phase === "running";
   const clock = useElapsed(running);
   const done = state.phase === "done";
+  // Lifted here so the polite status line can say the case will open by itself, and that the person stopped it.
+  const [stay, setStay] = useState(false);
+  const autoOpens = autoOpenSeconds > 0 && !stay;
 
   // The last finished step, spoken once by a polite live region (the list itself is not live: it
-  // would read every row again each time one changes).
+  // would read every row again each time one changes). The page moves on by itself a few seconds after
+  // the end (focus goes to "Open the case"), so that is said too, once, and again when the person stops
+  // it (WCAG 2.2.1): the countdown text itself is not announced every second.
   const finished = [...state.steps].reverse().find((s) => s.state !== "running" && (s.detail || s.kind === "intake"));
   const announcement = done
-    ? `The case is ready, ${formatDuration(state.lastMs)} after the report was received.`
+    ? `The case is ready, ${formatDuration(state.lastMs)} after the report was received. ${
+        autoOpens
+          ? `It opens in ${autoOpenSeconds} seconds; choose Stay on this page to stop.`
+          : stay
+            ? "Staying on this page. Open the case when you are ready."
+            : "Open the case when you are ready."
+      }`
     : finished
       ? `${finished.label}${finished.detail ? `: ${finished.detail}` : ""}`
-      : "";
+      : state.phase === "sending"
+        ? "Sending the report."
+        : "";
 
   return (
     <div data-testid="live-run" className="animate-rise">
@@ -105,9 +119,14 @@ export function LiveRun({
                 Live
               </Pill>
             )}
-            <span className="tabular text-xs text-muted" aria-hidden="true">
-              {running ? clock : formatDuration(state.lastMs)}
-            </span>
+            {/* Two clocks exist and they are never mixed under one label: the browser's while the run goes on
+                (it includes the upload), the server's once it is over. A DEMO MODE run shows neither: its
+                steps take milliseconds and the rows say "scripted". */}
+            {!mock && (running || done) && (
+              <span className="tabular text-xs text-muted" aria-hidden="true">
+                {running ? `${clock} since you sent it` : `${formatDuration(state.lastMs)} on the server`}
+              </span>
+            )}
           </div>
           <h2 className="font-display text-3xl leading-tight tracking-tight text-foreground">
             {done ? "The case is ready" : "The agent is on your report"}
@@ -125,6 +144,9 @@ export function LiveRun({
           {announcement}
         </p>
 
+        {/* Two columns from md to lg, ONE from lg to xl, two again from xl (measured 28 Oct 2026 at 375, 768,
+            1024 and 1280 px): at lg the page puts the demo cases beside the form, so the card is only ~600 px
+            wide and a 16 rem column would leave the timeline ~270 px; from xl the card is ~720 px again. */}
         <div className="grid items-start gap-6 md:max-lg:grid-cols-[minmax(0,1fr)_16rem] xl:grid-cols-[minmax(0,1fr)_17.5rem]">
           <ol aria-label="What the agent is doing, live" className="relative flex min-w-0 flex-col gap-0.5">
             <span aria-hidden="true" className="absolute bottom-5 left-[1.0625rem] top-5 w-px bg-border" />
@@ -139,13 +161,25 @@ export function LiveRun({
         </div>
 
         {state.phase === "lost" && (
-          <p role="alert" className="rounded-xl border border-warning/25 bg-warning-soft px-4 py-3 text-sm text-warning">
-            The connection dropped before the agent finished. The run keeps going on the server and the case is saved
-            when it ends.
-          </p>
+          <div role="alert" className="flex flex-col gap-2 rounded-xl border border-warning/25 bg-warning-soft px-4 py-3 text-sm text-warning">
+            <p className="font-medium">The connection dropped before the agent finished.</p>
+            <p className="text-xs leading-5">
+              The report is stored, so do not send it again. The run should finish on the server: open the case in a
+              minute. If it still says &ldquo;New&rdquo;, a person can open it and work from the report.
+            </p>
+            {state.caseId && (
+              <p>
+                <Link href={`/cases/${encodeURIComponent(state.caseId)}`} className="font-semibold underline underline-offset-2">
+                  Open the saved case
+                </Link>
+              </p>
+            )}
+          </div>
         )}
 
-        {done && state.caseId && <Completion caseId={state.caseId} onOpen={onOpen} seconds={autoOpenSeconds} />}
+        {done && state.caseId && (
+          <Completion caseId={state.caseId} onOpen={onOpen} seconds={autoOpenSeconds} stay={stay} onStay={() => setStay(true)} />
+        )}
       </div>
     </div>
   );
@@ -372,10 +406,22 @@ function ClaimCard({ claim }: { claim: NonNullable<LiveRunState["claim"]> }) {
 
 // ---- the end ---------------------------------------------------------------------------
 
-function Completion({ caseId, onOpen, seconds }: { caseId: string; onOpen: (id: string) => void; seconds: number }) {
+function Completion({
+  caseId,
+  onOpen,
+  seconds,
+  stay,
+  onStay,
+}: {
+  caseId: string;
+  onOpen: (id: string) => void;
+  seconds: number;
+  stay: boolean;
+  onStay: () => void;
+}) {
   const [left, setLeft] = useState(seconds);
-  const [stay, setStay] = useState(false);
   const open = useRef(onOpen);
+  const openButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     open.current = onOpen;
   });
@@ -403,11 +449,19 @@ function Completion({ caseId, onOpen, seconds }: { caseId: string; onOpen: (id: 
       </p>
       <div className="flex flex-wrap items-center gap-2">
         {!stay && seconds > 0 && (
-          <button type="button" onClick={() => setStay(true)} className={BUTTON_QUIET}>
+          <button
+            type="button"
+            onClick={() => {
+              onStay();
+              // The button that was pressed disappears: keep the keyboard where it was useful.
+              openButton.current?.focus();
+            }}
+            className={BUTTON_QUIET}
+          >
             Stay on this page
           </button>
         )}
-        <button type="button" autoFocus onClick={() => onOpen(caseId)} className={BUTTON_PRIMARY}>
+        <button ref={openButton} type="button" autoFocus onClick={() => onOpen(caseId)} className={BUTTON_PRIMARY}>
           Open the case
         </button>
       </div>

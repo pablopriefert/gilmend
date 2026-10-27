@@ -32,7 +32,7 @@ import {
   type AgentEventSink,
   type ToolResult,
 } from "./events";
-import { applyGuardrails } from "./guardrails";
+import { applyGuardrails, describeGuardrailNote } from "./guardrails";
 import { photoToImageUrl } from "./photos";
 import { redactForTrace } from "./redact";
 import { formatReportMessage } from "./report-prompt";
@@ -368,10 +368,10 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
           photosNotRead,
         });
         decision = result.decision;
-        for (const adj of result.adjustments) {
-          log(`Guardrail: ${adj}`);
-          emit({ type: "guardrail", message: scrub(adj, 240) });
-        }
+        for (const adj of result.adjustments) log(`Guardrail: ${adj}`);
+        // The trace keeps the internal wording; the person watching the timeline gets a plain sentence
+        // (review of 28 Oct 2026: "needsHuman forced: ..." is code talk in an otherwise English list).
+        for (const note of result.notes) emit({ type: "guardrail", message: scrub(describeGuardrailNote(note), 240) });
         const needsDoc = decision.carrierClaim && !document;
         return {
           accepted: true,
@@ -546,15 +546,6 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
     }
   }
 
-  emit({
-    type: "run_started",
-    engine,
-    model: provider?.model ?? "none",
-    label: (provider?.detail ?? describeEngine(engine, env)).label,
-    mock: engine === "demo-mock",
-    photos: report.photos.length,
-  });
-
   // ---- opening message (text + photos) ---------------------------------------------
 
   const content: ChatCompletionContentPart[] = [];
@@ -611,6 +602,20 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
     { role: "system", content: SYSTEM_PROMPT },
     { role: "user", content },
   ];
+
+  // Announced once the opening message is built, not before: only now is it known how many photos the
+  // model is really shown (none for a text-only model, fewer when one could not be read), and the page
+  // words "reading the photos" from that count (review of 28 Oct 2026). Any photo notice above therefore
+  // comes before this event; the page orders nothing by it.
+  emit({
+    type: "run_started",
+    engine,
+    model: provider?.model ?? "none",
+    label: (provider?.detail ?? describeEngine(engine, env)).label,
+    mock: engine === "demo-mock",
+    photos: report.photos.length,
+    photosSent: attached.length,
+  });
 
   // ---- the loop ---------------------------------------------------------------------
 

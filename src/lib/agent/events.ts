@@ -100,7 +100,15 @@ export type AgentEvent = Timed &
         label: string;
         /** True when the model is the scripted mock: nothing it says comes from a model. */
         mock: boolean;
+        /** Photos in the report. */
         photos: number;
+        /**
+         * Photos actually attached to the model's opening message (28 Oct 2026). It is below `photos`
+         * when a photo could not be read, and 0 when the model is text-only: the page must not say the
+         * model "read the photos" then. A `photos_withheld` notice later in the run (the server refused
+         * the images) brings it back to 0.
+         */
+        photosSent: number;
       }
     | { type: "thinking"; turn: number; phase: "start" }
     | { type: "thinking"; turn: number; phase: "end"; ok: boolean; toolCalls: number; ms: number }

@@ -156,8 +156,17 @@ order card, the SAM image fading in once it is stored, the claim amount rolling 
 number is the code's), and guardrail warnings; when the case is saved, "Open the case" (it also
 opens by itself after 5 s unless you stay). A DEMO MODE run streams the same real steps (the order
 lookup, the claim maths and the PDF are code) but is labelled "DEMO MODE (scripted)", shows no
-timings and never shows an outline. If nothing streams within 10 s (a proxy that buffers, an older
-server), the page falls back to the old step list, labelled as an illustration.
+timings (not even a header clock) and never shows an outline. If nothing streams within 10 s (a proxy
+that buffers, an older server), the page falls back to the old step list, labelled as an illustration.
+
+The first model turn says what the model was really given: `run_started` carries `photosSent` (how many
+photos were attached to the opening message), and a `photos_withheld` notice (a text-only model, or a
+server that answered HTTP 400/413/415/422 to the images and was retried without them) brings it to 0, so the
+row reads "the report (photos not shown to it)" instead of "the report and the photos". Guardrail rows are
+worded in plain English; the raw wording stays in the case's trace. If the connection drops after the report
+was stored, the timeline stays with a link to the case and tells the person not to send the report again:
+the run should finish on the server (see the `after()` caveat above, not verified on Vercel). "File another
+report" clears the form once a run is over.
 
 Events never carry the API key, a photo's bytes (a data URL is dropped, only a stored path is
 kept), the customer's name, e-mail, address or message, the reply, or the model's free text:
