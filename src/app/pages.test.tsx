@@ -1,0 +1,102 @@
+// @vitest-environment jsdom
+import { render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { makeCase, makeRules } from "@/components/fixtures";
+
+const listCases = vi.fn();
+const getCase = vi.fn();
+const getCarrierRules = vi.fn();
+vi.mock("@/lib/store/cases", () => ({ listCases: () => listCases(), getCase: (id: string) => getCase(id) }));
+vi.mock("@/lib/rules/carriers", () => ({ getCarrierRules: (c: string) => getCarrierRules(c) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/",
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
+}));
+
+import CasesPage from "./page";
+import CasePage from "./cases/[id]/page";
+import ReportPage from "./report/page";
+
+beforeEach(() => vi.spyOn(console, "error").mockImplementation(() => {}));
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+  for (const m of [listCases, getCase, getCarrierRules]) m.mockReset();
+});
+
+describe("Cases page", () => {
+  it("lists the stored cases", async () => {
+    listCases.mockResolvedValue([makeCase()]);
+    render(await CasesPage());
+    expect(screen.getByRole("heading", { name: "Cases" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /#1001/ })).toHaveAttribute("href", "/cases/case-1");
+  });
+
+  it("hides the details of an unexpected failure", async () => {
+    listCases.mockRejectedValue(new Error("EACCES: /home/secret"));
+    render(await CasesPage());
+    expect(screen.getByRole("alert")).toHaveTextContent(/could not be loaded/);
+    expect(screen.getByRole("alert").textContent).not.toMatch(/secret/);
+  });
+});
+
+describe("Case page", () => {
+  const params = (id: string) => ({ params: Promise.resolve({ id }) });
+
+  it("renders a needs_review case with the carrier rules of its order", async () => {
+    getCase.mockResolvedValue(makeCase());
+    getCarrierRules.mockReturnValue(makeRules());
+    render(await CasePage(params("case-1")));
+    expect(getCase).toHaveBeenCalledWith("case-1");
+    expect(getCarrierRules).toHaveBeenCalledWith("colissimo");
+    expect(screen.getByTestId("decision-kind")).toHaveTextContent("Reship");
+    expect(screen.getByText("Colissimo claims conditions")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+  });
+
+  it("still renders when the carrier rules module throws", async () => {
+    getCase.mockResolvedValue(makeCase());
+    getCarrierRules.mockImplementation(() => {
+      throw new Error("rules unavailable");
+    });
+    render(await CasePage(params("case-1")));
+    expect(screen.getByText("The carrier rules could not be loaded for this case.")).toBeInTheDocument();
+    expect(screen.getByTestId("decision-kind")).toBeInTheDocument();
+  });
+
+  it("is a 404 for an unknown case and for a malformed id, without reading the store for the latter", async () => {
+    getCase.mockResolvedValue(null);
+    await expect(CasePage(params("missing"))).rejects.toThrow("NEXT_NOT_FOUND");
+    getCase.mockClear();
+    await expect(CasePage(params("../etc"))).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(getCase).not.toHaveBeenCalled();
+  });
+
+  it("says the store is unavailable rather than pretending the case does not exist", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    getCase.mockRejectedValue(new Error("EACCES: /home/secret"));
+    render(await CasePage(params("case-1")));
+    expect(screen.getByRole("alert")).toHaveTextContent(/could not be loaded/);
+    expect(screen.getByRole("alert").textContent).not.toMatch(/secret/);
+  });
+});
+
+describe("Report page", () => {
+  it("tells the form which engines the server has", () => {
+    vi.stubEnv("MODEL_API_KEY", "");
+    vi.stubEnv("OPEN_WEIGHTS_BASE_URL", "");
+    vi.stubEnv("OPEN_WEIGHTS_MODEL", "");
+    render(<ReportPage />);
+    expect(screen.getByRole("heading", { name: "Report a damaged parcel" })).toBeInTheDocument();
+    expect(screen.getByText(/This report will run as/).textContent).toMatch(/DEMO MODE/);
+  });
+
+  it("offers Muse when a key is set", () => {
+    vi.stubEnv("MODEL_API_KEY", "fake-key-for-test");
+    render(<ReportPage />);
+    expect(screen.getByText(/This report will run as/).textContent).toMatch(/Muse Spark 1\.3/);
+  });
+});

@@ -1,0 +1,41 @@
+import Link from "next/link";
+import type { CaseRecord } from "@/lib/types";
+import { summarizeCases } from "@/lib/store/summary";
+import { formatEur } from "./format";
+
+/** Page title plus the counter: "€1,240 recoverable this month · 3 claims due this week". */
+export function CasesHeader({ cases, now }: { cases: CaseRecord[]; now: Date }) {
+  const { recoverableThisMonthEur: recoverableEur, claimsDueThisWeek, demoModeCases } = summarizeCases(cases, now);
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Cases</h1>
+        <p className="mt-2 text-lg" data-testid="counter">
+          <strong className="font-semibold">{formatEur(recoverableEur, { whole: true })}</strong> recoverable
+          this month{" "}
+          <span aria-hidden="true" className="px-1 text-muted">
+            ·
+          </span>{" "}
+          <strong className="font-semibold">{claimsDueThisWeek}</strong>{" "}
+          {claimsDueThisWeek === 1 ? "claim" : "claims"} due this week
+        </p>
+        <p className="mt-1 text-sm text-muted">
+          Maximum compensation under each carrier&apos;s rules, for claims the agent found eligible and you
+          have not rejected. Not a promise of payment.
+        </p>
+        {demoModeCases > 0 && (
+          <p className="mt-1 text-sm text-muted" data-testid="demo-mode-note">
+            Includes {demoModeCases} demo-mode {demoModeCases === 1 ? "case" : "cases"}: scripted decisions,
+            not Muse.
+          </p>
+        )}
+      </div>
+      <Link
+        href="/report"
+        className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
+      >
+        Report a damaged parcel
+      </Link>
+    </div>
+  );
+}

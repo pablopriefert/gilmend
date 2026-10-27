@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+/*
+ * Calm B2B look (think Linear / Stripe dashboard): neutral greys, one blue accent, status
+ * colours only where they carry meaning. Light theme only on purpose: every text/background
+ * pair below was picked for WCAG AA contrast (4.5:1), and a second theme would double that
+ * checking work during an 8-day hackathon.
+ */
+:root {
+  color-scheme: light;
+  --background: #f6f7f9;
+  --foreground: #111827;
+  --surface: #ffffff;
+  --border: #dfe3ea;
+  --muted: #566074; /* 6.1:1 on white, 5.6:1 on --background */
+  --accent: #2748c9; /* 7.4:1 against white text */
+  --accent-hover: #1d38a6;
+  --accent-soft: #eaeffd;
+  --danger: #b42318;
+  --danger-soft: #fef0ee;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* One visible focus ring for every keyboard-reachable control. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Respect users who ask for less motion (we only animate the "working" spinner). */
+@media (prefers-reduced-motion: reduce) {
+  .motion-safe-spin {
+    animation: none !important;
+  }
+}

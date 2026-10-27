@@ -1,0 +1,168 @@
+{
+  "_readme": "FICTITIOUS orders for the Damage Desk demo. Every person, e-mail (example.com / .org / .net only), tracking number and address below is invented. Timing is stored as an offset from 'now' (hours ago) and resolved when the file is loaded, so deadlines (Mondial Relay 72 h, Chronopost 3 days...) stay meaningful during the whole demo week. See src/lib/orders/fixtures.ts.",
+  "orders": [
+    {
+      "id": "#1001",
+      "name": "Camille Laurent",
+      "email": "camille.laurent@example.com",
+      "carrier": "colissimo",
+      "service": "Colissimo Domicile sans signature",
+      "trackingNumber": "6A99001001001",
+      "weightKg": 2.3,
+      "currency": "EUR",
+      "lineItems": [
+        { "sku": "VASE-TALL-SAND", "title": "Hand-thrown stoneware vase, tall", "quantity": 1, "unitPrice": 58.0 }
+      ],
+      "shippingEur": 6.9,
+      "shippingAddress": { "city": "Lyon", "country": "FR" },
+      "timing": { "orderedHoursAgo": 116, "deliveredHoursAgo": 20 }
+    },
+    {
+      "id": "#1002",
+      "name": "Hugo Bernard",
+      "email": "hugo.bernard@example.com",
+      "carrier": "chronopost",
+      "service": "Chronopost Chrono 13",
+      "trackingNumber": "XW990010021TS",
+      "weightKg": 1.6,
+      "currency": "EUR",
+      "lineItems": [
+        { "sku": "PRINT-LINO-OAK-4050", "title": "Linocut print, oak frame 40x50 cm", "quantity": 1, "unitPrice": 89.0 }
+      ],
+      "shippingEur": 8.9,
+      "shippingAddress": { "city": "Nantes", "country": "FR" },
+      "timing": { "orderedHoursAgo": 74, "deliveredHoursAgo": 26 }
+    },
+    {
+      "id": "#1003",
+      "name": "Ines Moreau",
+      "email": "ines.moreau@example.org",
+      "carrier": "colissimo",
+      "service": "Colissimo Domicile avec signature",
+      "trackingNumber": "6A99001003003",
+      "weightKg": 3.1,
+      "currency": "EUR",
+      "lineItems": [
+        { "sku": "LAMP-BRASS-GLASS", "title": "Brass table lamp with glass shade", "quantity": 1, "unitPrice": 129.0 }
+      ],
+      "shippingEur": 0,
+      "shippingAddress": { "city": "Lille", "country": "FR" },
+      "timing": { "orderedHoursAgo": 110, "deliveredHoursAgo": 15 }
+    },
+    {
+      "id": "#1004",
+      "name": "Lucas Petit",
+      "email": "lucas.petit@example.net",
+      "carrier": "mondial_relay",
+      "service": "Mondial Relay Point Relais",
+      "trackingNumber": "99100404",
+      "weightKg": 2.6,
+      "currency": "EUR",
+      "lineItems": [
+        { "sku": "CUPS-ESP-SET4", "title": "Stoneware espresso cups, set of 4", "quantity": 1, "unitPrice": 48.0 },
+        { "sku": "SAUC-ESP-SET4", "title": "Matching saucers, set of 4", "quantity": 1, "unitPrice": 36.0 }
+      ],
+      "shippingEur": 4.9,
+      "shippingAddress": { "city": "Bordeaux", "country": "FR" },
+      "timing": { "orderedHoursAgo": 126, "deliveredHoursAgo": 30 }
+    },
+    {
+      "id": "#1005",
+      "name": "Sofia Rossi",
+      "email": "sofia.rossi@example.com",
+      "carrier": "chronopost",
+      "service": "Chronopost Chrono 13",
+      "trackingNumber": "XW990010051TS",
+      "weightKg": 0.95,
+      "currency": "EUR",
+      "lineItems": [
+        { "sku": "AUDIO-HP-STUDIO", "title": "Studio wireless headphones", "quantity": 1, "unitPrice": 349.0 }
+      ],
+      "shippingEur": 0,
+      "shippingAddress": { "city": "Strasbourg", "country": "FR" },
+      "timing": { "orderedHoursAgo": 70, "deliveredHoursAgo": 22 }
+    },
+    {
+      "id": "#1006",
+      "name": "Thomas Garnier",
+      "email": "thomas.garnier@example.org",
+      "carrier": "chronopost",
+      "service": "Chronopost Chrono 13",
+      "trackingNumber": "XW990010061TS",
+      "weightKg": 1.2,
+      "currency": "EUR",
+      "lineItems": [
+        { "sku": "CARAFE-CUT-1L", "title": "Cut-glass water carafe, 1 L", "quantity": 1, "unitPrice": 38.0 }
+      ],
+      "shippingEur": 6.9,
+      "shippingAddress": { "city": "Toulouse", "country": "FR" },
+      "timing": { "orderedHoursAgo": 290, "deliveredHoursAgo": 216 }
+    },
+    {
+      "id": "#1007",
+      "name": "Lea Fontaine",
+      "email": "lea.fontaine@example.com",
+      "carrier": "mondial_relay",
+      "service": "Mondial Relay Point Relais",
+      "trackingNumber": "99100407",
+      "weightKg": 1.9,
+      "currency": "EUR",
+      "lineItems": [
+        { "sku": "BOARD-WALNUT-L", "title": "Walnut serving board, large", "quantity": 1, "unitPrice": 42.0 },
+        { "sku": "NAPK-LINEN-SET4", "title": "Linen napkins, set of 4", "quantity": 1, "unitPrice": 24.0 }
+      ],
+      "shippingEur": 4.9,
+      "shippingAddress": { "city": "Rennes", "country": "FR" },
+      "timing": { "orderedHoursAgo": 120, "deliveredHoursAgo": 52 }
+    },
+    {
+      "id": "#1008",
+      "name": "Marc Dubois",
+      "email": "marc.dubois@example.net",
+      "carrier": "colissimo",
+      "service": "Colissimo Domicile sans signature",
+      "trackingNumber": "6A99001008008",
+      "weightKg": 4.8,
+      "currency": "EUR",
+      "lineItems": [
+        { "sku": "PLANT-GLAZE-L", "title": "Large glazed ceramic planter", "quantity": 1, "unitPrice": 79.0 }
+      ],
+      "shippingEur": 9.9,
+      "shippingAddress": { "city": "Marseille", "country": "FR" },
+      "timing": { "orderedHoursAgo": 140, "deliveredHoursAgo": 70 }
+    },
+    {
+      "id": "#1009",
+      "name": "Nora Haddad",
+      "email": "nora.haddad@example.com",
+      "carrier": "chronopost",
+      "service": "Chronopost Chrono 13",
+      "trackingNumber": "XW990010091TS",
+      "weightKg": 0.7,
+      "currency": "EUR",
+      "lineItems": [
+        { "sku": "SPK-BT-PORT", "title": "Portable Bluetooth speaker", "quantity": 1, "unitPrice": 119.0 }
+      ],
+      "shippingEur": 0,
+      "shippingAddress": { "city": "Grenoble", "country": "FR" },
+      "timing": { "orderedHoursAgo": 30, "deliveredHoursAgo": null }
+    },
+    {
+      "id": "#1010",
+      "name": "Julien Roche",
+      "email": "julien.roche@example.org",
+      "carrier": "colissimo",
+      "service": "Colissimo Domicile avec signature",
+      "trackingNumber": "6A99001010010",
+      "weightKg": 2.0,
+      "currency": "EUR",
+      "lineItems": [
+        { "sku": "DECANT-BLOWN", "title": "Mouth-blown wine decanter", "quantity": 1, "unitPrice": 46.0 },
+        { "sku": "TUMB-BLOWN-SET2", "title": "Mouth-blown tumblers, set of 2", "quantity": 1, "unitPrice": 28.0 }
+      ],
+      "shippingEur": 6.9,
+      "shippingAddress": { "city": "Dijon", "country": "FR" },
+      "timing": { "orderedHoursAgo": 100, "deliveredHoursAgo": 5 }
+    }
+  ]
+}

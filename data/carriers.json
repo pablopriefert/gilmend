@@ -1,0 +1,272 @@
+{
+  "schemaVersion": 1,
+  "lastReviewed": "2026-10-27",
+  "disclaimer": "Public terms of the standard carrier contracts. A merchant with a negotiated contract may have different caps and deadlines; check the contract before filing. Amounts and deadlines are computed from this file by deterministic code, never by a model.",
+  "carriers": {
+    "colissimo": {
+      "carrier": "colissimo",
+      "label": "Colissimo (La Poste)",
+      "sources": [
+        {
+          "title": "Colissimo Entreprise general terms, Contrat Facilite (edition of 2020-12-08; clauses on standard indemnity and 12-month limitation read)",
+          "url": "https://www.colissimo.entreprise.laposte.fr/sites/default/files/2021-03/cgv-contrat-facilite.pdf",
+          "checkedOn": "2026-10-27"
+        },
+        {
+          "title": "French Commercial Code, art. L133-3 (3-day protest after receipt, carrier liability)",
+          "url": "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000021486442",
+          "checkedOn": "2026-10-27"
+        }
+      ],
+      "reserveDeadlineHours": 72,
+      "claimDeadlineDays": 365,
+      "compensation": {
+        "perKgEur": 23,
+        "capEur": 690
+      },
+      "requiresRefusal": false,
+      "claimDeadlineFrom": "shipment",
+      "reserveDeadlineBinding": false,
+      "compensationVariants": [
+        {
+          "id": "colissimo-signature",
+          "label": "Colissimo Domicile with signature",
+          "when": {
+            "serviceIncludes": [
+              "avec signature",
+              "with signature"
+            ],
+            "serviceExcludes": [
+              "sans signature",
+              "without signature"
+            ]
+          },
+          "compensation": {
+            "perKgEur": 33,
+            "capEur": 990
+          }
+        }
+      ],
+      "figures": [
+        {
+          "key": "compensation.perKgEur",
+          "label": "Indemnity per kg (standard offers)",
+          "value": "23 EUR/kg",
+          "status": "dated_source",
+          "sourceUrl": "https://www.colissimo.entreprise.laposte.fr/sites/default/files/2021-03/cgv-contrat-facilite.pdf",
+          "checkedOn": "2026-10-27",
+          "note": "Read in the 2020-12-08 edition. The 2026 general terms are not public, so the current figure is not confirmed."
+        },
+        {
+          "key": "compensation.capEur",
+          "label": "Cap per parcel (standard offers)",
+          "value": "690 EUR",
+          "status": "dated_source",
+          "sourceUrl": "https://www.colissimo.entreprise.laposte.fr/sites/default/files/2021-03/cgv-contrat-facilite.pdf",
+          "checkedOn": "2026-10-27",
+          "note": "Same edition as above. Applies to parcels over 1 kg; up to 1 kg the indemnity is 23 EUR/kg prorated by weight."
+        },
+        {
+          "key": "variant.colissimo-signature",
+          "label": "Domicile with signature: 33 EUR/kg, cap 990 EUR",
+          "value": "33 EUR/kg, 990 EUR",
+          "status": "dated_source",
+          "sourceUrl": "https://www.colissimo.entreprise.laposte.fr/sites/default/files/2021-03/cgv-contrat-facilite.pdf",
+          "checkedOn": "2026-10-27",
+          "note": "Same edition as above."
+        },
+        {
+          "key": "claimDeadlineDays",
+          "label": "Time limit to claim",
+          "value": "12 months from the day after pick-up (France)",
+          "status": "dated_source",
+          "sourceUrl": "https://www.colissimo.entreprise.laposte.fr/sites/default/files/2021-03/cgv-contrat-facilite.pdf",
+          "checkedOn": "2026-10-27",
+          "note": "Modelled as 365 days counted from the order creation date, because the order has no pick-up date; this is earlier than the real deadline, so it errs on the safe side."
+        },
+        {
+          "key": "reserveDeadlineHours",
+          "label": "Reserve window after delivery",
+          "value": "72 h (prudential)",
+          "status": "unverified",
+          "sourceUrl": "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000021486442",
+          "checkedOn": "2026-10-27",
+          "note": "L133-3 itself was read, but we could not confirm that it applies to Colissimo parcels (postal regime). The Colissimo general terms set no such deadline. Applied as a warning only, never as a hard block."
+        }
+      ],
+      "notes": [
+        "UNVERIFIED: the 3-day reserve window (L133-3) is applied to Colissimo out of prudence only; no official text confirms it for La Poste parcels. It never blocks a claim, it only adds a warning.",
+        "DATED SOURCE: the amounts (23 EUR/kg, 690 EUR, 33 EUR/kg, 990 EUR) and the 12-month limit come from the 2020-12-08 edition of the general terms; the 2026 edition is not public. Ask the merchant's Colissimo adviser for the current contract.",
+        "Colissimo pays the purchase value of the content (supplier invoice), or 70% of the sale value without one. The order only carries the sale price, so the ceiling computed here uses the sale price and the real indemnity may be lower.",
+        "No indemnity when the packaging is unsuitable for the content, and no indirect damage. Shipping fees are refunded only for a total loss. Only the weight measured by La Poste counts; the order's declared weight is used here.",
+        "The ad valorem option (up to 1000 or 5000 EUR) replaces the standard indemnity and is not modelled; the order does not say whether it was bought. A high-value parcel must go to a human.",
+        "Claims are filed by the merchant in the Colissimo Box tracking tool (OSC); no claim API was found."
+      ],
+      "compensationCaveat": "Colissimo pays the purchase value of the content (supplier invoice), or 70% of the sale value without one. This ceiling uses the order's sale price, so the final indemnity may be lower."
+    },
+    "mondial_relay": {
+      "carrier": "mondial_relay",
+      "label": "Mondial Relay (Offre Start)",
+      "sources": [
+        {
+          "title": "Mondial Relay general terms, Offre Start (updated 2025-09-01; 25 EUR per parcel and 72 h clauses read)",
+          "url": "https://www.mondialrelay.fr/media/125872/20250901-france-offre-start-conditions-g%C3%A9n%C3%A9rales-de-vente-fr.pdf",
+          "checkedOn": "2026-10-27"
+        },
+        {
+          "title": "Mondial Relay recipient FAQ, my parcel is damaged (refuse the parcel)",
+          "url": "https://www.mondialrelay.fr/faq/recevoir-un-colis/mon-colis-est-abime-que-faire/",
+          "checkedOn": "2026-10-27"
+        },
+        {
+          "title": "French Commercial Code, art. L133-3 (3-day protest after receipt, carrier liability)",
+          "url": "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000021486442",
+          "checkedOn": "2026-10-27"
+        }
+      ],
+      "reserveDeadlineHours": 72,
+      "claimDeadlineDays": 3,
+      "compensation": {
+        "flatEur": 25,
+        "capEur": 25
+      },
+      "requiresRefusal": true,
+      "claimDeadlineFrom": "delivery",
+      "reserveDeadlineBinding": true,
+      "compensationVariants": [],
+      "figures": [
+        {
+          "key": "compensation.flatEur",
+          "label": "Indemnity per parcel (loss or damage)",
+          "value": "25 EUR per parcel",
+          "status": "verified",
+          "sourceUrl": "https://www.mondialrelay.fr/media/125872/20250901-france-offre-start-conditions-g%C3%A9n%C3%A9rales-de-vente-fr.pdf",
+          "checkedOn": "2026-10-27",
+          "note": "Offre Start general terms of 2025-09-01. Shipping fees are not refunded."
+        },
+        {
+          "key": "claimDeadlineDays",
+          "label": "Time limit to claim for visible damage",
+          "value": "72 hours after delivery (excluding public holidays)",
+          "status": "verified",
+          "sourceUrl": "https://www.mondialrelay.fr/media/125872/20250901-france-offre-start-conditions-g%C3%A9n%C3%A9rales-de-vente-fr.pdf",
+          "checkedOn": "2026-10-27",
+          "note": "Counted here in calendar hours (public holidays are not skipped), so the computed deadline is never later than the real one."
+        },
+        {
+          "key": "reserveDeadlineHours",
+          "label": "Reserve window after delivery",
+          "value": "72 hours",
+          "status": "verified",
+          "sourceUrl": "https://www.mondialrelay.fr/media/125872/20250901-france-offre-start-conditions-g%C3%A9n%C3%A9rales-de-vente-fr.pdf",
+          "checkedOn": "2026-10-27",
+          "note": "Same 72 h clause as the claim deadline."
+        },
+        {
+          "key": "requiresRefusal",
+          "label": "Damaged parcel must be refused at delivery",
+          "value": "yes",
+          "status": "verified",
+          "sourceUrl": "https://www.mondialrelay.fr/faq/recevoir-un-colis/mon-colis-est-abime-que-faire/",
+          "checkedOn": "2026-10-27",
+          "note": "The FAQ says claims made after the parcel was handed over are not taken into account. Lockers differ (written reserves) and are not modelled."
+        }
+      ],
+      "notes": [
+        "Figures are for the standard Offre Start contract; merchants with a negotiated contract may have other terms (not public). UNVERIFIED for those merchants.",
+        "The recipient must refuse a damaged parcel at the relay point or at home; otherwise the claim is not admissible. The order does not record whether the customer refused it, so computeClaim takes it as an optional input and adds a warning when it is unknown.",
+        "Optional paid levels (50 to 500 EUR) exist but cannot be added after shipping and are not modelled.",
+        "Claims go through the Connect tool or an e-mail to offrestart@mondialrelay.fr; no claim API was found. Compensation is paid to the prepaid account.",
+        "A parcel declared delivered but never received is a different procedure (1 month, sworn statement and ID copy) and is out of scope: send it to a human."
+      ]
+    },
+    "chronopost": {
+      "carrier": "chronopost",
+      "label": "Chronopost (professional terms)",
+      "sources": [
+        {
+          "title": "Chronopost general terms of sale, professionals (online page, undated; limits and 3-day claim deadline read)",
+          "url": "https://www.chronopost.fr/fr/conditions-generales-de-vente-professionnels",
+          "checkedOn": "2026-10-27"
+        },
+        {
+          "title": "French Commercial Code, art. L133-3 (3-day protest after receipt, carrier liability)",
+          "url": "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000021486442",
+          "checkedOn": "2026-10-27"
+        }
+      ],
+      "reserveDeadlineHours": 72,
+      "claimDeadlineDays": 3,
+      "compensation": {
+        "flatEur": 250,
+        "capEur": 250
+      },
+      "requiresRefusal": false,
+      "claimDeadlineFrom": "delivery",
+      "reserveDeadlineBinding": true,
+      "compensationVariants": [
+        {
+          "id": "chronopost-per-kg",
+          "label": "Chrono 18, Chrono Classic, Chrono Relais Europe, or a parcel with mobile phone items",
+          "when": {
+            "serviceIncludes": [
+              "chrono 18",
+              "chrono classic",
+              "relais europe"
+            ],
+            "itemPattern": "\\b(smartphone|iphone|phone|telephone|t\\u00e9l\\u00e9phone)s?\\b"
+          },
+          "compensation": {
+            "perKgEur": 23,
+            "capEur": 690
+          }
+        }
+      ],
+      "figures": [
+        {
+          "key": "compensation.flatEur",
+          "label": "Default limit per parcel",
+          "value": "250 EUR per parcel",
+          "status": "verified",
+          "sourceUrl": "https://www.chronopost.fr/fr/conditions-generales-de-vente-professionnels",
+          "checkedOn": "2026-10-27",
+          "note": "The terms page shows no edition date. Needs supporting documents (invoice, photos)."
+        },
+        {
+          "key": "variant.chronopost-per-kg",
+          "label": "Chrono 18 / Classic / Relais Europe and mobile phone items: 23 EUR/kg, max 690 EUR",
+          "value": "23 EUR/kg, 690 EUR",
+          "status": "verified",
+          "sourceUrl": "https://www.chronopost.fr/fr/conditions-generales-de-vente-professionnels",
+          "checkedOn": "2026-10-27",
+          "note": "Mobile phone items are detected by a keyword match on item titles (phone, smartphone, iphone, telephone); this heuristic is not an official list."
+        },
+        {
+          "key": "claimDeadlineDays",
+          "label": "Time limit to claim (professional shipper, France)",
+          "value": "3 days after delivery",
+          "status": "verified",
+          "sourceUrl": "https://www.chronopost.fr/fr/conditions-generales-de-vente-professionnels",
+          "checkedOn": "2026-10-27",
+          "note": "14 days apply to consumer shippers, which is not our case. Counted in calendar days, which is never later than the real deadline."
+        },
+        {
+          "key": "reserveDeadlineHours",
+          "label": "Reserve window after delivery",
+          "value": "72 hours",
+          "status": "verified",
+          "sourceUrl": "https://www.chronopost.fr/fr/conditions-generales-de-vente-professionnels",
+          "checkedOn": "2026-10-27",
+          "note": "Same 3-day window as the claim. The clause asking for written reserves on the delivery slip comes from the research notes of 2026-10-22 and was not re-read."
+        }
+      ],
+      "notes": [
+        "Figures are for the public professional terms; a negotiated contract may differ (not public). UNVERIFIED for those merchants.",
+        "Without detailed written reserves on the delivery slip, the claimant must prove that the damage comes from transport; photos taken at delivery matter.",
+        "Insufficient packaging and the shipper's own fault are excluded; the optional insurance (up to 5000 EUR) is not modelled and the order does not say whether it was bought.",
+        "Claims are filed by the merchant through the online customer service form or live chat; no claim API was found. The shipping fee must have been paid."
+      ],
+      "compensationCaveat": "Chronopost pays on supporting documents (purchase invoice dated no later than the shipping day, photos of the damage)."
+    }
+  }
+}

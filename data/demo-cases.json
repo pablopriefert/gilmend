@@ -1,0 +1,113 @@
+{
+  "_readme": "The six filmable cases of the spec (section 4). Each one is a DamageReport (resolved at load time, see src/lib/store/demo-cases.ts) plus the outcome we EXPECT from the agent. 'reportedHoursAgo' is an offset from now, so a case reported 3 hours ago stays 3 hours old whenever the demo is opened; it must be smaller than the order's 'deliveredHoursAgo' in data/fixtures/orders.json (a test checks it). Photos: the team shoots them (data/photos/<name>.jpg, see data/photos/README.md). Until then data/photos/<name>.webp holds a PROVISIONAL AI-generated stand-in, labelled as such there; no real customer image is ever used.",
+  "cases": [
+    {
+      "id": "demo-1-vase-broken",
+      "title": "Broken vase (Colissimo): reship and claim the carrier",
+      "reportedHoursAgo": 3,
+      "customerEmail": "camille.laurent@example.com",
+      "orderNumber": "#1001",
+      "message": "Hi, my vase arrived broken this morning. The box looked fine from outside but the vase is in several pieces. Order #1001, photo attached. Can you send a new one?",
+      "photos": ["data/photos/vase-broken.jpg"],
+      "language": "en",
+      "expected": {
+        "decision": "reship",
+        "acceptableDecisions": ["reship"],
+        "carrierClaim": true,
+        "needsHuman": false,
+        "claimEligible": true,
+        "rationale": "Clear breakage on a 58 EUR item, well inside the claim window: serve the customer first, then claim the carrier (Colissimo, 23 EUR/kg cap above 1 kg)."
+      }
+    },
+    {
+      "id": "demo-2-carton-crushed",
+      "title": "Crushed carton, product intact: no claim",
+      "reportedHoursAgo": 4,
+      "customerEmail": "Hugo.Bernard@Example.com",
+      "orderNumber": "1002",
+      "message": "The cardboard box was completely crushed on one corner when the courier dropped it off. I opened it and the print and frame look fine, but I wanted to let you know in case the carrier needs to hear about it.",
+      "photos": ["data/photos/carton-crushed.jpg"],
+      "language": "en",
+      "expected": {
+        "decision": "no_action",
+        "acceptableDecisions": ["no_action"],
+        "carrierClaim": false,
+        "needsHuman": false,
+        "claimEligible": false,
+        "rationale": "Packaging damage without product damage: nothing to compensate, so no reship, no refund and no carrier claim. The e-mail typed with capitals and the order number without '#' must still match the order."
+      }
+    },
+    {
+      "id": "demo-3-photo-blurry",
+      "title": "Blurry photo: ask for another one",
+      "reportedHoursAgo": 2,
+      "customerEmail": "ines.moreau@example.org",
+      "orderNumber": "#1003",
+      "message": "My lamp is damaged, I think the glass is cracked. Here is a photo.",
+      "photos": ["data/photos/lamp-blurry.jpg"],
+      "language": "en",
+      "expected": {
+        "decision": "ask_more_photos",
+        "acceptableDecisions": ["ask_more_photos"],
+        "carrierClaim": false,
+        "needsHuman": false,
+        "claimEligible": false,
+        "rationale": "The photo is too blurry to judge the damage or the packaging: ask for sharper pictures (parcel as received, damage close-up, inner padding) before deciding anything."
+      }
+    },
+    {
+      "id": "demo-4-opened-missing",
+      "title": "Parcel opened at the relay, item missing (Mondial Relay, 72 h window)",
+      "reportedHoursAgo": 4,
+      "customerEmail": "lucas.petit@example.net",
+      "orderNumber": "#1004",
+      "message": "Bonjour, le colis était déjà ouvert quand je suis allé le chercher au point relais : il manque les soucoupes, il n'y a que les tasses. J'ai refusé le colis sur place et pris des photos au relais. Pouvez-vous régler cela ?",
+      "photos": ["data/photos/parcel-open-missing.jpg"],
+      "language": "fr",
+      "expected": {
+        "decision": "reship",
+        "acceptableDecisions": ["reship", "refund"],
+        "carrierClaim": true,
+        "needsHuman": false,
+        "claimEligible": true,
+        "rationale": "Delivered about 30 h ago, so the 72 h Mondial Relay window is still open (about 42 h left) and the customer refused the parcel as the carrier requires. Compensation is capped at 25 EUR per parcel. The reply must be in French."
+      }
+    },
+    {
+      "id": "demo-5-expensive-escalation",
+      "title": "Expensive item: hand over to a human",
+      "reportedHoursAgo": 3,
+      "customerEmail": "sofia.rossi@example.com",
+      "orderNumber": "#1005",
+      "message": "The left ear cup of my headphones is cracked and one of the hinges is bent. The box has a big dent. I would like a replacement or my money back.",
+      "photos": ["data/photos/headphones-cracked.jpg"],
+      "language": "en",
+      "expected": {
+        "decision": "refund",
+        "acceptableDecisions": ["refund", "reship"],
+        "carrierClaim": true,
+        "needsHuman": true,
+        "claimEligible": true,
+        "rationale": "349 EUR item, above the 300 EUR threshold: high stake, the carrier may want to inspect the product, so the agent prepares everything (the compensation is capped at the 250 EUR Chronopost default; insurance is not modelled) but escalates (needsHuman) instead of deciding alone."
+      }
+    },
+    {
+      "id": "demo-6-late-report",
+      "title": "Reported too late: refund, no carrier claim possible",
+      "reportedHoursAgo": 2,
+      "customerEmail": "thomas.garnier@example.org",
+      "orderNumber": "#1006",
+      "message": "I only unpacked the carafe today and found it cracked along the neck. It was delivered over a week ago, sorry for the delay. Order #1006.",
+      "photos": ["data/photos/carafe-cracked.jpg"],
+      "language": "en",
+      "expected": {
+        "decision": "refund",
+        "acceptableDecisions": ["refund", "reship"],
+        "carrierClaim": false,
+        "needsHuman": false,
+        "claimEligible": false,
+        "rationale": "Delivered 9 days ago, reported long after the 3-day Chronopost deadline: the carrier claim is time-barred, but the merchant still owes the customer (the merchant chose the carrier), so serve the customer without claiming."
+      }
+    }
+  ]
+}
