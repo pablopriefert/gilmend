@@ -442,7 +442,7 @@ export async function buildClaimDocument(
   const pages = doc.getPages();
   pages.forEach((page, index) => {
     const footer = w.clean(
-      `Damage Desk  |  file ${caseRecord.id}  |  engine: ${engineLabel(caseRecord.engine)}  |  page ${index + 1}/${pages.length}`,
+      `Damage Desk  |  file ${caseRecord.id}  |  engine: ${engineLabel(caseRecord.engine, caseRecord.engineDetail)}  |  page ${index + 1}/${pages.length}`,
     );
     page.drawText(footer, { x: MARGIN, y: 30, size: 7.5, font: footerFont, color: MUTED });
   });

@@ -44,7 +44,7 @@ export function CaseView({
             <span className="font-normal text-muted"> · {c.order?.name ?? c.report.customerEmail}</span>
           </h1>
           <StatusPill status={c.status} />
-          <EngineBadge engine={c.engine} />
+          <EngineBadge engine={c.engine} detail={c.engineDetail} />
         </div>
         <p className="mt-1 text-sm text-muted">Reported {formatDateTime(c.report.receivedAt)}</p>
         {c.status === "new" && (

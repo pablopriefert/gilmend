@@ -1,10 +1,15 @@
-import type { Engine } from "@/lib/types";
+import type { Engine, EngineDetail } from "@/lib/types";
 
 export interface EngineAvailability {
   /** MODEL_API_KEY is set on the server. */
   museKey: boolean;
-  /** OPEN_WEIGHTS_BASE_URL and OPEN_WEIGHTS_MODEL are set on the server. */
+  /** The open-weights engine is configured on the server (Baseten preset, or OPEN_WEIGHTS_BASE_URL and _MODEL). */
   openWeights: boolean;
+  /** Which model and host the open-weights engine runs; set with `openWeights`. */
+  openWeightsDetail?: EngineDetail;
+  /** OPENROUTER_API_KEY is set: the cheap test engine is offered. */
+  openRouter?: boolean;
+  openRouterDetail?: EngineDetail;
   /** DAMAGE_DESK_ACCESS_CODE is set: a real engine needs the code, else the report runs in demo mode. */
   accessCodeRequired?: boolean;
 }
@@ -30,11 +35,31 @@ export function effectiveEngine(
   if (requested === "demo-mock") return "demo-mock";
   if (availability.accessCodeRequired && !hasAccess) return "demo-mock";
   if (requested === "open-weights") return availability.openWeights ? "open-weights" : "demo-mock";
+  if (requested === "openrouter") return availability.openRouter ? "openrouter" : "demo-mock";
   return availability.museKey ? "muse-spark-1.3" : "demo-mock";
 }
 
+/** The model and host to name next to an engine, when the server told the page which they are. */
+export function detailFor(engine: Engine, availability: EngineAvailability): EngineDetail | undefined {
+  if (engine === "open-weights") return availability.openWeightsDetail;
+  if (engine === "openrouter") return availability.openRouterDetail;
+  return undefined;
+}
+
+/** Where the photos and the message go on a private run: said plainly, "private" is not "on your hardware". */
+function openWeightsDescription(detail: EngineDetail | undefined): string {
+  if (!detail) return "Same agent and tools on open-weights Muse models, nothing goes to the Model API.";
+  const where =
+    detail.host === "baseten"
+      ? "Hosted by Baseten (not your own hardware): the photos and the message go to Baseten."
+      : detail.host === "modal"
+        ? "On the Modal deployment of this server: the photos and the message go there."
+        : "On the endpoint configured on this server: the photos and the message go there.";
+  return `${detail.label}. Same agent and tools, nothing goes to the Meta Model API. ${where}`;
+}
+
 export function engineOptions(availability: EngineAvailability): EngineOption[] {
-  return [
+  const options: EngineOption[] = [
     {
       value: "muse-spark-1.3",
       label: "Muse Spark 1.3 (Model API)",
@@ -47,15 +72,26 @@ export function engineOptions(availability: EngineAvailability): EngineOption[] 
       value: "open-weights",
       label: "Run privately (open weights)",
       description: availability.openWeights
-        ? "Same agent and tools on open-weights Muse models, nothing goes to the Model API."
+        ? openWeightsDescription(availability.openWeightsDetail)
         : "No open-weights endpoint is configured on this server, so this option runs in demo mode.",
       available: availability.openWeights,
     },
-    {
-      value: "demo-mock",
-      label: "Demo mode",
-      description: "Deterministic mock provider with canned answers. Not Muse.",
-      available: true,
-    },
   ];
+  // The test engine is offered only on a server that has its key: it is never the default and
+  // not something to show to a judge who has no use for it.
+  if (availability.openRouter) {
+    options.push({
+      value: "openrouter",
+      label: "Muse via OpenRouter (test)",
+      description: `${availability.openRouterDetail?.label ?? "Muse via OpenRouter"}. For cheap test runs only: the photos and the message go to OpenRouter and Meta. Not private.`,
+      available: true,
+    });
+  }
+  options.push({
+    value: "demo-mock",
+    label: "Demo mode",
+    description: "Deterministic mock provider with canned answers. Not Muse.",
+    available: true,
+  });
+  return options;
 }

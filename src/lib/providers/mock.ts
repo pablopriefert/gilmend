@@ -3,6 +3,7 @@ import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
 } from "openai/resources/chat/completions";
+import { describeEngine } from "../config";
 import { parseReportMessage, type ReportPromptFields } from "../agent/report-prompt";
 import type { Provider, ChatParams } from "./index";
 
@@ -311,6 +312,7 @@ export function createMockProvider(): Provider {
     engine: "demo-mock",
     model: "demo-mock",
     isMock: true,
+    detail: describeEngine("demo-mock"),
     async chat(params: ChatParams): Promise<ChatCompletion> {
       if (!warned) {
         warned = true;

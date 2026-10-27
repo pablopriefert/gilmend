@@ -93,6 +93,25 @@ describe("getProvider", () => {
     }
   });
 
+  it("keeps Glimmer's settings on a generic *.baseten.co address (the preset follows the configuration, not the host)", async () => {
+    const fetchMock = okFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const p = getProvider("open-weights", {
+        OPEN_WEIGHTS_BASE_URL: "https://model-x.api.baseten.co/environments/production/sync/v1",
+        OPEN_WEIGHTS_MODEL: "muse-glimmer",
+        OPEN_WEIGHTS_API_KEY: "placeholder-not-a-key",
+      });
+      expect(p.detail).toMatchObject({ host: "baseten" });
+      await p.chat({ messages: [{ role: "user", content: "hi" }] });
+      const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+      expect(body).toMatchObject({ temperature: 1, top_p: 0.95, top_k: 64 });
+      expect(body).not.toHaveProperty("reasoning_effort");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("refuses a Contributor model id on every real engine", () => {
     expect(() =>
       getProvider("open-weights", {
@@ -193,5 +212,146 @@ describe("the deploy script for the open-weights server", () => {
   it("publishes the server behind Modal proxy auth, because vLLM --api-key leaves /invocations open", () => {
     const script = readFileSync(path.join(ROOT, "deploy", "modal_glimmer.py"), "utf8");
     expect(script).toMatch(/@modal\.web_server\([^)]*requires_proxy_auth=True/);
+  });
+});
+
+describe("open-weights on Baseten", () => {
+  const env = {
+    OPEN_WEIGHTS_PROVIDER: "baseten",
+    BASETEN_API_KEY: "placeholder-not-a-key",
+    // The generic variables must be ignored when the Baseten preset is chosen.
+    OPEN_WEIGHTS_BASE_URL: "https://ignored.invalid/v1",
+    OPEN_WEIGHTS_PROXY_KEY: "wk-test",
+    OPEN_WEIGHTS_PROXY_SECRET: "ws-test",
+  };
+  const send = async (extra: Record<string, string> = {}, params: Partial<Parameters<ReturnType<typeof getProvider>["chat"]>[0]> = {}) => {
+    const fetchMock = okFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const p = getProvider("open-weights", { ...env, ...extra });
+      await p.chat({ messages: [{ role: "user", content: "hi" }], ...params });
+      const [url, init] = fetchMock.mock.calls[0];
+      return {
+        p,
+        url: String(url),
+        headers: new Headers((init as RequestInit).headers),
+        body: JSON.parse(String((init as RequestInit).body)),
+      };
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  };
+
+  it("calls Baseten's chat-completions endpoint with the Baseten key and the guide's Muse Spark Open slug", async () => {
+    const { p, url, headers, body } = await send();
+    expect(url).toBe("https://inference.baseten.co/v1/chat/completions");
+    expect(headers.get("authorization")).toBe("Bearer placeholder-not-a-key");
+    expect(body.model).toBe("meta-models/muse-spark-open-1026");
+    expect(p).toMatchObject({ engine: "open-weights", isMock: false, supportsImages: true });
+    expect(p.detail).toMatchObject({ host: "baseten", label: "Muse Spark Open (open weights, served by Baseten)" });
+  });
+
+  it("sends the sampling of the model card, a reasoning effort, and neither Modal headers nor top_k", async () => {
+    const { headers, body } = await send();
+    expect(body).toMatchObject({ temperature: 1, top_p: 1, reasoning_effort: "medium", stream: false });
+    expect(body).not.toHaveProperty("top_k");
+    expect(headers.get("modal-key")).toBeNull();
+    expect(headers.get("modal-secret")).toBeNull();
+    // Glimmer's system-prompt line does not apply here: the field above does the job.
+    expect(JSON.stringify(body.messages)).not.toMatch(/Reasoning strength/);
+  });
+
+  it("takes the reasoning effort from OPEN_WEIGHTS_REASONING_STRENGTH and ignores values Baseten does not know", async () => {
+    expect((await send({ OPEN_WEIGHTS_REASONING_STRENGTH: "xhigh" })).body.reasoning_effort).toBe("xhigh");
+    expect((await send({ OPEN_WEIGHTS_REASONING_STRENGTH: "max" })).body.reasoning_effort).toBe("medium");
+  });
+
+  it("uses a random session-affinity header that carries nothing about the case, new for each provider", async () => {
+    const a = (await send()).headers.get("x-session-affinity");
+    const b = (await send()).headers.get("x-session-affinity");
+    expect(a).toMatch(/^[0-9a-f-]{36}$/);
+    expect(b).toMatch(/^[0-9a-f-]{36}$/);
+    expect(a).not.toBe(b);
+  });
+
+  it("passes tools and image_url parts through untouched (no response_format: Baseten does not support it for this model)", async () => {
+    const tools = [{ type: "function" as const, function: { name: "t", parameters: { type: "object", properties: {} } } }];
+    const content = [
+      { type: "text" as const, text: "look" },
+      { type: "image_url" as const, image_url: { url: "data:image/png;base64,AAAA" } },
+    ];
+    const { body } = await send({}, { tools, messages: [{ role: "user", content }] });
+    expect(body.tools).toEqual(tools);
+    expect(body.messages[0].content).toEqual(content);
+    expect(body).not.toHaveProperty("response_format");
+  });
+
+  it("honours BASETEN_MODEL and OPEN_WEIGHTS_VISION=0", async () => {
+    const { p, body } = await send({ BASETEN_MODEL: "meta-models/muse-spark-open", OPEN_WEIGHTS_VISION: "0" });
+    expect(body.model).toBe("meta-models/muse-spark-open");
+    expect(p.supportsImages).toBe(false);
+  });
+
+  it("refuses to build without the Baseten key, and says which variable is missing", () => {
+    expect(() => getProvider("open-weights", { OPEN_WEIGHTS_PROVIDER: "baseten" })).toThrow(/BASETEN_API_KEY/);
+  });
+
+  it("refuses a Contributor slug even from BASETEN_MODEL", () => {
+    expect(() => getProvider("open-weights", { ...env, BASETEN_MODEL: "meta-models/muse-spark-open-contributor" })).toThrow(
+      /Contributor/,
+    );
+  });
+});
+
+describe("the generic open-weights path keeps its labels", () => {
+  it("names Muse Glimmer on Modal on the provider, and keeps images on by default", () => {
+    const p = getProvider("open-weights", {
+      OPEN_WEIGHTS_BASE_URL: "https://ws--damage-desk-glimmer-glimmer-serve.modal.run/v1",
+      OPEN_WEIGHTS_MODEL: "muse-glimmer",
+    });
+    expect(p.detail).toMatchObject({ host: "modal", label: "Muse Glimmer (open weights, served by Modal)" });
+    expect(p.supportsImages).toBe(true);
+  });
+});
+
+describe("the OpenRouter test engine", () => {
+  const env = { OPENROUTER_API_KEY: "placeholder-not-a-key" };
+  const send = async (extra: Record<string, string> = {}) => {
+    const fetchMock = okFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const p = getProvider("openrouter", { ...env, ...extra, OPEN_WEIGHTS_PROXY_KEY: "wk-test", OPEN_WEIGHTS_PROXY_SECRET: "ws-test" });
+      await p.chat({ messages: [{ role: "user", content: "hi" }] });
+      const [url, init] = fetchMock.mock.calls[0];
+      return {
+        p,
+        url: String(url),
+        headers: new Headers((init as RequestInit).headers),
+        body: JSON.parse(String((init as RequestInit).body)),
+      };
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  };
+
+  it("calls OpenRouter with its own key and the Standard Muse Spark 1.3 id", async () => {
+    const { p, url, headers, body } = await send();
+    expect(url).toBe("https://openrouter.ai/api/v1/chat/completions");
+    expect(headers.get("authorization")).toBe("Bearer placeholder-not-a-key");
+    expect(body.model).toBe("meta/muse-spark-1.3");
+    expect(headers.get("modal-key")).toBeNull();
+    expect(p).toMatchObject({ engine: "openrouter", isMock: false });
+    expect(p.detail?.label).toBe("Muse Spark 1.3 via OpenRouter (test engine, not private)");
+  });
+
+  it("only routes to endpoints that do not store prompts or train on them", async () => {
+    expect((await send()).body.provider).toEqual({ data_collection: "deny" });
+  });
+
+  it("refuses to build without its key and refuses a Contributor id", () => {
+    expect(() => getProvider("openrouter", {})).toThrow(/OPENROUTER_API_KEY/);
+    expect(() => getProvider("openrouter", { ...env, OPENROUTER_MODEL: "meta/muse-spark-1.3-contributor" })).toThrow(
+      /Contributor/,
+    );
   });
 });

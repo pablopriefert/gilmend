@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppHeader } from "@/components/app-header";
+import { hasOpenRouterKey, openRouterModel, resolveOpenWeights } from "@/lib/config";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,6 +16,11 @@ export const dynamic = "force-dynamic";
 // System font stack on purpose: no build-time font download, so `npm run build` works
 // offline and in CI.
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // The Muse Model License asks every product that uses Muse Spark Open to say so in its UI.
+  // The OpenRouter test engine can serve it too (OPENROUTER_MODEL=meta/muse-spark-open).
+  const builtWithSparkOpen =
+    /muse-spark-open/i.test(resolveOpenWeights()?.model ?? "") ||
+    (hasOpenRouterKey() && /muse-spark-open/i.test(openRouterModel()));
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">
@@ -32,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <p className="mx-auto w-full max-w-6xl px-4 py-4 text-xs text-muted sm:px-6">
             Fictitious orders and customers only. Damage Desk never sends anything to a carrier or a
             customer: every message waits for a human click, and even then it is only marked ready to send.
+            {builtWithSparkOpen && " Built with Muse Spark Open."}
           </p>
         </footer>
       </body>

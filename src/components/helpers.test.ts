@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { summarizeCases } from "@/lib/store/summary";
 import { isStaleSource, noteVerification, prettyJson, sanitizeForDisplay } from "./display-data";
-import { effectiveEngine, engineOptions } from "./engine-choice";
+import { describeEngine } from "@/lib/config";
+import { detailFor, effectiveEngine, engineOptions } from "./engine-choice";
 import { NOW, makeCase } from "./fixtures";
 import { deadlineInfo, formatDate, formatEur } from "./format";
 import { photoSrc } from "./photo-src";
@@ -165,6 +166,44 @@ describe("engine choice", () => {
     expect(open.label).toBe("Run privately (open weights)");
     expect(open.description).toMatch(/runs in demo mode/);
     expect(demo.description).toMatch(/Not Muse/);
+  });
+});
+
+describe("engine choice: Baseten and the OpenRouter test engine", () => {
+  const baseten = describeEngine("open-weights", { OPEN_WEIGHTS_PROVIDER: "baseten", BASETEN_API_KEY: "placeholder" });
+  const availability = { museKey: true, openWeights: true, openWeightsDetail: baseten };
+
+  it("says plainly where the photos go on a Baseten run: private from Meta's API is not on your hardware", () => {
+    const open = engineOptions(availability).find((o) => o.value === "open-weights")!;
+    expect(open.description).toMatch(/Muse Spark Open \(open weights, served by Baseten\)/);
+    expect(open.description).toMatch(/nothing goes to the Meta Model API/);
+    expect(open.description).toMatch(/not your own hardware/);
+    expect(open.description).toMatch(/go to Baseten/);
+  });
+
+  it("describes the Modal and custom hosts for what they are", () => {
+    const modal = describeEngine("open-weights", { OPEN_WEIGHTS_BASE_URL: "https://w--g.modal.run/v1", OPEN_WEIGHTS_MODEL: "muse-glimmer" });
+    expect(engineOptions({ museKey: false, openWeights: true, openWeightsDetail: modal })[1].description).toMatch(
+      /Muse Glimmer \(open weights, served by Modal\).*Modal deployment/,
+    );
+  });
+
+  it("hands the page the model and host of the engine it will run as", () => {
+    expect(detailFor("open-weights", availability)).toBe(baseten);
+    expect(detailFor("muse-spark-1.3", availability)).toBeUndefined();
+  });
+
+  it("offers the OpenRouter test engine only when its key is set, last before demo mode, never as the default", () => {
+    expect(engineOptions({ museKey: true, openWeights: false }).map((o) => o.value)).toEqual([
+      "muse-spark-1.3",
+      "open-weights",
+      "demo-mock",
+    ]);
+    const options = engineOptions({ museKey: true, openWeights: false, openRouter: true });
+    expect(options.map((o) => o.value)).toEqual(["muse-spark-1.3", "open-weights", "openrouter", "demo-mock"]);
+    expect(options[2].description).toMatch(/Not private/);
+    expect(effectiveEngine("openrouter", { museKey: true, openWeights: false })).toBe("demo-mock");
+    expect(effectiveEngine("openrouter", { museKey: true, openWeights: false, openRouter: true })).toBe("openrouter");
   });
 });
 

@@ -99,7 +99,14 @@ export async function markDamage(photo: string, options: MarkDamageOptions = {})
   if (options.engine === "open-weights") {
     return none(
       photo,
-      "Raw photo: private run (open weights). SAM runs on the Meta Model API, so it was not called and the photo never left this run.",
+      "Raw photo: private run (open weights). SAM runs on the Meta Model API, so it was not called: in a private run the photos go only to the open-weights host.",
+      quiet,
+    );
+  }
+  if (options.engine === "openrouter") {
+    return none(
+      photo,
+      "Raw photo: OpenRouter test engine. SAM runs on the Meta Model API, so it was not called; the photos still go to OpenRouter and the model's provider.",
       quiet,
     );
   }

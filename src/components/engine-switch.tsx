@@ -2,10 +2,11 @@
 
 import type { Engine } from "@/lib/types";
 import { EngineBadge } from "./engine-badge";
-import { effectiveEngine, engineOptions, type EngineAvailability } from "./engine-choice";
+import { detailFor, effectiveEngine, engineOptions, type EngineAvailability } from "./engine-choice";
 
 /**
- * Engine selector: Muse Spark 1.3 (Model API) / Run privately (open weights) / Demo mode.
+ * Engine selector: Muse Spark 1.3 (Model API) / Run privately (open weights) / Muse via OpenRouter
+ * (test, only when its key is set) / Demo mode.
  * An option the server cannot honour stays selectable but says so, and a line below states
  * what the report will really run as, so a mock answer is never mistaken for Muse.
  */
@@ -28,7 +29,7 @@ export function EngineSwitch({
   return (
     <fieldset className="min-w-0">
       <legend className="mb-2 text-sm font-medium">Engine</legend>
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className={`grid gap-2 ${options.length > 3 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
         {options.map((o) => {
           const selected = o.value === value;
           return (
@@ -55,7 +56,7 @@ export function EngineSwitch({
         })}
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
-        This report will run as <EngineBadge engine={willRunAs} />
+        This report will run as <EngineBadge engine={willRunAs} detail={detailFor(willRunAs, availability)} />
         {willRunAs === "demo-mock" && value !== "demo-mock" && (
           <span className="text-muted">
             {availability.accessCodeRequired && !hasAccess

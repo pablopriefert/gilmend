@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import type { ChatCompletion } from "openai/resources/chat/completions";
 import { assertStandardModel } from "../config";
 import type { ChatParams, Provider } from "./index";
-import type { Engine } from "../types";
+import type { Engine, EngineDetail } from "../types";
 
 export interface OpenAiCompatibleOptions {
   engine: Exclude<Engine, "demo-mock">;
@@ -17,14 +17,18 @@ export interface OpenAiCompatibleOptions {
    * protects the whole URL).
    */
   headers?: Record<string, string>;
+  /** Model and host written on the case; see Provider.detail. */
+  detail?: EngineDetail;
+  /** False when the model cannot read images (see Provider.supportsImages). Default true. */
+  supportsImages?: boolean;
   /** Appended to the system message (e.g. Glimmer's "Reasoning strength: high" line). */
   systemSuffix?: string;
 }
 
 /**
- * One OpenAI-compatible provider serves both real engines: the Meta Model API (Muse
- * Spark 1.3) and an open-weights server (vLLM on Modal, or a hosted provider). Only the
- * base URL, key, model id and a few defaults differ.
+ * One OpenAI-compatible provider serves every real engine: the Meta Model API (Muse Spark
+ * 1.3), an open-weights server (Baseten, vLLM on Modal...) and OpenRouter. Only the base URL,
+ * key, model id and a few defaults differ.
  */
 export function createOpenAiCompatibleProvider(opts: OpenAiCompatibleOptions): Provider {
   // Checked here as well as in getProvider so no code path can reach a Contributor model.
@@ -43,6 +47,8 @@ export function createOpenAiCompatibleProvider(opts: OpenAiCompatibleOptions): P
     engine: opts.engine,
     model,
     isMock: false,
+    ...(opts.detail ? { detail: opts.detail } : {}),
+    supportsImages: opts.supportsImages ?? true,
     async chat(params: ChatParams, options?: { timeoutMs?: number }): Promise<ChatCompletion> {
       const messages = opts.systemSuffix
         ? params.messages.map((m) =>

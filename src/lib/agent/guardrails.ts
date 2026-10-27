@@ -21,6 +21,8 @@ export interface GuardrailContext {
   toolOutputs: unknown[];
   /** ISO date-time the report was received (a date the reply may legitimately quote). */
   reportReceivedAt: string;
+  /** The model was never shown the photos (no image input, or its server refused them). */
+  photosNotRead?: boolean;
 }
 
 export interface GuardrailResult {
@@ -61,6 +63,17 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
       );
       reasons.push("Guardrail: no carrier claim (not eligible or not computed).");
     }
+  }
+
+  // Without the photos the model's reading of the damage is a guess, and a claim is built on
+  // that reading: no claim, and a human looks at the photos themselves.
+  if (ctx.photosNotRead) {
+    if (carrierClaim) {
+      carrierClaim = false;
+      adjustments.push("carrierClaim dropped: the photos were not read by the model");
+      reasons.push("Guardrail: no carrier claim drafted, the model did not read the photos.");
+    }
+    force("the photos were not read by the model, so the damage is not assessed");
   }
 
   if (confidence < CONFIDENCE_THRESHOLD) {
