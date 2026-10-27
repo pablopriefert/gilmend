@@ -5,21 +5,24 @@ The six demo cases (`data/demo-cases.json`) each point to one photo in this fold
 customer photo is ever used (hackathon rule), and none of the photos may show a real person, a
 real address or a real tracking label.
 
-## Status on 27 Oct 2026: provisional stand-ins, not our photos
+## Status on 27 Oct 2026: generated with Muse Image, not photographed
 
-Today the folder holds six `<name>.webp` files. They are **provisional, AI-generated images**
-(their XMP metadata says `DigitalSourceType = trainedAlgorithmicMedia`; we do not know which
-tool made them). They are real WebP files and carry their true extension (they used to be named
-`.jpg`, which made the agent send them to the model with the wrong MIME type). They only keep the
-demo and the tests working until the real shots exist: **do not present them as photos taken by
-the team, in the README, in the video or in the submission form**, and do not strip their
-metadata. A vision model may also read an obviously synthetic image differently from a real
-photo, so rehearse the video with the real ones.
+Today the folder holds six `<name>.webp` files **generated with Meta's Muse Image**
+(`muse-image-1.0`, Meta Model API, `/v1/images/generations`) on 27 Oct 2026, with
+[`scripts/generate-demo-photo.mjs`](../../scripts/generate-demo-photo.mjs) (the prompt of the
+vase is in its header). They show fictitious parcels: no real customer, no real address, no
+real shipping label. Their XMP metadata says `DigitalSourceType = trainedAlgorithmicMedia`; do
+not strip it.
 
-To switch, drop `<name>.jpg` next to the stand-in (same name, see the table). The file the team
-shot always wins over `<name>.webp`; delete the stand-ins once the six JPEGs are in.
-`provisionalDemoPhotos()` in `src/lib/store/demo-cases.ts` lists the cases still running on a
-stand-in, and `npm run demo` prints it.
+Say it everywhere they appear: **AI-generated with Muse Image, not photos taken by the team**
+(README, video, submission form). All six demo cases were run end to end on the real Muse Spark
+1.3 and SAM 3.1 with these images on 27 Oct 2026 and gave the expected decisions; a real photo
+may still read differently, so a real shot is worth trying before filming.
+
+To switch to a real photo, drop `<name>.jpg` next to the generated one (same name, see the
+table). A JPEG always wins over `<name>.webp`. `provisionalDemoPhotos()` in
+`src/lib/store/demo-cases.ts` lists the cases still running on a generated image, and
+`npm run demo` prints it.
 
 ## Rules for every photo
 

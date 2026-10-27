@@ -97,6 +97,7 @@ prompt-injection attempt counts as a fraud signal.
 | Investigation | **Muse Spark 1.3** (Meta Model API, Standard mode, `muse-spark-1.3`) | One model does three jobs in the same loop: **vision** (it reads the photos), **tool calling** (order lookup, damage marking, rules, claim maths) and a **structured decision** returned through the `finish_case` tool call and validated in code. |
 | Evidence | **SAM 3.1** (Meta Model API) | A claim needs proof, not only a verdict. Muse names the damaged object to outline (for example "broken pottery" or "glass carafe": SAM segments things, not states, so "crack" or "shattered vase" match nothing), SAM segments it, and the annotated photo goes into the claim PDF. If SAM finds nothing or fails, the claim ships with the raw photo and says so. |
 | "Run privately" | **Muse Glimmer** (open weights, Apache 2.0, served with vLLM on Modal, see [`deploy/`](deploy/README.md)) or **Muse Spark Open** through a provider | Parcel photos and customer messages can stay on infrastructure the merchant controls. The same agent, tools and output schema run on open weights. A private run never calls the Model API, SAM included. |
+| Demo data | **Muse Image** (`muse-image-1.0`, Meta Model API) | The six demo photos are generated, not taken: no real customer, label or address can leak into a public repository. [`scripts/generate-demo-photo.mjs`](scripts/generate-demo-photo.mjs) remakes one. |
 
 The product is the decision and the dossier, not an image analyzer: the photo is one input among
 several, and the output is money-shaped (a decision, a maximum compensation, a deadline, a
@@ -177,18 +178,35 @@ Muse.
 | 5 | Cracked headphones, 349 EUR, #1005 | Everything prepared (250 EUR maximum under the Chronopost default), but handed to a human because the value is above 300 EUR. |
 | 6 | Cracked carafe reported nine days after delivery, #1006 | Refund the customer; no carrier claim, the 3-day window has passed. |
 
-> **About the demo photos.** The images in `data/photos/` are currently **provisional
-> AI-generated stand-ins**, not photographs taken by the team (see
-> [`data/photos/README.md`](data/photos/README.md)). Dropping `<name>.jpg` next to a stand-in
-> replaces it. It is not confirmed that a vision model reads a synthetic image the way it reads a
-> real photo.
+### Measured on the real models (27 Oct 2026)
+
+All six cases were also run end to end on the real **Muse Spark 1.3** and **SAM 3.1** (Meta Model
+API, Standard mode) with `npm run real -- <case-id>`. Each gave the expected decision:
+
+| # | Decision (Muse Spark 1.3) | Claim | SAM 3.1 evidence (concept named by Muse) | Time |
+|---|---|---|---|---|
+| 1 | reship, claim the carrier, confidence 0.95 | 52.90 EUR | 5 shards outlined ("broken pottery") | 36 s |
+| 2 | no action, no claim | none | 1 region ("torn cardboard") | 25 s |
+| 3 | ask for more photos, handed to a human (confidence 0.35) | none | none: the photo is too blurry to outline | 16 s |
+| 4 | reship, claim the carrier, reply in French | 25.00 EUR | 5 regions ("torn cardboard") | 22 s |
+| 5 | reship, claim the carrier, handed to a human (value above 300 EUR) | 250.00 EUR | 2 ear cups ("ear cup") | 27 s |
+| 6 | refund, no claim (3-day window passed) | none | 1 region ("glass carafe") | 18 s |
+
+SAM 3.1 segments **things, not states**: on these photos "crack", "dent" or "shattered vase"
+matched nothing, while "broken pottery", "glass carafe" or "ear cup" did
+(`npm run sam-probe -- <photo> "<concept>" ...`). The prompt asks Muse for the damaged object, and
+the code falls back to the item of the assessment, then to the parcel itself.
+
+> **About the demo photos.** The images in `data/photos/` were **generated with Meta's Muse Image**
+> (`muse-image-1.0`) for this project; they are not photographs taken by the team, and show
+> fictitious parcels only (see [`data/photos/README.md`](data/photos/README.md)). Dropping
+> `<name>.jpg` next to one replaces it with a real photo.
 
 ## Limitations
 
-- **Not verified against the live Meta APIs.** No call to the Model API, SAM or Glimmer has been
-  made from this code. Request shapes follow Meta's public documentation and are tested against
-  fakes. Whether the live endpoints accept the tools, images and multi-turn loop exactly as sent
-  is still to be confirmed with a key.
+- **Verified live on Muse Spark 1.3 and SAM 3.1, not on open weights yet.** The six demo cases ran
+  end to end on the Meta Model API on 27 Oct 2026 (table above). The open-weights engine has not
+  run against a live endpoint yet. Six cases are a smoke test, not an accuracy benchmark.
 - **Demo mode is scripted.** It shows the product flow, not the quality of Muse's reading of a photo.
 - **Carrier figures are the public standard terms**, some from a dated source and one window
   unverified (table above). Not modelled: insurance (ad valorem), negotiated contracts, relay
