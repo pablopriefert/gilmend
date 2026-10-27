@@ -173,7 +173,8 @@ Replace each `[bracket]` with the figure read from the screen of the take.
 - That the voice report was tested with real customers or accents, or that the recorded run is
   live.
 - That the SAM outline marks the damage: it shows what SAM matched (the item, its pieces or the box).
-  On the recorded headphones it covers the ear cushions, not the cracked shell.
+  On the recorded headphones it covers the whole pair, not the cracked shell alone; on the opened
+  parcel, the whole carton, not the missing saucers.
 - That a recorded run was dictated: the six recorded runs were typed. Only the live run of the
   voice shot was dictated.
 - That the app is deployed or that the judges' URL stores cases reliably, unless the Vercel

@@ -18,8 +18,9 @@ Say it everywhere they appear: **AI-generated with Muse Image, not photos taken 
 (README, video, submission form). All six demo cases were run end to end on the real Muse Spark
 1.3 and SAM 3.1 with these images on 27 Oct 2026. The recorded run of each case reached the decision
 the demo script expects, but Muse is not stable on every photo (the vase was read twice with a claim
-and twice without it, the blurry lamp once handed to a human and once not; README, "Measured on the
-real models"). A real photo may read differently again, so a real shot is worth trying before filming.
+and twice without it, the blurry lamp once handed to a human and once not, the opened parcel as
+"missing item", then "opened parcel", then "missing item" again, and the headphones outlined once as
+two ear cushions and once as the whole pair; README, "Measured on the real models"). A real photo may read differently again, so a real shot is worth trying before filming.
 
 ## Optional: switching to a real photo later
 
