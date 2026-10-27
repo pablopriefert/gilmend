@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { damageConceptFor, itemConcept, markDamage } from "./mark-damage";
-import { IMAGE_H, IMAGE_W, samLine, sseResponse, writeGreyPhoto } from "./test-helpers";
+import { damageConceptFor, damageConceptsFor, itemConcept, markDamage, materialConcept } from "./mark-damage";
+import { IMAGE_H, IMAGE_W, fakeSam, samLine, samRegions, sseResponse, writeGreyPhoto } from "./test-helpers";
 
 let dir: string;
 let photo: string;
@@ -81,14 +81,12 @@ describe("markDamage and the engine of the case", () => {
     expect(evidence.method).toBe("sam-3.1");
   });
 
-  it("tries the model's concepts in order, one per request", async () => {
-    const bodies: string[] = [];
-    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
-      bodies.push(JSON.parse(init?.body as string).input[0].content[0].text);
-      return bodies.length === 2 ? sseResponse([samLine(0.9)]) : sseResponse([]);
-    });
-    await run(fetchImpl as unknown as typeof fetch, { concepts: ["shattered vase", "crack", "dent"] });
-    expect(bodies).toEqual(["shattered vase", "crack"]);
+  it("asks the model's concepts in order, one per request, until one gives strong regions", async () => {
+    const asked: string[] = [];
+    const strong = samRegions([{ confidence: 0.9, at: { x: 0, y: 0 } }, { confidence: 0.8, at: { x: 200, y: 100 } }]);
+    const fetchImpl = fakeSam({ crack: strong }, asked);
+    await run(fetchImpl, { concepts: ["shattered vase", "crack", "dent"] });
+    expect(asked).toEqual(["shattered vase", "crack"]);
   });
 });
 
@@ -127,22 +125,19 @@ describe("markDamage request shape", () => {
       urls.push(url);
       return sseResponse([]);
     }) as unknown as typeof fetch;
-    await run(fetchImpl, { env: { ...KEY, SAM_BASE_URL: "https://sam.example/v1/" }, concepts: ["crack"] });
-    await run(fetchImpl, { env: { ...KEY, MODEL_BASE_URL: "https://model.example/v1" }, concepts: ["crack"] });
+    await run(fetchImpl, { env: { ...KEY, SAM_BASE_URL: "https://sam.example/v1/" }, concepts: ["crack"], fallbackConcepts: [] });
+    await run(fetchImpl, { env: { ...KEY, MODEL_BASE_URL: "https://model.example/v1" }, concepts: ["crack"], fallbackConcepts: [] });
     expect(urls).toEqual(["https://sam.example/v1/responses", "https://model.example/v1/responses"]);
   });
 
-  it("uses the concepts it is given, in order, and stops at the first match", async () => {
-    const concepts: string[] = [];
-    const fetchImpl = (async (_url: string, init: RequestInit) => {
-      const concept = JSON.parse(init.body as string).input[0].content[0].text as string;
-      concepts.push(concept);
-      return concept === "dent" ? sseResponse([samLine(0.8)]) : sseResponse([]);
-    }) as unknown as typeof fetch;
-    const evidence = await run(fetchImpl, { concepts: ["torn cardboard", "dent", "crack"] });
-    expect(concepts).toEqual(["torn cardboard", "dent"]);
+  it("uses the concepts it is given, in order, and lists the one that matched", async () => {
+    const asked: string[] = [];
+    const fetchImpl = fakeSam({ dent: [samLine(0.8)] }, asked);
+    const evidence = await run(fetchImpl, { concepts: ["torn cardboard", "dent"] });
+    expect(asked).toEqual(["torn cardboard", "dent"]);
     expect(evidence.method).toBe("sam-3.1");
-    expect(evidence.note).toContain('"dent"');
+    expect(evidence.note).toContain('matching "dent"');
+    expect(evidence.note).toContain('No region for "torn cardboard"');
   });
 });
 
@@ -210,6 +205,118 @@ describe("markDamage with a SAM answer", () => {
     const evidence = await run(fetchImpl);
     expect(evidence.method).toBe("sam-3.1");
     expect(evidence.note).not.toContain("confidence");
+  });
+});
+
+describe("markDamage merges the concepts of the damaged item", () => {
+  const shards = (n: number, confidence = 0.85) =>
+    samRegions(
+      Array.from({ length: n }, (_, i) => ({
+        confidence: confidence - i * 0.01,
+        at: { x: (i % 3) * 130, y: Math.floor(i / 3) * 100 },
+      })),
+    );
+  // The whole-vase box of the single-region answer sits where no shard is.
+  const vaseNeck = samLine(0.68, { x: 270, y: 200 });
+
+  it("keeps the shards of the second concept next to the lone region of the model's concept", async () => {
+    // The 27 Oct 2026 case 1: "ceramic vase" gave one weak region, "broken pottery" 26 shards.
+    const asked: string[] = [];
+    const fetchImpl = fakeSam({ "ceramic vase": [vaseNeck], "broken pottery": shards(4) }, asked);
+    const evidence = await run(fetchImpl, { concepts: ["ceramic vase", "broken pottery"] });
+    expect(asked).toEqual(["ceramic vase", "broken pottery"]);
+    expect(evidence.method).toBe("sam-3.1");
+    expect(evidence.note).toContain("outlined 5 regions");
+    expect(evidence.note).toContain('from 2 concepts: "ceramic vase" 1, "broken pottery" 4');
+    expect(evidence.note).toContain("confidence 0.85, 0.84, 0.83, 0.82, 0.68");
+  });
+
+  it("keeps at most 5 regions, the most confident", async () => {
+    const fetchImpl = fakeSam({ "ceramic vase": [vaseNeck], "broken pottery": shards(6) });
+    const evidence = await run(fetchImpl, { concepts: ["ceramic vase", "broken pottery"] });
+    expect(evidence.note).toContain("outlined 5 regions");
+    // The lone 0.68 region loses to five shards at 0.80 and above, so its concept drops out.
+    expect(evidence.note).toContain('matching "broken pottery"');
+    expect(evidence.note).not.toContain("0.68");
+    expect(evidence.note).toContain('Also matched "ceramic vase"');
+  });
+
+  it("stops when one concept already gave strong regions: no third call", async () => {
+    const asked: string[] = [];
+    const fetchImpl = fakeSam({ "ear cup": shards(2, 0.88), headphones: [samLine(0.98)] }, asked);
+    const evidence = await run(fetchImpl, { concepts: ["ear cup", "headphones"] });
+    expect(asked).toEqual(["ear cup"]);
+    expect(evidence.note).toContain('matching "ear cup"');
+  });
+
+  it("does not stop on a single region, even a confident one", async () => {
+    const asked: string[] = [];
+    const fetchImpl = fakeSam({ "glass carafe": [samLine(0.9)], "glass water carafe": [] }, asked);
+    const evidence = await run(fetchImpl, { concepts: ["glass carafe", "glass water carafe"] });
+    expect(asked).toEqual(["glass carafe", "glass water carafe"]);
+    expect(evidence.note).toContain('matching "glass carafe" (confidence 0.90)');
+    expect(evidence.note).toContain('No region for "glass water carafe"');
+  });
+
+  it("drops a region that overlaps one already kept (IoU above 0.5) and credits the more confident concept", async () => {
+    // Same box from two concepts: one region, credited to the 0.9 one.
+    const fetchImpl = fakeSam({ "ceramic vase": [samLine(0.6)], "broken pottery": [samLine(0.9)] });
+    const evidence = await run(fetchImpl, { concepts: ["ceramic vase", "broken pottery"] });
+    expect(evidence.note).toContain("outlined 1 region matching \"broken pottery\" (confidence 0.90)");
+    expect(evidence.note).toContain('Also matched "ceramic vase"');
+    expect(evidence.note).not.toContain("No region for");
+  });
+
+  it("makes at most 3 SAM calls per photo, whatever the lists hold", async () => {
+    const asked: string[] = [];
+    const evidence = await run(fakeSam({}, asked), {
+      concepts: ["a", "b", "c", "d"],
+      fallbackConcepts: ["torn cardboard", "cardboard box"],
+    });
+    expect(asked).toEqual(["a", "b", "c"]);
+    expect(evidence.method).toBe("none");
+    expect(evidence.note).toContain('"a", "b", "c"');
+  });
+
+  it("asks a concept once even when two lists name it", async () => {
+    const asked: string[] = [];
+    await run(fakeSam({}, asked), { concepts: ["glass carafe", "glass carafe"], fallbackConcepts: ["glass carafe", "torn cardboard"] });
+    expect(asked).toEqual(["glass carafe", "torn cardboard"]);
+  });
+
+  it("asks the packaging only when nothing about the item matched", async () => {
+    const asked: string[] = [];
+    const none = fakeSam({ "torn cardboard": [samLine(0.7)] }, asked);
+    const evidence = await run(none, { concepts: ["ceramic vase", "broken pottery"], fallbackConcepts: ["torn cardboard", "cardboard box"] });
+    expect(asked).toEqual(["ceramic vase", "broken pottery", "torn cardboard"]);
+    expect(evidence.note).toContain('matching "torn cardboard"');
+
+    // A weak match on the item is enough to leave the packaging alone.
+    const askedWeak: string[] = [];
+    const weak = fakeSam({ "ceramic vase": [samLine(0.5)] }, askedWeak);
+    await run(weak, { concepts: ["ceramic vase", "broken pottery"], fallbackConcepts: ["torn cardboard", "cardboard box"] });
+    expect(askedWeak).toEqual(["ceramic vase", "broken pottery"]);
+  });
+
+  it("stops at the first packaging concept that matches", async () => {
+    const asked: string[] = [];
+    await run(fakeSam({ "torn cardboard": [samLine(0.7)] }, asked), { concepts: [] });
+    expect(asked).toEqual(["torn cardboard"]);
+  });
+
+  it("keeps what an earlier call found when a later one fails, and says so", async () => {
+    const fetchImpl = fakeSam({ "ceramic vase": [samLine(0.7)], "broken pottery": new Response("down", { status: 503 }) });
+    const evidence = await run(fetchImpl, { concepts: ["ceramic vase", "broken pottery"] });
+    expect(evidence.method).toBe("sam-3.1");
+    expect(evidence.note).toContain("A later SAM call failed (SAM request failed with HTTP 503");
+    expect(evidence.note).toContain("may be incomplete");
+  });
+
+  it("falls back to the raw photo when the first call fails", async () => {
+    const fetchImpl = fakeSam({ "ceramic vase": new Error("fetch failed") });
+    const evidence = await run(fetchImpl, { concepts: ["ceramic vase", "broken pottery"] });
+    expect(evidence.method).toBe("none");
+    expect(evidence.note).toContain("fetch failed");
   });
 });
 
@@ -334,11 +441,66 @@ describe("damageConceptFor", () => {
   });
 });
 
+describe("materialConcept and damageConceptsFor", () => {
+  const assessment = (item: string, damageType: "broken_product" | "crushed_packaging" | "missing_item") => ({
+    item,
+    damageType,
+    severity: "major" as const,
+    carrierLikelyAtFault: true,
+    packagingAdequate: true,
+    evidenceNotes: [],
+    photoQuality: "ok" as const,
+  });
+
+  it("derives 'broken pottery' from a ceramic item, and nothing for glass or an unnamed material", () => {
+    expect(materialConcept("White ceramic vase")).toBe("broken pottery");
+    expect(materialConcept("porcelain teapot")).toBe("broken pottery");
+    expect(materialConcept("Stoneware mug, set of 2")).toBe("broken pottery");
+    // "broken glass" matched nothing on the carafe photo (27 Oct 2026): not offered.
+    expect(materialConcept("Glass carafe, 1 L")).toBeNull();
+    expect(materialConcept("Studio wireless headphones")).toBeNull();
+    expect(materialConcept(undefined)).toBeNull();
+  });
+
+  it("asks the model's concept and the broken material of the item, packaging last", () => {
+    expect(damageConceptsFor("ceramic vase", assessment("White ceramic vase", "broken_product"))).toEqual({
+      concepts: ["ceramic vase", "broken pottery"],
+      fallbackConcepts: ["torn cardboard", "cardboard box"],
+    });
+  });
+
+  it("uses the item noun when no material concept exists, once when it equals the model's", () => {
+    expect(damageConceptsFor("ear cup", assessment("Studio wireless headphones", "broken_product")).concepts).toEqual([
+      "ear cup",
+      "studio wireless headphones",
+    ]);
+    expect(damageConceptsFor("glass carafe", assessment("Glass carafe, 1 L", "broken_product")).concepts).toEqual([
+      "glass carafe",
+    ]);
+  });
+
+  it("works without a model concept or without an assessment", () => {
+    expect(damageConceptsFor(null, assessment("White ceramic vase", "broken_product")).concepts).toEqual(["broken pottery"]);
+    expect(damageConceptsFor("shards", null).concepts).toEqual(["shards"]);
+    expect(damageConceptsFor(null, null).concepts).toEqual([]);
+  });
+
+  it("keeps the cardboard as the item concept of a crushed parcel, and no material for a missing item", () => {
+    expect(damageConceptsFor("cardboard box", assessment("Framed print", "crushed_packaging")).concepts).toEqual([
+      "cardboard box",
+      "torn cardboard",
+    ]);
+    expect(damageConceptsFor(null, assessment("White ceramic vase", "missing_item")).concepts).toEqual([]);
+  });
+});
+
 describe("itemConcept", () => {
   it("turns the item of the assessment into a SAM noun phrase", () => {
     expect(itemConcept("Glass carafe, 1 L")).toBe("glass carafe");
     expect(itemConcept("Handmade blue ceramic vase (large)")).toBe("blue ceramic vase");
     expect(itemConcept("Wireless headphones - black")).toBe("wireless headphones");
+    // The size and its unit are not part of the noun phrase ("water carafe l" matched nothing).
+    expect(itemConcept("glass water carafe 1L")).toBe("glass water carafe");
   });
 
   it("returns null when nothing usable is left", () => {

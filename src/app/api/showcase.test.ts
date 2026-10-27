@@ -11,6 +11,9 @@ import { GET as getFile } from "./files/route";
 
 const REPO_SHOWCASE = path.join(process.cwd(), "data", "showcase");
 const ID = "real_demo-1-vase-broken";
+// The recorded case that carries a claim PDF. The vase run of 27 Oct 2026 (16:01 UTC) ended
+// without a carrier claim (Muse read the box as inadequate packaging), so it has none.
+const PDF_ID = "real_demo-4-opened-missing";
 
 let scratch: string;
 let showcase: string;
@@ -77,18 +80,20 @@ describe("the recorded runs through the API, with an empty store", () => {
   });
 
   it("serves the recorded claim PDF, inline and as a download", async () => {
-    const inline = await getPdf(new Request(`http://x/api/cases/${ID}/pdf`), ctx(ID));
+    const inline = await getPdf(new Request(`http://x/api/cases/${PDF_ID}/pdf`), ctx(PDF_ID));
     expect(inline.status).toBe(200);
     expect(inline.headers.get("Content-Type")).toBe("application/pdf");
     expect(inline.headers.get("Content-Disposition")).toMatch(/^inline;/);
     expect(Buffer.from(await inline.arrayBuffer()).subarray(0, 5).toString()).toBe("%PDF-");
-    const download = await getPdf(new Request(`http://x/api/cases/${ID}/pdf?download=1`), ctx(ID));
-    expect(download.headers.get("Content-Disposition")).toMatch(/^attachment; filename="claim-real_demo-1-vase-broken\.pdf"/);
+    const download = await getPdf(new Request(`http://x/api/cases/${PDF_ID}/pdf?download=1`), ctx(PDF_ID));
+    expect(download.headers.get("Content-Disposition")).toMatch(/^attachment; filename="claim-real_demo-4-opened-missing\.pdf"/);
   });
 
   it("a recorded run with no carrier claim has no PDF", async () => {
-    const res = await getPdf(new Request("http://x/api/cases/real_demo-2-carton-crushed/pdf"), ctx("real_demo-2-carton-crushed"));
-    expect(res.status).toBe(404);
+    for (const id of ["real_demo-2-carton-crushed", ID]) {
+      const res = await getPdf(new Request(`http://x/api/cases/${id}/pdf`), ctx(id));
+      expect(res.status, id).toBe(404);
+    }
   });
 
   it("does not serve anything else through the showcase paths", async () => {
@@ -115,7 +120,7 @@ describe("approving, editing or rejecting a recorded run", () => {
     const listed = ((await (await listCases()).json()) as { cases: CaseRecord[] }).cases;
     expect(listed).toHaveLength(6);
     expect(listed.find((c) => c.id === ID)?.status).toBe("approved");
-    expect((await getPdf(new Request("http://x"), ctx(ID))).status).toBe(200);
+    expect(listed.find((c) => c.id === ID)?.evidence[0].annotatedPhoto).toBeTruthy();
 
     expect(await fingerprint(showcase)).toBe(before);
     const original = JSON.parse(await readFile(path.join(showcase, "cases", `${ID}.json`), "utf8")) as CaseRecord;

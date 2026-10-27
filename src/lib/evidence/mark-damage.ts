@@ -7,6 +7,7 @@ import { persistRuntimeFile } from "../storage/runtime-files";
 import type { DamageAssessment, Engine, Evidence } from "../types";
 import { annotateImage } from "./annotate";
 import { loadImage, normaliseImage, type LoadImageOptions } from "./image-io";
+import { isStrong, mergeRegions, type ConceptRegions } from "./regions";
 import { runtimeDir, toStoredPath } from "./runtime-dir";
 import { SAM_MODEL, segmentConcept, type SamDetection, type SamOptions } from "./sam";
 
@@ -19,14 +20,19 @@ const MIN_CONFIDENCE = 0.3;
 const MAX_REGIONS = 5;
 
 // SAM takes short, concrete noun phrases (not commands or sentences) and one concept per
-// request, so we try these in order and keep the first that matches. Each call costs
-// $2.50 per 1,000 images, so the list stays short.
+// request. Each call costs $2.50 per 1,000 images, so at most MAX_SAM_CALLS are made per photo.
+const MAX_SAM_CALLS = 3;
 // SAM finds things, not states. Probe of 27/10/2026 on the six demo photos
 // (scripts/sam-probe.ts): "crack", "dent", "broken glass", "broken vase" and
 // "shattered vase" matched nothing anywhere; "broken pottery" (26 shards on the vase),
 // "glass carafe", "ear cup", "headphones", "torn cardboard" and "cardboard box" did.
-// The last resort is therefore the parcel itself: an outline of the box is weaker
-// evidence than one of the broken item, but it is still evidence.
+// A second probe the same day showed that the NOUN the model picks decides the evidence:
+// on the vase photo "broken pottery" and "broken ceramic" found 26 and 30 shards, "ceramic
+// vase" found nothing and "vase" one region. The concepts of the damaged item are therefore
+// asked together and their regions merged (see damageConceptsFor), not "first match wins".
+// The parcel itself is the last resort: an outline of the box is weaker evidence than one of
+// the broken item, but it is still evidence, and it is only asked when nothing about the
+// item matched.
 export const DEFAULT_DAMAGE_CONCEPTS = ["torn cardboard", "cardboard box"] as const;
 
 export interface MarkDamageOptions extends SamOptions, LoadImageOptions {
@@ -37,8 +43,17 @@ export interface MarkDamageOptions extends SamOptions, LoadImageOptions {
    * annotation. Left undefined (direct calls, older tests) the decision is the key alone.
    */
   engine?: Engine;
-  /** Noun phrases to try in order; defaults to a generic damage vocabulary. */
+  /**
+   * Noun phrases about the damaged item, asked in order and MERGED: the loop stops early only
+   * when one of them already gave strong regions (isStrong). At most MAX_SAM_CALLS per photo,
+   * shared with `fallbackConcepts`.
+   */
   concepts?: readonly string[];
+  /**
+   * Last resort, asked in order only when nothing in `concepts` matched, stopping at the first
+   * match; defaults to the packaging vocabulary (the parcel itself).
+   */
+  fallbackConcepts?: readonly string[];
   /** Redirect data/runtime (tests). */
   runtimeDir?: string;
   /** Silence the log line (tests). */
@@ -53,8 +68,47 @@ export interface MarkDamageOptions extends SamOptions, LoadImageOptions {
 export function itemConcept(item: string | undefined): string | null {
   if (!item) return null;
   const head = item.split(/[,(\[;:]| - /)[0].toLowerCase().replace(/[^a-z -]+/g, " ");
-  const words = head.trim().split(/\s+/).filter(Boolean).slice(-3);
+  // A one-letter word is what is left of a size or a unit ("glass water carafe 1L" gave
+  // "water carafe l" in the real run of 27 Oct 2026, a wasted SAM call): drop it.
+  const words = head.trim().split(/\s+/).filter((w) => w.length > 1).slice(-3);
   return parseConcept(words.join(" "));
+}
+
+const MATERIAL_CONCEPTS: Array<[RegExp, string]> = [
+  // Probed 27/10/2026: "broken pottery" outlines the shards of a ceramic vase (26 regions).
+  [/\b(ceramic|porcelain|stoneware|earthenware|terracotta|pottery|clay)\b/, "broken pottery"],
+  // No entry for glass: "broken glass" and "glass shard" matched nothing on the carafe photo,
+  // so a glass item is outlined by its own noun ("glass carafe"), which did.
+];
+
+/**
+ * A "broken <material>" concept derived from the item of the assessment, or null when no
+ * material is named or none was shown to work with SAM. It outlines the shards, which a noun
+ * for the whole product ("ceramic vase") does not.
+ */
+export function materialConcept(item: string | undefined): string | null {
+  if (!item) return null;
+  const lower = item.toLowerCase();
+  for (const [pattern, concept] of MATERIAL_CONCEPTS) if (pattern.test(lower)) return concept;
+  return null;
+}
+
+/**
+ * What to ask SAM for one photo, so the evidence does not hang on the single word the model
+ * picked. `concepts` are about the damaged item and are merged: the model's concept, then a
+ * "broken <material>" concept when the item names a material, else the item noun (for a
+ * crushed or opened parcel, the cardboard). `fallbackConcepts` is the packaging, asked only
+ * when nothing about the item matched.
+ */
+export function damageConceptsFor(
+  modelConcept: string | null,
+  assessment: DamageAssessment | null,
+): { concepts: string[]; fallbackConcepts: string[] } {
+  const material = assessment?.damageType === "broken_product" ? materialConcept(assessment.item) : null;
+  const concepts = [modelConcept, material ?? damageConceptFor(assessment)].filter(
+    (c): c is string => typeof c === "string",
+  );
+  return { concepts: [...new Set(concepts)], fallbackConcepts: [...DEFAULT_DAMAGE_CONCEPTS] };
 }
 
 /**
@@ -123,29 +177,71 @@ export async function markDamage(photo: string, options: MarkDamageOptions = {})
     const image = await normaliseImage(loaded.bytes, MAX_LONG_SIDE);
     const dataUrl = `data:image/jpeg;base64,${image.jpeg.toString("base64")}`;
 
-    const concepts = options.concepts?.length ? options.concepts : DEFAULT_DAMAGE_CONCEPTS;
-    let regions: SamDetection[] = [];
-    let matched = "";
-    for (const concept of concepts) {
-      regions = usable(await segmentConcept(dataUrl, concept, { ...options, env }));
-      if (regions.length > 0) {
-        matched = concept;
-        break;
+    const primary = [...new Set(options.concepts ?? [])];
+    const fallback = [...new Set(options.fallbackConcepts ?? DEFAULT_DAMAGE_CONCEPTS)];
+    const tried: string[] = [];
+    const found: ConceptRegions[] = [];
+    const state = { failure: null as string | null };
+    // One SAM call. An error after something was already found keeps what was found (the
+    // outline is still true); with nothing found yet it is the caller's "SAM call failed".
+    const ask = async (concept: string): Promise<number> => {
+      tried.push(concept);
+      try {
+        const regions = usable(await segmentConcept(dataUrl, concept, { ...options, env }));
+        if (regions.length > 0) found.push({ concept, regions });
+        return regions.length;
+      } catch (error) {
+        if (found.length === 0) throw error;
+        state.failure = error instanceof Error ? error.message : "unknown error";
+        return 0;
+      }
+    };
+    const canAsk = (concept: string) =>
+      !tried.includes(concept) && tried.length < MAX_SAM_CALLS && state.failure === null;
+
+    for (const concept of primary) {
+      if (!canAsk(concept)) continue;
+      await ask(concept);
+      const last = found[found.length - 1];
+      if (last?.concept === concept && isStrong(last.regions)) break;
+    }
+    if (found.length === 0) {
+      for (const concept of fallback) {
+        if (!canAsk(concept)) continue;
+        if ((await ask(concept)) > 0) break;
       }
     }
-    if (regions.length === 0) {
+    if (found.length === 0) {
       return none(
         photo,
-        `SAM ${SAM_MODEL} found no region matching ${concepts.map((c) => `"${c}"`).join(", ")}: the raw photo is used as evidence.`,
+        `SAM ${SAM_MODEL} found no region matching ${tried.map((c) => `"${c}"`).join(", ")}: the raw photo is used as evidence.`,
         quiet,
       );
     }
+
+    const merged = mergeRegions(found, MAX_REGIONS);
+    const regions = merged.regions;
+    // The concepts that matched, with what each brought; a single concept reads as before.
+    const matchedText =
+      merged.byConcept.length === 1
+        ? `matching "${merged.byConcept[0].concept}"`
+        : `from ${merged.byConcept.length} concepts: ${merged.byConcept.map((c) => `"${c.concept}" ${c.count}`).join(", ")}`;
+    // A concept can match and still add no region of its own (same box as a more confident
+    // one, or cut by the limit of 5): the note says so instead of listing it as unmatched.
+    const absorbed = found
+      .filter((f) => !merged.byConcept.some((c) => c.concept === f.concept))
+      .map((f) => `"${f.concept}"`);
+    const unmatched = tried.filter((c) => !found.some((f) => f.concept === c)).map((c) => `"${c}"`);
 
     const annotated = await annotateImage(image.jpeg, regions);
     const root = runtimeDir(options.runtimeDir);
     const dir = path.join(root, "evidence");
     await mkdir(dir, { recursive: true });
-    const stem = createHash("sha256").update(image.jpeg).update(matched).digest("hex").slice(0, 16);
+    const stem = createHash("sha256")
+      .update(image.jpeg)
+      .update(merged.byConcept.map((c) => c.concept).join("|"))
+      .digest("hex")
+      .slice(0, 16);
     const file = path.join(dir, `${stem}-annotated.jpg`);
     await writeFile(file, annotated);
     // Copy to the shared store when one is configured (no-op otherwise), so the claim page
@@ -161,9 +257,13 @@ export async function markDamage(photo: string, options: MarkDamageOptions = {})
       annotatedPhoto: toStoredPath(file),
       method: "sam-3.1",
       note:
-        `SAM 3.1 outlined ${regions.length} region${regions.length > 1 ? "s" : ""} matching "${matched}"` +
+        `SAM 3.1 outlined ${regions.length} region${regions.length > 1 ? "s" : ""} ${matchedText}` +
         (scores.length ? ` (confidence ${scores.join(", ")})` : "") +
-        ". The outline marks where the damage appears to be; it is not a damage verdict.",
+        "." +
+        (absorbed.length ? ` Also matched ${absorbed.join(", ")}, with regions already kept or less confident.` : "") +
+        (unmatched.length ? ` No region for ${unmatched.join(", ")}.` : "") +
+        (state.failure ? ` A later SAM call failed (${state.failure}), so the outline may be incomplete.` : "") +
+        " The outline marks where the damage appears to be; it is not a damage verdict.",
     };
   } catch (error) {
     // Message only, never the request (it holds the photo and the key header).

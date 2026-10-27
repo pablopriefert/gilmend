@@ -6,7 +6,7 @@ import type {
 } from "openai/resources/chat/completions";
 import { describeEngine, resolveEngine, type Env } from "../config";
 import { buildClaimDocument } from "../documents/claim-pdf";
-import { DEFAULT_DAMAGE_CONCEPTS, damageConceptFor, markDamage } from "../evidence/mark-damage";
+import { damageConceptsFor, markDamage } from "../evidence/mark-damage";
 import { getOrder } from "../orders";
 import { getProvider, type Provider } from "../providers";
 import { computeClaim, getCarrierRules } from "../rules/carriers";
@@ -220,21 +220,17 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
           return { error: `photoIndex must be an integer between 0 and ${report.photos.length - 1}` };
         }
         const photo = report.photos[idx];
-        // What SAM outlines is what the model names: Muse reads the photo, then tells SAM
-        // the concept to segment. Fallbacks (the concept of the recorded assessment, then
-        // the generic vocabulary) cover a missing or rejected concept; one concept per SAM call.
+        // What SAM outlines starts from what the model names, but the evidence must not hang on
+        // that one word ("ceramic vase" found 1 region, "broken pottery" 26 on the same photo,
+        // 27 Oct 2026): damageConceptsFor adds a "broken <material>" or the item noun from the
+        // recorded assessment, markDamage asks them together and merges the regions, and the
+        // packaging is asked only when nothing about the item matched.
         const concept = parseConcept(args.concept);
-        const concepts = [
-          ...new Set(
-            [concept, damageConceptFor(assessment), ...DEFAULT_DAMAGE_CONCEPTS].filter(
-              (c): c is string => typeof c === "string",
-            ),
-          ),
-        ].slice(0, 4);
+        const { concepts, fallbackConcepts } = damageConceptsFor(concept, assessment);
         let ev: Evidence;
         try {
           // `engine` decides whether SAM may run at all: not for a private run, not in demo mode.
-          ev = await deps.markDamage(photo, { engine, concepts });
+          ev = await deps.markDamage(photo, { engine, concepts, fallbackConcepts });
         } catch (e) {
           // markDamage should never throw; if it does the claim still ships with the raw photo.
           ev = { photo, annotatedPhoto: null, method: "none", note: `mark_damage failed: ${errMessage(e)}` };

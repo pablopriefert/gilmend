@@ -52,7 +52,9 @@ describe("the committed showcase (data/showcase)", () => {
     const real = await resolveShowcaseFile(annotated);
     expect(real).toBe(path.join(await realpath(REPO_SHOWCASE), annotated.slice("data/showcase/".length)));
     expect(await resolveShowcaseFile(annotated.replace("data/showcase/", "showcase/"))).toBe(real);
-    expect(await resolveShowcaseFile(c.document!.pdfPath)).toMatch(/claims\/real_demo-1-vase-broken\.pdf$/);
+    // The vase run ended without a carrier claim, so the PDF is checked on the opened parcel.
+    const claimed = (await getShowcaseCase("real_demo-4-opened-missing"))!;
+    expect(await resolveShowcaseFile(claimed.document!.pdfPath)).toMatch(/claims\/real_demo-4-opened-missing\.pdf$/);
     expect(await resolveShowcaseFile(c.report.photos[0])).toMatch(/photos\/vase-broken\.webp$/);
   });
 
