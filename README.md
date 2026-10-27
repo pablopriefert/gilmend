@@ -1,6 +1,6 @@
 # Damage Desk
 
-**The agent that recovers the money from damaged parcels.**
+**The agent that prepares the claim to recover the money from damaged parcels.**
 
 A customer writes "my vase arrived broken" and attaches a photo. Damage Desk finds the order,
 reads the photo, decides what to do (reship, refund, ask for a better photo, or nothing), builds
@@ -12,7 +12,7 @@ drafts that the merchant files or sends.
 
 Built for the Meta Global AI Developer Hackathon, Startups track, theme "Build for Your World".
 
-> **Built during the Meta Global AI Developer Hackathon (Oct 27 – Nov 4, 2026). Prior work: none —
+> **Built during the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026). Prior work: none —
 > all code written during the hackathon; domain knowledge from running an e-commerce store's
 > customer support.**
 >
@@ -35,6 +35,13 @@ Everything: this is a new repository, and the commit history starts on 27 Oct 20
 - **Six recorded real runs** (Muse Spark 1.3 + SAM 3.1) committed as a read-only showcase, and a
   shared-storage backend (Vercel Blob) for a public deployment.
 - **Six demo photos generated with Muse Image**, declared as AI-generated.
+
+### How it was built
+
+Built solo by Pablo Priefert during the hackathon, with AI coding agents (Claude Code) doing much
+of the implementation under his direction. Every claim about a live run in this README comes from
+a real run that was checked, not from the code alone. The early commits are squashed into a few
+large ones, so the history is coarser than the work was.
 
 What has been run live, and what has not (details in [Limitations](#limitations)):
 
@@ -122,14 +129,14 @@ prompt-injection attempt counts as a fraud signal.
 
 ## Which Meta models, and why
 
-Five Meta models, each with its own job:
+Four Meta models used live, each with its own job, plus an open-weights route (Muse Spark Open or Muse Glimmer) that is written and tested but not run live yet:
 
 | Step | Model | Why this one |
 |---|---|---|
 | Investigation | **Muse Spark 1.3** (Meta Model API, Standard mode, `muse-spark-1.3`) | One model does three jobs in the same loop: **vision** (it reads the photos), **tool calling** (order lookup, damage marking, rules, claim maths) and a **structured decision** returned through the `finish_case` tool call and validated in code. |
 | Evidence | **SAM 3.1** (Meta Model API) | A claim needs proof, not only a verdict. Muse names the damaged object to outline (for example "broken pottery" or "glass carafe": SAM segments things, not states, so "crack" or "shattered vase" match nothing), SAM segments it, and the annotated photo goes into the claim PDF. If SAM finds nothing or fails, the claim ships with the raw photo and says so. |
 | Voice report | **Muse Voice Transcribe 1.0** (Meta Model API, `muse-voice-transcribe-1.0`) | A customer with a broken parcel in their hands talks faster than they type. They dictate the report, the transcript fills the message box (still editable), and the case records that it was dictated, by which model, for how long, and whether it was edited. Audio is processed in memory and never stored. |
-| "Run privately" | **Muse Spark Open** (open weights, 816B total / 42B active, natively multimodal) on **Baseten Model APIs**, or **Muse Glimmer** (open weights, Apache 2.0) on **Modal** (see [`deploy/`](deploy/README.md)) | The same agent, tools and output schema on open weights, so a merchant who does not want customer photos on Meta's API has a route. A private run never calls the Meta Model API: SAM and voice are off too. "Private" means no Meta Model API and no Meta training traffic, **not** "on your hardware": on Baseten the photos and the message go to Baseten, which states that it stores neither inputs nor outputs of synchronous Model API requests. |
+| "Run privately" | **Muse Spark Open** (open weights, 816B total / 42B active, natively multimodal, per Meta's model card, not verified here) on **Baseten Model APIs**, or **Muse Glimmer** (open weights, Apache 2.0) on **Modal** (see [`deploy/`](deploy/README.md)) | The same agent, tools and output schema on open weights, so a merchant who does not want customer photos on Meta's API has a route. A private run never calls the Meta Model API: SAM and voice are off too. "Private" means no Meta Model API and no Meta training traffic, **not** "on your hardware": on Baseten the photos and the message go to Baseten, which states that it stores neither inputs nor outputs of synchronous Model API requests. |
 | Demo data | **Muse Image** (`muse-image-1.0`, Meta Model API) | The six demo photos are generated, not taken: no real customer, label or address can leak into a public repository. [`scripts/generate-demo-photo.mjs`](scripts/generate-demo-photo.mjs) remakes one. |
 
 The product is the decision and the dossier, not an image analyzer: the photo is one input among
@@ -148,16 +155,15 @@ multipart), and the transcript lands in the message box. Details that matter:
 - A clip is capped at 90 s, and several clips can be added to one message.
 - The real transcription returns a signed receipt (HMAC derived from `MODEL_API_KEY`, valid 30
   minutes). The case says "Voice message, transcribed by muse-voice-transcribe-1.0" only when every
-  clip has a valid receipt. Without a key, or on a public deployment without the access code, the
-  endpoint returns a labelled canned transcript and the case says "DEMO MODE, canned transcript":
-  it is never attributed to Muse.
+  clip has a valid receipt. Without a key the endpoint returns a labelled canned transcript and
+  the case says "DEMO MODE, canned transcript": it is never attributed to Muse. On a public
+  deployment a real transcription needs the access code.
 - Spoken digits can come back as words ("Order one thousand one"), so the agent is told that a
   verified dictation may contain misheard names and numbers.
 - Voice is off in "Run privately" mode (the audio would go to Meta), and a dictated message cannot
   be filed as a private run.
 - Recording needs HTTPS or localhost and a browser with `MediaRecorder`; otherwise the form says so
   and the customer types.
-- Cost per Meta's pricing pages: $0.18 per hour of audio.
 
 ### Open weights
 
@@ -224,8 +230,8 @@ Environment variables (all listed, empty, in [`.env.example`](.env.example)):
 | `SAM_BASE_URL` | SAM 3.1 endpoint if different from `MODEL_BASE_URL`. |
 | `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_ADMIN_ACCESS_TOKEN` | Optional read-only dev store. Empty means fictitious orders. |
 | `MERCHANT_NAME`, `MERCHANT_ADDRESS`, `MERCHANT_EMAIL` | Merchant identity printed on the claim. |
-| `DAMAGE_DESK_ACCESS_CODE`, `DAMAGE_DESK_REAL_RUNS_PER_DAY` | For a public deployment: a shared code for real engines, voice transcription and approve/edit/reject, and a daily cap of real runs (default 100, counted per instance in memory). |
-| `DAMAGE_DESK_STORAGE` (empty, `file` or `blob`), `BLOB_READ_WRITE_TOKEN` | Case storage: local files (default) or a private Vercel Blob store ([`docs/storage.md`](docs/storage.md)). |
+| `DAMAGE_DESK_ACCESS_CODE`, `DAMAGE_DESK_REAL_RUNS_PER_DAY` | For a public deployment: a shared code that every report, every real voice transcription and every approve/edit/reject needs (a request without it is refused with 401), and a daily cap of real runs (default 100, counted per instance in memory). The recorded runs stay readable without it. |
+| `DAMAGE_DESK_STORAGE` (empty, `file` or `blob`), `BLOB_READ_WRITE_TOKEN` | Case storage: local files (default) or a private Vercel Blob store ([`docs/storage.md`](docs/storage.md)). On Vercel the Blob SDK authenticates with `BLOB_STORE_ID` and the injected OIDC token; `BLOB_READ_WRITE_TOKEN` is only for code running outside Vercel. |
 
 **Demo mode.** Without `MODEL_API_KEY` the app uses a deterministic mock provider and labels every
 result "DEMO MODE": the case, the trace, the badge, the PDF footer and the logs. The mock follows a
@@ -306,17 +312,25 @@ left out of the "recoverable this month" counter. Everything in them is fictitio
 2. Leave Fluid Compute on (the default): `POST /api/reports` declares `maxDuration = 120` itself.
 3. Environment variables (Production): `MODEL_API_KEY` (Standard model only),
    `DAMAGE_DESK_ACCESS_CODE` (give it to the judges), `DAMAGE_DESK_REAL_RUNS_PER_DAY`; optionally
-   `MERCHANT_*`, the open-weights variables and `OPENROUTER_API_KEY`.
+   `MERCHANT_*` and the open-weights variables. **Never set `SHOPIFY_*` or `OPENROUTER_API_KEY` on
+   the public deployment**: the first would put a store's orders on a public URL, the second would
+   open the third-party test engine to every visitor. Set a **spend alert on the Meta console**: the
+   daily cap of real runs is per instance and in memory, so it is a soft limit.
 4. Storage: either keep the default (temporary, per serverless instance: a case a visitor files can
-   answer "not on this server" from another instance; the recorded runs are unaffected) or create a
-   **private** Vercel Blob store and set `DAMAGE_DESK_STORAGE=blob` ([`docs/storage.md`](docs/storage.md)).
-   The Blob backend has only been tested against a fake SDK.
+   answer "not on this server" from another instance; the recorded runs are unaffected) or use a
+   shared store. For Vercel Blob ([`docs/storage.md`](docs/storage.md)): create the store
+   **private** (it cannot be changed afterwards) with the CLI, from the linked project,
+   `vercel blob create-store damage-desk --access private --yes`, which adds `BLOB_STORE_ID` and an
+   OIDC token to the project, then set `DAMAGE_DESK_STORAGE=blob`. `BLOB_READ_WRITE_TOKEN` is only
+   needed for code running outside Vercel. The Blob backend has only been tested against a fake SDK.
 5. Deploy, open `/`: the six recorded runs must be listed with photos, outlined evidence and PDF.
-   File one report to check the whole flow, and from a second browser open its case.
+   File one report with the access code to check the whole flow, and from a second browser open its
+   case. Also check that a report without the code is refused (401).
 
 Do **not** put real customer data on the public URL: the case list, every case page, the photos
-and the claim PDFs are open to anyone with the link. Real runs, voice transcription and
-approve/edit/reject need the access code.
+and the claim PDFs are open to anyone with the link. On a public deployment every report, every
+real voice transcription and approve/edit/reject need the access code; the recorded runs stay
+readable without it.
 
 ## Limitations
 

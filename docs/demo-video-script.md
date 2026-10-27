@@ -1,12 +1,12 @@
 # Demo video script (3 minutes, voice-over in English)
 
-Story: **a broken vase becomes recovered money.** One case told in full (the customer dictates it,
-the agent investigates, the merchant approves), the others in a montage, then, only if it ran for
-real, the open-weights switch, ending on the recoverable counter.
+Story: **a broken vase becomes a claim ready to recover the money.** One case told in full (the
+customer dictates it live, the agent investigates, the merchant approves), the others in a montage,
+then, only if it ran for real, the open-weights switch, ending on the recoverable counter.
 
-Target length: at most 3:00. The spoken text is about 390 words with the optional open-weights
-shot and about 335 without it, which leaves room for the screen-only beats (the microphone, the
-trace, the PDF). Subtitles on. If the open-weights shot is cut, the video is shorter: never pad.
+Target length: at most 3:00. The spoken text below is 373 words with the optional open-weights
+shot and 323 without it (counted on the one-piece text, each bracketed figure as one word), which
+leaves room for the screen-only beats (the microphone, the trace, the PDF). Subtitles on. If the open-weights shot is cut, the video is shorter: never pad.
 
 ## Before recording: what must be true
 
@@ -15,14 +15,21 @@ lines that no longer hold.
 
 1. **Real mode, and say so on screen.** The script is written for a recording made with a real
    `MODEL_API_KEY` (plain `npm run dev`, engine "Muse Spark 1.3"). The six demo cases did run end
-   to end on the real Muse Spark 1.3 and SAM 3.1 on 27 Oct 2026 (README, "Measured on the real
-   models"), so a live run works; it takes 16 to 36 s. Two ways to show it, both honest:
-   - film a live run of case 1 and cut the wait (a visible "sped up" caption);
-   - or open the **recorded run** of case 1 from the Cases list (badge "Recorded run", recorded
-     on 27 Oct 2026) and say it is a recorded real run.
+   to end on the real Muse Spark 1.3 and SAM 3.1 on 27 Oct 2026, so a live run works; it took
+   16 to 36 s then. The voice shot (shot 3) and the case that follows it (shots 4 to 7) are **one
+   live run**: dictate, submit in real mode, cut the wait with a visible "sped up" caption. The six
+   recorded runs were typed, never dictated, so a recorded run can never stand in for the dictated
+   case. Recorded runs appear only in the Cases list shot, badge "Recorded run". If the
+   microphone fails (item 3), type the message, cut the voice sentences, and either file a live
+   run or open the recorded run of case 1 (caption "Recorded real run", and say it is a recorded
+   real run).
    Never film demo mode as if it were real. If the whole video is recorded in demo mode
    (`npm run dev:demo`), the "DEMO MODE" badge stays on screen, the narrator never says that Muse
-   read the photo, and the numbers below (0.95, five shards, 36 s) are not used.
+   read the photo, and no confidence, amount or outline is read out as Muse's.
+   **Numbers.** The narrator quotes only figures that are on screen in the take. Every figure in
+   square brackets below (`[confidence]`, `[amount]`) is read from the case view of the take, and
+   the sentence is changed if the decision is not the one scripted. Do not rehearse a figure from
+   an earlier run: the case is re-recorded and the values can differ.
 2. **Photos.** `data/photos/` holds six images **generated with Muse Image** (`muse-image-1.0`),
    not photographs taken by the team. They may appear in the video, with the on-screen caption
    "Demo photos generated with Muse Image" and the voice-over line in shot 3. Never present them
@@ -32,15 +39,17 @@ lines that no longer hold.
    `MediaRecorder` only, and Muse Voice Transcribe with real API calls from a script, never with a
    microphone in a real browser. Try it in the browser you will film (HTTPS or localhost,
    microphone allowed), in real mode, before recording. If it fails, type the message, cut the
-   voice sentences of shot 3 and keep the Muse Image line. Speak a short sentence, for example "My
-   vase arrived broken. Order 1001." (that exact sentence came back correctly in about 2 s from a
-   script). Digits can come back as words ("Order one thousand one"): check the
-   transcript on screen before submitting. Voice is off in "Run privately" mode, and in
-   demo mode the endpoint returns a labelled canned transcript that must not be called Muse's.
-4. **Open-weights shot (shot 8) only if it ran for real.** It needs a real run of "Run privately"
+   voice sentences of shot 3 and keep the Muse Image line. The shot must be a **live dictation**:
+   speak a short sentence, for example "My vase arrived broken. Order 1001." (that exact sentence
+   came back correctly in about 2 s from a script), and show the transcript filling the box. Digits
+   can come back as words ("Order one thousand one"): check the transcript on screen before
+   submitting, and correct the order number if needed (the case records that it was edited). Voice
+   is off in "Run privately" mode, and in demo mode the endpoint returns a labelled canned
+   transcript that must not be called Muse's.
+4. **Open-weights shot (shot 9) only if it ran for real.** It needs a real run of "Run privately"
    on Muse Spark Open (Baseten: `OPEN_WEIGHTS_PROVIDER=baseten`, `npm run probe -- open-weights
    --models --chat` first) or on Muse Glimmer (Modal, `deploy/README.md`). Neither has been run
-   live as of this writing. If it did not run, cut shot 8 and say nothing about open weights. Do
+   live as of this writing. If it did not run, cut shot 9 and say nothing about open weights. Do
    not film the demo-mode fallback and call it open weights. Say the real host (the badge on the
    case names it), and never "on our own hardware" for Baseten.
 5. **The counter.** Read the number on screen; do not rehearse a figure. With the six demo cases
@@ -51,25 +60,38 @@ lines that no longer hold.
    recorded runs it reads zero.
 6. Fictitious customers and orders only. No real tracking labels, addresses or people anywhere.
 
+### Before filming locally
+
+Film either on the deployed URL (once it is deployed and checked), or on a clean local runtime:
+`data/runtime/` must not hold old runs. Every `npm run real` writes a `real_demo-*` case there with
+the same id as a recorded run, and a stored case shadows the recording (`layered-store.ts`): the
+Cases list then shows your own run without the "Recorded run" badge instead of the recording, and
+the header counter counts it (recorded runs are excluded from the counter, stored copies are not),
+so the number on screen is inflated. So, before recording locally: stop the dev server, move the
+folder away (`mv data/runtime data/runtime.away`), run `npm run demo` for fresh demo cases, start
+the app in real mode, and check that the six recorded runs show the "Recorded run" badge and that
+the counter reads what the three demo claims add up to. Put the folder back afterwards.
+
 ## Shot list
 
 | Time | On screen | Voice-over |
 |---|---|---|
 | 0:00 – 0:12 | **New report** screen, the "Broken vase" scenario: the customer's message, order #1001. | "A customer writes: my vase arrived broken. For a small shop, that is two jobs: make the customer whole, then chase the carrier for the money." |
 | 0:12 – 0:25 | Cut to the **carrier rules** card of a case, then the three carrier names. Highlight "72 hours" (Mondial Relay), "3 days" (Chronopost), "12 months" (Colissimo). | "Every carrier has its own proof, its own cap, and its own deadline. Mondial Relay gives you 72 hours. Chronopost, three days. Miss it, and the claim is lost." |
-| 0:25 – 0:43 | **Voice report**: click the microphone in the message box, speak ("My vase arrived broken. Order 1001."), the transcript fills the box. Caption: "Demo photos generated with Muse Image". The one photo is attached. | "She doesn't type, she talks. Muse Voice Transcribe turns the clip into the message, still editable, and the case records that it was dictated. The demo photos are generated with Muse Image, so no real customer appears here." |
-| 0:43 – 0:50 | Engine selector: **Muse Spark 1.3 (Model API)**. Click submit (cut the wait, caption "sped up"; or switch to the recorded run, caption "Recorded real run"). | "Damage Desk is an agent on Muse Spark 1.3 through the Meta Model API, Standard mode." |
-| 0:50 – 1:18 | Open **Agent reasoning trace** and scroll: order lookup, photo reading, damage marking, carrier rules, claim computation, decision. Pause on the SAM step. | "It looks up the order, reads the photo, and calls tools. It asks SAM 3.1 to outline the damage, so the claim has proof: Muse names the broken object, SAM segments it. Plain code reads the carrier's rules and computes the claim. The model never writes an amount or a deadline. This real run took 36 seconds." |
+| 0:25 – 0:43 | **Voice report, live**: click the microphone in the message box, speak ("My vase arrived broken. Order 1001."), the transcript fills the box (check the order number on screen). Caption: "Demo photos generated with Muse Image". The one photo is attached. | "She doesn't type, she talks. Muse Voice Transcribe turns the clip into the message, still editable, and the case records that it was dictated. The demo photos are generated with Muse Image, so no real customer appears here." |
+| 0:43 – 0:50 | Engine selector: **Muse Spark 1.3 (Model API)**. Click submit on the dictated report and cut the wait (caption "sped up"). The case that opens is this live run. | "Damage Desk is an agent on Muse Spark 1.3 through the Meta Model API, Standard mode." |
+| 0:50 – 1:18 | Open **Agent reasoning trace** and scroll: order lookup, photo reading, damage marking, carrier rules, claim computation, decision. Pause on the SAM step. | "It looks up the order, reads the photo, and calls tools. It asks SAM 3.1 to outline the damage, so the claim has proof. Plain code reads the carrier's rules and computes the claim. The model never writes an amount or a deadline." |
 | 1:18 | **[DEMO MODE]** variant of the two lines above | "In demo mode a scripted mock plays the same steps. It does not look at the image, and the screen says so." |
-| 1:18 – 1:45 | **Case view**: "What the agent saw", the **annotated photo** (five shards outlined) next to the raw one, then **Decision**: reship, carrier claim yes, confidence 0.95. Zoom on the maximum compensation, 52.90 EUR, and the deadline. | "Decision: reship the vase, and claim Colissimo, confidence 0.95. SAM outlined five shards. The maximum compensation is 52.90 euros: 23 euros a kilo, 2.3 kilos, from Colissimo's published terms, with the source and its date shown next to it." |
+| 1:18 – 1:45 | **Case view**: "What the agent saw", the **annotated photo** (the outlined region) next to the raw one, then **Decision**: reship, carrier claim yes, and the confidence. Zoom on the maximum compensation and the deadline. | "Decision: reship the vase, and claim Colissimo, confidence [confidence]. SAM outlines the damage on the photo. The maximum compensation is [amount] euros: 23 euros a kilo, 2.3 kilos, from Colissimo's published terms, with the source and its date shown next to it." |
 | 1:45 – 2:07 | **Claim document**: the PDF preview, the e-mail to the carrier, the drafted reply to the customer. End on **Approve**; click it. Banner: "Approved: ready to send. Damage Desk sends nothing by itself." | "It builds the claim PDF and the e-mail to the carrier, and drafts the reply in the customer's language. Guardrails in code can only make a decision stricter. Nothing leaves without a click, and this app sends nothing: the merchant files the claim." |
 | 2:07 – 2:35 | **Cases** list (badge "Recorded run" on the six real runs), then quick cuts on four cases: crushed carton (no action), blurry photo (asks for another one, handed to a human), Mondial Relay case with the French reply, headphones (handed to a human). | "All six demo cases ran on the real models, and not every case is a claim. A crushed box with the product intact: no action. A blurry photo: it asks for another one. A parcel opened at the relay: a reply in French, inside the 72 hours. Headphones worth 349 euros: it prepares everything, then hands the decision to a human." |
 | 2:35 – 2:50 | **Only if it ran for real.** **New report**, same scenario. Select **Run privately (open weights)**; the line under the selector names the engine and host. Submit; the case opens with the badge naming the model and host. | "Some merchants will not send customer photos to a cloud API. The same agent, with the same tools and output, runs on open weights: Muse Spark Open, served by Baseten. A private run never calls the Meta Model API, so SAM is skipped and the claim carries the raw photo." |
-| 2:50 – 3:00 | **Cases** header, full width: the counter "€… recoverable this month · … claims due this week". Hold on it, then the title card: "Damage Desk. Built during the Meta Global AI Developer Hackathon." | "At the top, the money still recoverable, and the claims about to expire. A broken vase, turned into a claim that gets filed. Damage Desk." |
+| 2:50 – 3:00 | **Cases** header, full width: the counter "€… recoverable this month · … claims due this week". Hold on it, then the title card: "Damage Desk. Built during the Meta Global AI Developer Hackathon." | "At the top, the money still recoverable, and the claims about to expire. A broken vase, turned into a claim ready to file. Damage Desk." |
 
 ## Spoken text, in one piece (for the recording take)
 
 Real mode, with the voice shot. Cut the paragraph marked *(only if it ran for real)* if it did not.
+Replace each `[bracket]` with the figure read from the screen of the take.
 
 > A customer writes: my vase arrived broken. For a small shop, that is two jobs: make the customer
 > whole, then chase the carrier for the money.
@@ -84,13 +106,12 @@ Real mode, with the voice shot. Cut the paragraph marked *(only if it ran for re
 > Damage Desk is an agent on Muse Spark 1.3 through the Meta Model API, Standard mode.
 >
 > It looks up the order, reads the photo, and calls tools. It asks SAM 3.1 to outline the damage,
-> so the claim has proof: Muse names the broken object, SAM segments it. Plain code reads the
-> carrier's rules and computes the claim. The model never writes an amount or a deadline. This real
-> run took 36 seconds.
+> so the claim has proof. Plain code reads the carrier's rules and computes the claim. The model
+> never writes an amount or a deadline.
 >
-> Decision: reship the vase, and claim Colissimo, confidence 0.95. SAM outlined five shards. The
-> maximum compensation is 52.90 euros: 23 euros a kilo, 2.3 kilos, from Colissimo's published
-> terms, with the source and its date shown next to it.
+> Decision: reship the vase, and claim Colissimo, confidence [confidence]. SAM outlines the damage
+> on the photo. The maximum compensation is [amount] euros: 23 euros a kilo, 2.3 kilos, from
+> Colissimo's published terms, with the source and its date shown next to it.
 >
 > It builds the claim PDF and the e-mail to the carrier, and drafts the reply in the customer's
 > language. Guardrails in code can only make a decision stricter. Nothing leaves without a click,
@@ -107,7 +128,7 @@ Real mode, with the voice shot. Cut the paragraph marked *(only if it ran for re
 > photo.
 >
 > At the top, the money still recoverable, and the claims about to expire. A broken vase, turned
-> into a claim that gets filed. Damage Desk.
+> into a claim ready to file. Damage Desk.
 
 ## Claims checklist (each line of the voice-over, and where the code does it)
 
@@ -117,10 +138,10 @@ Real mode, with the voice shot. Cut the paragraph marked *(only if it ran for re
 | Reads the photo, calls tools | `src/lib/agent/run-agent.ts`, `tools.ts` (`assess_photos`, `get_order`, ...) |
 | Muse Voice Transcribe turns the clip into the message; the case records it was dictated | `src/lib/voice/`, `src/app/api/transcribe/route.ts`, `src/components/voice-recorder.tsx`; verified with real API calls, **not yet with a real microphone in a browser** (checklist item 3) |
 | The demo photos are generated with Muse Image | `data/photos/README.md`, `scripts/generate-demo-photo.mjs`, README "About the demo photos" |
-| SAM 3.1 outlines the damage; Muse names the broken object; claim carries the annotated photo | `src/lib/evidence/` (`mark_damage`); raw photo when SAM fails or is skipped; README "SAM 3.1 segments things, not states" |
+| SAM 3.1 outlines the damage; claim carries the annotated photo | `src/lib/evidence/` (`mark_damage`); raw photo when SAM fails or is skipped; README "SAM 3.1 segments things, not states" |
 | The model never writes an amount or a deadline | `src/lib/rules/carriers.ts` (`computeClaim`), guardrails in `src/lib/agent/guardrails.ts` |
-| Confidence 0.95, five shards outlined, 36 seconds | README table "Measured on the real models", row 1; recorded in `data/showcase/cases/` (`real_demo-1-vase-broken`). Run times vary: say 36 s only for that recorded run |
-| 52.90 EUR = 23 EUR/kg x 2.3 kg | `data/carriers.json` (Colissimo, dated source) and `data/fixtures/orders.json` (#1001, 2.3 kg, 58 EUR item) |
+| Confidence `[confidence]`, SAM outlines the damage | Read from the case view of the take (the decision card and the annotated photo). No figure is rehearsed: the case is being re-recorded. No run time is quoted, because none is on screen |
+| `[amount]` EUR = 23 EUR/kg x 2.3 kg (52.90 for case 1 in the current fixtures) | `data/carriers.json` (Colissimo, dated source) and `data/fixtures/orders.json` (#1001, 2.3 kg, 58 EUR item) |
 | 72 hours Mondial Relay, three days Chronopost | `data/carriers.json` (both marked verified) |
 | Claim PDF, carrier e-mail, customer reply in her language | `src/lib/documents/`, `draft_claim_document`, reply language from the report |
 | Guardrails in code can only make a decision stricter | `src/lib/agent/guardrails.ts` (`CONFIDENCE_THRESHOLD` 0.7, `HIGH_VALUE_EUR` 300, fraud signals) |
@@ -141,5 +162,7 @@ Real mode, with the voice shot. Cut the paragraph marked *(only if it ran for re
 - That the demo photos are real photographs: they are generated with Muse Image.
 - That the voice report was tested with real customers or accents, or that the recorded run is
   live.
+- That a recorded run was dictated: the six recorded runs were typed. Only the live run of the
+  voice shot was dictated.
 - That the app is deployed or that the judges' URL stores cases reliably, unless the Vercel
   deployment and its storage check are done.

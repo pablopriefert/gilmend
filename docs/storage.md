@@ -77,7 +77,8 @@ The deployed app has no accounts. Everything the pages show is readable by anyon
   says so).
 - **Not public:** the Meta key, the access code, the storage token, `.env.local`. They are only read on
   the server and never sent to the browser. Approving, editing or rejecting a case needs the access
-  code when `DAMAGE_DESK_ACCESS_CODE` is set; so does a real (paid) run.
+  code when `DAMAGE_DESK_ACCESS_CODE` is set; so does every report (a request without it is refused
+  with 401), whichever engine it asks for.
 - **The store itself must be private.** Objects are only reachable through the app's own routes, which
   serve images and PDFs by path (`/api/files`, `/api/cases/[id]/pdf`). A public blob URL would make every
   case readable without going through the app, and its listing could be crawled. Use a private store.

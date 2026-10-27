@@ -1,13 +1,13 @@
-# Demo photos: the 6 shots to take
+# Demo photos: generated with Muse Image
 
 The six demo cases (`data/demo-cases.json`) each point to one photo in this folder, named
-`<name>.jpg`. **We shoot them ourselves** with real packages that we damage on purpose. No
-customer photo is ever used (hackathon rule), and none of the photos may show a real person, a
-real address or a real tracking label.
+`<name>.webp` (a `<name>.jpg` placed next to one replaces it). The six photos are generated with
+Muse Image (below). No customer photo is ever used (hackathon rule), and none of the photos may
+show a real person, a real address or a real tracking label.
 
-## Status on 27 Oct 2026: generated with Muse Image, not photographed
+## How they were made (27 Oct 2026)
 
-Today the folder holds six `<name>.webp` files **generated with Meta's Muse Image**
+The folder holds six `<name>.webp` files **generated with Meta's Muse Image**
 (`muse-image-1.0`, Meta Model API, `/v1/images/generations`) on 27 Oct 2026, with
 [`scripts/generate-demo-photo.mjs`](../../scripts/generate-demo-photo.mjs) (the prompt of the
 vase is in its header). They show fictitious parcels: no real customer, no real address, no
@@ -19,12 +19,15 @@ Say it everywhere they appear: **AI-generated with Muse Image, not photos taken 
 1.3 and SAM 3.1 with these images on 27 Oct 2026 and gave the expected decisions; a real photo
 may still read differently, so a real shot is worth trying before filming.
 
-To switch to a real photo, drop `<name>.jpg` next to the generated one (same name, see the
+## Optional: switching to a real photo later
+
+To switch a case to a real photo, drop `<name>.jpg` next to the generated one (same name, see the
 table). A JPEG always wins over `<name>.webp`. `provisionalDemoPhotos()` in
 `src/lib/store/demo-cases.ts` lists the cases still running on a generated image, and
-`npm run demo` prints it.
+`npm run demo` prints it. The recorded runs in `data/showcase/` keep their own pinned copy of the
+photo Muse saw, so they do not change; a real photo means re-running the case.
 
-## Rules for every photo
+## Rules for every real photo
 
 - JPEG, named exactly as below, long edge about **1600 px**, under **1 MB** (the vision model
   reads them, and the file ends up in the public repository).
@@ -32,11 +35,10 @@ table). A JPEG always wins over `<name>.webp`. `provisionalDemoPhotos()` in
   macOS: `exiftool -all= data/photos/*.jpg` (or export from Preview with "Location" unticked).
 - Daylight or a bright lamp, plain table or floor behind the parcel.
 - The parcel carries a **hand-written paper label** with the fictitious tracking number from
-  the table (the research notes ask for a legible label in at least one photo). Never a real
-  shipping label.
+  the table. Never a real shipping label.
 - Break things you own, with the box and padding as you would normally pack them.
 
-## The six shots
+## The six shots, if you take real ones
 
 | File | Case | What to photograph | Props |
 |---|---|---|---|
@@ -47,7 +49,7 @@ table). A JPEG always wins over `<name>.webp`. `provisionalDemoPhotos()` in
 | `headphones-cracked.jpg` | 5. Expensive item (Chronopost, `XW990010051TS`) | Over-ear headphones with a **cracked ear cup** and a bent hinge, next to the dented box. Use old or broken headphones: do not damage a good pair. | Spare or broken headphones; a dented box. |
 | `carafe-cracked.jpg` | 6. Late report (Chronopost, `XW990010061TS`) | A glass carafe with a **crack along the neck** on a plain background. No box needed (the report comes too late for a claim, the photo only proves the damage). | A thrift-store carafe; tap the neck until it cracks. |
 
-## Checklist before committing
+## Checklist before committing a real photo
 
 - [ ] six files with the exact names above
 - [ ] EXIF location removed (`exiftool -gps:all data/photos/*.jpg` prints nothing)

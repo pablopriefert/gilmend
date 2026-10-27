@@ -36,7 +36,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   orders, `example.*` e-mails, and files without keys or local paths. Approving a recorded case stores
   a copy; it never writes to the folder. Tests see no showcase (`vitest.setup.ts` points
   `DAMAGE_DESK_SHOWCASE_DIR` at a folder that does not exist).
-- Storage on a public deployment is explained in `docs/storage.md` (what is public, why there is no
-  shared backend yet).
+- Storage on a public deployment is explained in `docs/storage.md` (what is public, and how the shared
+  Vercel Blob backend is switched on with `DAMAGE_DESK_STORAGE=blob`; the adapter,
+  `src/lib/storage/blob-object-store.ts`, has been tested against a fake SDK only).
 - Do not commit, push, deploy or create a GitHub repository unless Pablo asks.
 

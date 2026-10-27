@@ -23,7 +23,10 @@ What is in here, and how the app treats it:
   (`muse-image-1.0`, see `data/photos/README.md`), not photographs taken by the team; the copy here is pinned so the
   recording keeps showing what Muse actually saw even after the team's own photos replace
   the stand-ins.
-- `evidence/`: the photos annotated by SAM 3.1. `claims/`: the claim PDFs.
+- `evidence/`: the photos annotated by SAM 3.1. `claims/`: the claim PDFs. The annotated JPEGs do
+  **not** carry the XMP `DigitalSourceType = trainedAlgorithmicMedia` tag that the generated photos
+  in `photos/` have (the annotation is a re-encode that drops the metadata), yet they derive from
+  those generated photos and are AI-generated images too: say so wherever one is shown.
 - **Read-only.** Nothing in the app writes here. Approving, editing or rejecting a recorded
   case stores a *copy* in the normal store (`src/lib/store/layered-store.ts`), and that copy
   shadows the recording; the committed files never change.

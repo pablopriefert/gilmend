@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "Damage Desk", template: "%s · Damage Desk" },
   description:
-    "The agent that recovers the money from damaged parcels: investigates, decides, files the carrier claim, and waits for one click.",
+    "The agent that prepares the claim to recover the money from damaged parcels: investigates, decides, prepares the carrier claim, and waits for one click.",
 };
 
 // The header reads the server environment (is a model key set?). Without this the layout

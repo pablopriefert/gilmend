@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "The agent that recovers the money from damaged parcels (Meta Global AI Developer Hackathon, Startups track).",
+  "description": "The agent that prepares the claim to recover the money from damaged parcels (Meta Global AI Developer Hackathon, Startups track).",
   "scripts": {
     "dev": "next dev",
     "dev:demo": "MODEL_API_KEY= OPEN_WEIGHTS_BASE_URL= OPEN_WEIGHTS_MODEL= BASETEN_API_KEY= OPENROUTER_API_KEY= next dev",

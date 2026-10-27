@@ -19,8 +19,8 @@ const DEMO_PHOTO_NAMES = [
 ] as const;
 
 /**
- * GET /api/demo-photo?name=vase-broken: the demo photo (the one we shot, else the provisional
- * stand-in), with the content type read from its bytes. 404 for any other name.
+ * GET /api/demo-photo?name=vase-broken: the demo photo (generated with Muse Image; a .jpg placed
+ * next to it replaces it), with the content type read from its bytes. 404 for any other name.
  */
 export async function GET(request: Request): Promise<Response> {
   const name = new URL(request.url).searchParams.get("name") ?? "";
