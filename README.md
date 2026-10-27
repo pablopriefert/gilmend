@@ -37,8 +37,12 @@ Built for the Meta Global AI Developer Hackathon, Startups track, theme "Build f
 
 Everything: this is a new repository, and the commit history starts on 27 Oct 2026. In order:
 
-- **The agent**: a tool-calling loop on Muse Spark 1.3 (7 tools, at most 8 turns), a structured
+- **The agent**: a tool-calling loop on Muse Spark 1.3 (8 tools, at most 9 turns), a structured
   decision, and guardrails in code that can only make it stricter.
+- **Evidence integrity**: `check_photo_integrity` hashes every photo, compares it with the photos of
+  the other stored cases and the demo photos, and compares its EXIF capture date with the delivery
+  date. A signal sends the case to a human; nothing is rejected on its own
+  ([Evidence integrity](#evidence-integrity)).
 - **Deterministic carrier rules and claim maths** from dated, sourced public terms, so the model
   never writes an amount or a deadline.
 - **Evidence**: SAM 3.1 outlines what the agent names (the broken item, its pieces or the box:
@@ -105,8 +109,9 @@ Caveats that matter:
 
 1. **Report.** A customer message (typed or dictated), one to three photos and an order number
    arrive (in the demo, a form that stands in for the inbox).
-2. **Investigation.** An agent calls tools in a loop: it fetches the order, reads the photos,
-   has SAM outline the item or the box, looks up the carrier's rules and computes the claim.
+2. **Investigation.** An agent calls tools in a loop: it fetches the order, checks the photos for
+   reuse and capture date (code), reads the photos, has SAM outline the item or the box, looks up
+   the carrier's rules and computes the claim.
 3. **Decision.** A structured answer: `reship | refund | ask_more_photos | no_action`, whether to
    claim the carrier, a confidence, reasons, and whether a human must look.
 4. **Drafts.** A claim PDF, an e-mail to the carrier's claims department, and a reply to the customer.
@@ -118,15 +123,16 @@ flowchart TD
     V["Optional voice: Muse Voice Transcribe fills the message"] -.-> A
     A["Customer report: message, 1-3 photos, order number"] --> B["POST /api/reports"]
     B --> C{"Engine"}
-    C -->|"Muse Spark 1.3, Model API"| D["Agent loop, max 8 turns"]
+    C -->|"Muse Spark 1.3, Model API"| D["Agent loop, max 9 turns"]
     C -->|"Run privately: Muse Spark Open or Glimmer"| D
     C -->|"No key: DEMO MODE mock"| D
     D --> T1["get_order"]
+    D --> T1b["check_photo_integrity: reused photo, capture date (code)"]
     D --> T2["assess_photos: Muse reads the photos"]
     D --> T3["mark_damage: SAM 3.1 outlines the item, its pieces or the box"]
     D --> T4["get_carrier_rules + compute_claim: deterministic code"]
     D --> T5["finish_case: structured decision"]
-    T1 & T2 & T3 & T4 & T5 --> G["Guardrails in code: can only make the decision stricter"]
+    T1 & T1b & T2 & T3 & T4 & T5 --> G["Guardrails in code: can only make the decision stricter"]
     G --> H["Claim PDF + carrier e-mail + customer reply"]
     H --> I["Case saved: status needs_review"]
     I --> J{"Merchant click"}
@@ -141,12 +147,65 @@ and what to conclude from what the tools return.
 
 **Guardrails run in code after the model answers and can only make a decision stricter.** A human
 is required when the confidence is below 0.7, the order is above 300 EUR, the order match is
-doubtful, there are fraud signals, the photos are too blurry, a tool failed, the customer reply
+doubtful, there are fraud signals, the photo integrity check found a signal (a photo reused for
+another order, a capture date before the delivery), the photos are too blurry, a tool failed, the customer reply
 quotes a figure the tools did not return, or Muse read the packaging as inadequate on a claim that
 is kept (the claim is not cancelled on that reading: it stays, with a merchant-only warning to check
 the packing before filing, and the carrier file says nothing about it: neither the reading nor the
 model's notes about the packing). Customer text is treated as untrusted data; a
 prompt-injection attempt counts as a fraud signal.
+
+## Evidence integrity
+
+A claim is only as good as its photos, so the agent checks the evidence before it believes it.
+`check_photo_integrity` is plain code, not a model call, and it runs in demo mode too (only the
+model's reading of the photos is scripted there). The model sees its result as a tool result; the
+guardrails act on it; the case keeps it and the case page shows it in an **Integrity** row under
+the photos.
+
+- **Same photo, another order.** Every photo gets two 64-bit perceptual hashes (dHash and aHash,
+  computed with `sharp` after the EXIF rotation, `src/lib/integrity/image-hash.ts`). They are stored
+  on the case (the whole integrity record is under 2 KB), and each new report is compared with the
+  hashes of every stored case, so it works across serverless instances and storage backends. A match
+  with a case of another order **or** another customer is a signal; the same customer filing the
+  same photo again for the same order is not.
+- **Demo photos.** The six demo photos are public and reused by design, so they are never compared
+  with other cases. They are compared with every report: a demo photo used by its own demo case
+  (order and e-mail match, `#` and capitals ignored) is fine any number of times; the same photo
+  filed for another order is a signal. Try it: file the broken vase for #1001, then the same photo for #1002 (hugo.bernard@example.com).
+- **Capture date against delivery.** A minimal EXIF reader (no dependency, bounds-checked on every
+  read) takes `DateTimeOriginal`, then `DateTimeDigitized`. A date more than 12 hours before the
+  delivery of the order is a signal (EXIF has no time zone, so the margin absorbs it). **A photo
+  without EXIF is not a signal**: most messengers, browsers and share sheets strip it, and the demo
+  photos, being AI-generated, carry none. The result says so instead of staying silent.
+- **What happens on a signal.** The guardrail forces `needsHuman` with the signal as the reason and
+  nothing else: the decision, the claim and the documents are untouched, because a reused photo or an
+  early capture date is a reason to look, not a verdict (a customer can have a spare account, a
+  camera clock can be wrong). The model is told not to accuse the customer. If the model does not call
+  the tool, or calls it before the order is known (no delivery date yet), the code runs it before the
+  guardrails and the trace says so. If it fails, that is a tool error and the case goes to a human.
+- **What it does not catch**, and the case page says so: a photo that was cropped by more than a few
+  percent, mirrored, rotated or edited, a photo of a screen showing another photo, a genuine photo
+  used for a false claim, and any photo filed before this check existed (those cases hold no hash).
+  A clean result says what was compared ("5 photos from 4 earlier cases and 6 demo photos") and does
+  not claim the photos are genuine.
+
+Measured, not assumed (`npx tsx scripts/measure-photo-hash.ts`, 27 Oct 2026): 329 of 330 re-saves
+(resize and JPEG 55, JPEG 40, PNG at 300 px, +12 % brightness, JPEG 30 at 640 px) of the six demo
+photos and 60 synthetic pictures stay matched; the six demo photos are at least 25 (dHash) and 20
+(aHash) bits apart; 9 of 7,140 pairs of different synthetic smooth pictures (0.13 %) were matched
+wrongly. Synthetic blurred blobs are the hard case for a hash, so that rate is a pessimistic guess
+for real photos, not a measured one. A false match only asks a person to look.
+
+Run live on Muse Spark 1.3 on 27 Oct 2026, three runs (not a benchmark). First, the broken vase of
+#1001: Muse called the tool on the turn after `get_order`, saw no signal, and decided what it decides
+without the check (reship, claim); but with one tool per turn it used all 8 turns of the old cap, so
+the prompt now asks for the tool in the same turn as `get_order` and the cap is 9. Second, after that
+change, the same vase photo filed for #1002: Muse called both tools in its first turn, saw the
+signal, said in its reasons that the photos need a check, handed the case to a human and wrote a
+neutral reply, without accusing anyone (it also noticed on its own that the order was a print, not a
+vase). Third, #1001 again after the change: both tools in the first turn, no signal, the same decision
+and claim, 30 s.
 
 ## Which Meta models, and why
 
@@ -207,8 +266,10 @@ default, sends the photos to OpenRouter and to the model's provider, and does no
 A single Next.js (TypeScript) app, no database: cases are JSON files (or objects in a private
 Vercel Blob store on a public deployment), claim PDFs are built with `pdf-lib`.
 
-- `src/lib/agent/`: the loop (`run-agent.ts`, at most 8 model turns), the tool schemas
-  (`tools.ts`, 7 tools), the system prompt, and the guardrails (`guardrails.ts`).
+- `src/lib/agent/`: the loop (`run-agent.ts`, at most 9 model turns), the tool schemas
+  (`tools.ts`, 8 tools), the system prompt, and the guardrails (`guardrails.ts`).
+- `src/lib/integrity/`: the photo integrity check (perceptual hashes, EXIF capture date, comparison
+  with stored cases and demo photos).
 - `src/lib/providers/`: an OpenAI-compatible client for Muse Spark 1.3, for open weights (Baseten,
   Modal, custom endpoint) and for the OpenRouter test engine, plus the deterministic demo mock.
 - `src/lib/rules/` and `data/carriers.json`: carrier rules and the claim maths (maximum
@@ -428,6 +489,14 @@ Storage, the Blob store).
 - **The OpenRouter engine** was called once with a real photo (27 Oct 2026). It is a test engine,
   not private.
 - **Demo mode is scripted.** It shows the product flow, not the quality of Muse's reading of a photo.
+  The photo integrity check is the exception: it is real code in demo mode too.
+- **Photo integrity is a cheap signal, not forensics.** Perceptual hashes catch a file filed again
+  after a resize or a re-save, not a crop, a mirror image or an edit; a missing capture date is
+  normal and proves nothing; a clean result does not prove the photos are genuine. Cases filed
+  before the check hold no hash, so the first reports on a fresh deployment have little to compare
+  with. The thresholds were measured on the six demo photos and synthetic pictures, not on a
+  collection of real customer photos. Each report reads every stored case to compare hashes (one
+  read per case on Blob): fine for a demo's dozens of cases, not for thousands, like the case list.
 - **The demo photos are AI-generated** (Muse Image), not photographs of damaged parcels. A real
   photo may read differently.
 - **Carrier figures are the public standard terms**, some from a dated source and one window

@@ -1,4 +1,4 @@
-import type { ClaimComputation, DamageAssessment, Decision, Order } from "../types";
+import type { ClaimComputation, DamageAssessment, Decision, Order, PhotoIntegrity } from "../types";
 import type { RawDecision } from "./tools";
 
 // Rules that must hold whatever the model says. The prompt asks for the same things, but
@@ -23,6 +23,8 @@ export interface GuardrailContext {
   reportReceivedAt: string;
   /** The model was never shown the photos (no image input, or its server refused them). */
   photosNotRead?: boolean;
+  /** Result of the photo integrity check (reused photo, capture date); null when it did not run. */
+  integrity?: PhotoIntegrity | null;
 }
 
 export interface GuardrailResult {
@@ -102,6 +104,15 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
     }
   }
   if (raw.fraudSuspected) force("fraud or manipulation suspected");
+  // Evidence integrity (src/lib/integrity): any signal sends the case to a person. It changes
+  // nothing else: no claim is dropped and no decision is rejected, because a reused photo or an
+  // early capture date is a reason to look, not proof (a customer can have a spare account, a
+  // camera clock can be wrong). The merchant sees each signal on the case page.
+  if (ctx.integrity && ctx.integrity.signals.length > 0) {
+    force(
+      `photo integrity: ${ctx.integrity.signals.map((s) => s.message).join(" ")} A person must check the photos before anything is filed or sent.`,
+    );
+  }
 
   const needsAssessment = raw.decision === "reship" || raw.decision === "refund";
   if (needsAssessment && ctx.order !== null && ctx.assessment === null) {

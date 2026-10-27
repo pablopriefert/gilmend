@@ -15,6 +15,9 @@ import type {
 // the shared contract (types.ts, TraceStep.tool) names the six spec tools carrier_rules /
 // draft_claim / draft_reply. TRACE_TOOL_NAME maps one to the other; the customer reply is
 // written inside finish_case, so finish_case is traced as draft_reply.
+// check_photo_integrity (27 Oct 2026) is an eighth: deterministic checks on the photos (same picture
+// filed for another order, capture date before delivery), run by code; its result is what the model
+// is shown and what the guardrails act on.
 // assess_photos is a seventh tool (27 Oct 2026): the structured reading of the photos used
 // to be recorded only when the model called compute_claim, so a blurry-photo case (which
 // skips compute_claim) showed "The photos were not assessed". It is now recorded on its own.
@@ -24,6 +27,7 @@ import type {
 
 export type ModelToolName =
   | "get_order"
+  | "check_photo_integrity"
   | "assess_photos"
   | "mark_damage"
   | "get_carrier_rules"
@@ -33,6 +37,7 @@ export type ModelToolName =
 
 export const TRACE_TOOL_NAME: Record<ModelToolName, AgentToolName> = {
   get_order: "get_order",
+  check_photo_integrity: "check_photo_integrity",
   assess_photos: "assess_photos",
   mark_damage: "mark_damage",
   get_carrier_rules: "carrier_rules",
@@ -151,6 +156,11 @@ export const AGENT_TOOLS: ChatCompletionFunctionTool[] = [
         },
       },
     },
+  ),
+  fn(
+    "check_photo_integrity",
+    "Deterministic checks on the customer's photos, run by code: whether a photo is the same picture as one filed in another case for a different order or customer (or a demo photo filed for another order), and whether a photo's capture date is earlier than the delivery date. Call it in the same turn as get_order, listed after it (it needs the delivery date; calls of one turn run in order). A signal is a reason for a human to look, never a verdict on the customer. A photo with no capture date is normal and is not a signal.",
+    NO_ARGS,
   ),
   fn(
     "assess_photos",

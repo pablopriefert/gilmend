@@ -1,4 +1,4 @@
-import { Archive, Clock, EyeOff, FlaskConical, Hourglass } from "lucide-react";
+import { Archive, Clock, EyeOff, FlaskConical, Hourglass, ShieldAlert } from "lucide-react";
 import type { CaseRecord } from "@/lib/types";
 import { CaseReviewProvider, ReplyCard, ReviewActions } from "./case-review-panel";
 import {
@@ -40,6 +40,7 @@ export function CaseView({
   const clock = caseClock(c, now);
   const photosNotRead = c.trace.find((s) => PHOTOS_NOT_READ.test(s.step));
   const title = c.order?.name ?? c.report.customerEmail;
+  const integritySignals = c.integrity?.signals.length ?? 0;
   return (
     <CaseReviewProvider
       caseId={c.id}
@@ -78,7 +79,7 @@ export function CaseView({
             </div>
           </div>
 
-          {(c.status === "new" || photosNotRead || c.recorded || c.engine === "demo-mock") && (
+          {(c.status === "new" || photosNotRead || integritySignals > 0 || c.recorded || c.engine === "demo-mock") && (
             <div className="flex flex-col gap-3">
               {c.status === "new" && (
                 <Note tone="warn" icon={Hourglass} className="animate-rise" style={riseStyle(0)}>
@@ -90,6 +91,15 @@ export function CaseView({
               {photosNotRead && (
                 <Note tone="warn" icon={EyeOff} className="animate-rise" style={riseStyle(1)}>
                   <strong>Photos not read.</strong> {photosNotRead.step}
+                </Note>
+              )}
+              {integritySignals > 0 && (
+                <Note tone="warn" icon={ShieldAlert} data-testid="integrity-note" className="animate-rise" style={riseStyle(2)}>
+                  <strong>
+                    Photo integrity: {integritySignals === 1 ? "1 signal" : `${integritySignals} signals`}.
+                  </strong>{" "}
+                  A person must check the photos before anything is filed or sent. A signal is a reason to look, not a
+                  verdict on the customer: see the Integrity row under the photos.
                 </Note>
               )}
               {c.recorded && (
@@ -124,6 +134,8 @@ export function CaseView({
               evidence={c.evidence}
               voiceNote={c.report.voiceNote}
               inClaim={c.decision?.carrierClaim === true}
+              integrity={c.integrity}
+              integrityMissing={c.recorded ? "recorded" : c.status === "new" ? "unfinished" : "absent"}
             />
             <AssessmentSection assessment={c.assessment} />
             <OrderSection order={c.order} />

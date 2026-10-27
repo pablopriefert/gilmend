@@ -7,6 +7,7 @@ import type {
   DamageReport,
   Evidence,
   Order,
+  PhotoIntegrity,
 } from "../types";
 import type { AgentDeps } from "./run-agent";
 
@@ -64,6 +65,22 @@ export const CLAIM_OK: ClaimComputation = {
   daysLeft: 19,
 };
 
+/** A clean integrity result (nothing compared, nothing found), for tests that are not about it. */
+export function cleanIntegrity(over: Partial<PhotoIntegrity> = {}): PhotoIntegrity {
+  return {
+    checkedAt: NOW.toISOString(),
+    calledBy: "model",
+    photos: [],
+    comparedCases: 0,
+    comparedPhotos: 0,
+    comparedDemoPhotos: 0,
+    deliveredAt: null,
+    signals: [],
+    notes: [],
+    ...over,
+  };
+}
+
 export function fakeDeps(over: Partial<AgentDeps> = {}): AgentDeps {
   return {
     getOrder: async () => makeOrder(),
@@ -80,6 +97,8 @@ export function fakeDeps(over: Partial<AgentDeps> = {}): AgentDeps {
       emailSubject: "Claim for parcel 6A00000000001",
       emailBody: "Please find the claim attached.",
     }),
+    // The real check reads files and the case store: agent tests that are not about it get a clean one.
+    checkPhotoIntegrity: async () => cleanIntegrity(),
     ...over,
   };
 }

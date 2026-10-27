@@ -22,6 +22,10 @@ describe("deployment configuration", () => {
     expect(includes["/api/demo-photo"]).toEqual(["./data/photos/**/*"]);
   });
 
+  it("traces the demo photos into the report route too: the photo integrity check hashes them at run time", () => {
+    expect(nextConfig.outputFileTracingIncludes?.["/api/reports"]).toEqual(["./data/photos/**/*"]);
+  });
+
   it("never ships the git-ignored runtime folder", () => {
     expect(nextConfig.outputFileTracingExcludes?.["/*"]).toContain("./data/runtime/**/*");
   });

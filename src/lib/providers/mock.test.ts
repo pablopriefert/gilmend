@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { runAgent, type AgentDeps } from "../agent/run-agent";
-import { NOW, fakeDeps, makeOrder, makeReport } from "../agent/test-helpers";
+import { NOW, cleanIntegrity, fakeDeps, makeOrder, makeReport } from "../agent/test-helpers";
 import { getProvider } from "./index";
 import type { CaseRecord, ClaimComputation, DamageReport } from "../types";
 
@@ -164,5 +164,36 @@ describe("demo-mock provider: fixes of the 27 Oct 2026 review", () => {
     const options = (markDamage.mock.calls[0] as unknown as [string, { concepts: string[]; engine: string }])[1];
     expect(options.engine).toBe("demo-mock");
     expect(options.concepts[0]).toBe("broken pottery");
+  });
+});
+
+describe("demo-mock provider: photo integrity (27 Oct 2026)", () => {
+  const SIGNAL = {
+    kind: "reused_photo" as const,
+    photoIndex: 0,
+    message: "Photo 1 looks like a photo already filed in 1 other case for a different order or customer.",
+  };
+
+  it("calls check_photo_integrity right after the order, as the system prompt asks", async () => {
+    const c = await run(rep({ message: "My vase arrived broken" }));
+    expect(c.trace.map((t) => t.tool).filter(Boolean).slice(0, 3)).toEqual(["get_order", "check_photo_integrity", "assess_photos"]);
+    expect(c.integrity?.calledBy).toBe("model");
+  });
+
+  it("hands a case with an integrity signal to a person, and keeps the reply neutral", async () => {
+    const c = await run(
+      rep({ message: "My vase arrived broken" }),
+      deps({ checkPhotoIntegrity: async () => cleanIntegrity({ signals: [SIGNAL] }) }),
+    );
+    expect(c.decision?.needsHuman).toBe(true);
+    expect(c.decision?.reasons.join(" ")).toMatch(/photo integrity check reported something to look at/);
+    // Neither a reshipment nor a refund is promised while a person has not looked.
+    expect(c.decision?.customerReply).toMatch(/team is reviewing your case/);
+    expect(c.decision?.customerReply).not.toMatch(/replacement|refund/i);
+  });
+
+  it("leaves a clean case alone", async () => {
+    const c = await run(rep({ message: "My vase arrived broken" }));
+    expect(c.decision?.needsHuman).toBe(false);
   });
 });

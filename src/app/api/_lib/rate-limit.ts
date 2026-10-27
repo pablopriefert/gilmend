@@ -54,7 +54,7 @@ export function resetRateLimits(): void {
 }
 
 // Global ceiling on REAL model runs per UTC day, on top of the per-client limit above: a
-// person rotating IPs gets past a per-IP limit, and each real run can cost up to 8 turns with
+// person rotating IPs gets past a per-IP limit, and each real run can cost up to 9 turns with
 // 3 images sent back every turn. Beyond it the route runs the labelled demo mode instead of
 // failing. Per instance and in memory, like everything here: a ceiling, not an accounting.
 const daily = { day: "", count: 0 };

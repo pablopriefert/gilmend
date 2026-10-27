@@ -7,9 +7,17 @@ import type {
 import { describeEngine, resolveEngine, type Env } from "../config";
 import { buildClaimDocument } from "../documents/claim-pdf";
 import { damageConceptsFor, markDamage } from "../evidence/mark-damage";
+import {
+  DEFAULT_INTEGRITY_DEPS,
+  checkPhotoIntegrity,
+  integrityForModel,
+  type IntegrityCache,
+  type IntegrityInput,
+} from "../integrity/check";
 import { getOrder } from "../orders";
 import { getProvider, type Provider } from "../providers";
 import { computeClaim, getCarrierRules } from "../rules/carriers";
+import { listCases } from "../store/cases";
 import type {
   CaseRecord,
   ClaimComputation,
@@ -21,6 +29,7 @@ import type {
   Engine,
   Evidence,
   Order,
+  PhotoIntegrity,
   TraceStep,
 } from "../types";
 import { applyGuardrails } from "./guardrails";
@@ -42,8 +51,12 @@ import {
 /** Damage types whose evidence SAM can outline (the item, its pieces or the box). */
 const EVIDENCE_DAMAGE_TYPES: readonly DamageType[] = ["broken_product", "crushed_packaging", "opened_parcel"];
 
-/** Maximum number of model turns (a turn may contain several parallel tool calls). */
-export const MAX_AGENT_STEPS = 8;
+/**
+ * Maximum number of model turns (a turn may contain several parallel tool calls). 9 since
+ * check_photo_integrity became a tool (27 Oct 2026): the first real run of Muse Spark 1.3 with it
+ * used all 8 turns of the old cap, one tool per turn, which left no turn to spare before finish_case.
+ */
+export const MAX_AGENT_STEPS = 9;
 
 /**
  * Wall-clock budget of a real run (ms). The route is capped by the platform (maxDuration on
@@ -72,6 +85,8 @@ export interface AgentDeps {
   getCarrierRules: typeof getCarrierRules;
   computeClaim: typeof computeClaim;
   buildClaimDocument: typeof buildClaimDocument;
+  /** Photo integrity checks (src/lib/integrity): reads the photos and the stored cases. */
+  checkPhotoIntegrity: (input: IntegrityInput) => Promise<PhotoIntegrity>;
 }
 
 export interface RunAgentOptions {
@@ -95,6 +110,7 @@ const DEFAULT_DEPS: AgentDeps = {
   getCarrierRules: (...a) => getCarrierRules(...a),
   computeClaim: (...a) => computeClaim(...a),
   buildClaimDocument: (...a) => buildClaimDocument(...a),
+  checkPhotoIntegrity: (input) => checkPhotoIntegrity(input, { listCases: () => listCases(), ...DEFAULT_INTEGRITY_DEPS }),
 };
 
 const errMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -150,6 +166,11 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
   let claim = null as ClaimComputation | null;
   let decision = null as Decision | null;
   let document = null as ClaimDocument | null;
+  let integrity = null as PhotoIntegrity | null;
+  // Delivery date the last integrity check compared the capture dates with: when the model calls
+  // the tool before get_order the date is unknown, and the check is run again once it is.
+  let integrityDeliveredAt = null as string | null;
+  const integrityCache: IntegrityCache = {};
   const caseId = opts.caseId ?? `case_${randomUUID()}`;
   const startedAt = Date.now();
   const budgetMs = opts.timeBudgetMs ?? (engine === "demo-mock" ? Infinity : DEFAULT_TIME_BUDGET_MS);
@@ -177,6 +198,7 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
     status: "needs_review",
     engine,
     engineDetail: provider?.detail ?? describeEngine(engine, env),
+    ...(integrity ? { integrity } : {}),
     trace: [...trace],
     createdAt,
     updatedAt: new Date().toISOString(),
@@ -212,6 +234,17 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
           return out;
         } catch (e) {
           return toolError("get_order", `order lookup failed: ${errMessage(e)}`);
+        }
+      }
+
+      case "check_photo_integrity": {
+        try {
+          const out = integrityForModel(await runIntegrity("model"));
+          // Deterministic code output, like the carrier rules: the dates in it may be quoted.
+          toolOutputs.push(out);
+          return out;
+        } catch (e) {
+          return toolError("check_photo_integrity", `photo integrity check failed: ${errMessage(e)}`);
         }
       }
 
@@ -324,6 +357,7 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
         if (decision) return { error: "finish_case was already called; the decision is recorded." };
         const d = parseDecision(args);
         if (!d.ok) return { error: d.error };
+        await ensureIntegrity();
         const result = applyGuardrails(d.value, {
           order,
           quotedOrderNumber: report.orderNumber,
@@ -333,6 +367,7 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
           toolOutputs,
           reportReceivedAt: report.receivedAt,
           photosNotRead,
+          integrity,
         });
         decision = result.decision;
         for (const adj of result.adjustments) log(`Guardrail: ${adj}`);
@@ -355,6 +390,47 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
 
       default:
         return { error: `Unknown tool "${name}". Available: ${AGENT_TOOLS.map((t) => t.function.name).join(", ")}.` };
+    }
+  }
+
+  /** Runs the integrity checks with what the run knows now (the delivery date of the order, once found). */
+  async function runIntegrity(calledBy: "model" | "code"): Promise<PhotoIntegrity> {
+    const deliveredAt = order?.deliveredAt ?? null;
+    const result = await deps.checkPhotoIntegrity({
+      report,
+      caseId,
+      deliveredAt,
+      calledBy,
+      now,
+      cache: integrityCache,
+    });
+    integrity = result;
+    integrityDeliveredAt = deliveredAt;
+    return result;
+  }
+
+  /**
+   * The photo integrity check must have run before the guardrails: the model is asked to call it,
+   * but a guardrail cannot depend on a model remembering to. When the model skipped it, or called it
+   * before the order (so without a delivery date to compare), the code runs it and says so in the
+   * trace. A failure counts as a tool error, which sends the case to a human.
+   */
+  async function ensureIntegrity(): Promise<void> {
+    const deliveredAt = order?.deliveredAt ?? null;
+    if (integrity && integrityDeliveredAt === deliveredAt) return;
+    const why = integrity
+      ? "the order was found after the model's check, so the capture dates are compared with its delivery date now"
+      : "the model did not call check_photo_integrity";
+    try {
+      const result = await runIntegrity("code");
+      log(`Photo integrity check run by the code (${why}).`, {
+        tool: TRACE_TOOL_NAME.check_photo_integrity,
+        output: integrityForModel(result),
+      });
+      toolOutputs.push(integrityForModel(result));
+    } catch (e) {
+      toolErrors.push("check_photo_integrity");
+      log(`Tool error: photo integrity check failed (${errMessage(e)}).`, { tool: TRACE_TOOL_NAME.check_photo_integrity });
     }
   }
 

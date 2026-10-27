@@ -9,7 +9,7 @@ import {
   stripFigures,
   type GuardrailContext,
 } from "./guardrails";
-import { CLAIM_OK, REPORT_AT, RULES, makeOrder } from "./test-helpers";
+import { CLAIM_OK, REPORT_AT, RULES, cleanIntegrity, makeOrder } from "./test-helpers";
 import type { DamageAssessment } from "../types";
 import type { RawDecision } from "./tools";
 
@@ -256,5 +256,65 @@ describe("applyGuardrails: photos the model never saw", () => {
   it("changes nothing when the photos were read", () => {
     const r = applyGuardrails(raw(), ctx());
     expect(r.decision).toMatchObject({ carrierClaim: true, needsHuman: false });
+  });
+});
+
+describe("applyGuardrails: photo integrity", () => {
+  const reused = cleanIntegrity({
+    signals: [
+      {
+        kind: "reused_photo",
+        photoIndex: 0,
+        message: "Photo 1 looks like a photo already filed in 1 other case for a different order or customer.",
+      },
+    ],
+  });
+
+  it("sends a case with any integrity signal to a human, with the signal as the reason", () => {
+    const r = applyGuardrails(raw(), ctx({ integrity: reused }));
+    expect(r.decision.needsHuman).toBe(true);
+    expect(r.decision.reasons.join(" ")).toMatch(/Guardrail: photo integrity: Photo 1 looks like a photo already filed in 1 other case/);
+    expect(r.decision.reasons.join(" ")).toMatch(/A person must check the photos before anything is filed or sent/);
+    expect(r.adjustments[0]).toMatch(/needsHuman forced: photo integrity/);
+  });
+
+  it.each([
+    ["a capture date before delivery", "captured_before_delivery", "Photo 2 says it was taken on 2026-10-10 09:30, 15 days before the parcel was delivered (2026-10-25 14:00 UTC)."],
+    ["a demo photo for another order", "demo_photo_reused", "Photo 1 is one of the demo photos shipped with Gilmend, filed for an order and customer that are not its demo case."],
+  ] as const)("does the same for %s", (_name, kind, message) => {
+    const r = applyGuardrails(raw(), ctx({ integrity: cleanIntegrity({ signals: [{ kind, photoIndex: 0, message }] }) }));
+    expect(r.decision.needsHuman).toBe(true);
+    expect(r.decision.reasons.join(" ")).toContain(message);
+  });
+
+  it("never rejects or changes the decision, and keeps the claim: a person decides", () => {
+    const r = applyGuardrails(raw({ decision: "reship", carrierClaim: true }), ctx({ integrity: reused }));
+    expect(r.decision).toMatchObject({ decision: "reship", carrierClaim: true, confidence: 0.9 });
+    expect(r.decision.customerReply).toBe("We are sending a replacement.");
+  });
+
+  it("does not touch a case whose check found nothing, or that was not checked", () => {
+    expect(applyGuardrails(raw(), ctx({ integrity: cleanIntegrity() })).decision.needsHuman).toBe(false);
+    expect(applyGuardrails(raw(), ctx({ integrity: null })).decision.needsHuman).toBe(false);
+    expect(applyGuardrails(raw(), ctx()).adjustments).toEqual([]);
+  });
+
+  it("a missing capture date or an unreadable photo (notes, not signals) does not send the case to a human", () => {
+    const notesOnly = cleanIntegrity({
+      notes: ["No capture date in the metadata of photo 1. Most apps and messengers strip it.", "Photo 2 could not be read or decoded."],
+    });
+    expect(applyGuardrails(raw(), ctx({ integrity: notesOnly })).decision.needsHuman).toBe(false);
+  });
+
+  it("lists every signal when there are several", () => {
+    const two = cleanIntegrity({
+      signals: [
+        { kind: "reused_photo", photoIndex: 0, message: "Photo 1 looks like a photo already filed in 2 other cases for a different order or customer." },
+        { kind: "captured_before_delivery", photoIndex: 1, message: "Photo 2 says it was taken on 2026-10-10 09:30, 15 days before the parcel was delivered (2026-10-25 14:00 UTC)." },
+      ],
+    });
+    const reasons = applyGuardrails(raw(), ctx({ integrity: two })).decision.reasons.join(" ");
+    expect(reasons).toMatch(/Photo 1 looks like/);
+    expect(reasons).toMatch(/Photo 2 says it was taken/);
   });
 });
