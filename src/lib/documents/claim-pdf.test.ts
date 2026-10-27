@@ -110,6 +110,49 @@ describe("buildClaimDocument", () => {
     expect(doc.emailBody).not.toMatch(/inadequate|may refuse|Check the packing|judged/);
   });
 
+  // Review of 27 Oct 2026: the merchant-only warning says the carrier may refuse on the packaging, yet
+  // the model's own notes ("Padding looks thin") were printed in "Observations from the photos".
+  it("drops the model's packaging notes from the carrier file when it read the packaging as inadequate", async () => {
+    const base = sampleCase();
+    const notes = [
+      "Vase split into three pieces",
+      "Padding looks thin for a ceramic",
+      "The box was not wrapped in bubble film",
+      "Cushioning is insufficient",
+      "Inadequate protection around the base",
+      "Weak corners on the outer carton",
+      "Outer box dented on one corner",
+    ];
+    const render = async (id: string, packagingAdequate: boolean | null) =>
+      extractPdfText(
+        await readFile(
+          path.resolve((await build({ id, assessment: { ...base.assessment!, packagingAdequate, evidenceNotes: notes } })).pdfPath),
+        ),
+      );
+
+    const inadequate = await render("case-notes-packing-false", false);
+    expect(inadequate).toContain("Observations from the photos");
+    expect(inadequate).toContain("Vase split into three pieces");
+    expect(inadequate).toContain("Outer box dented on one corner");
+    expect(inadequate).not.toMatch(/Padding|wrapped|Cushioning|Inadequate|Weak corners/i);
+
+    // Adequate or unknown: the notes are the model's observations and stay as they were.
+    for (const [id, value] of [["case-notes-packing-true", true], ["case-notes-packing-null", null]] as const) {
+      expect(await render(id, value)).toContain("Padding looks thin for a ceramic");
+    }
+  });
+
+  it("omits the observations heading when every note talked about the packing", async () => {
+    const base = sampleCase();
+    const doc = await build({
+      id: "case-notes-all-packing",
+      assessment: { ...base.assessment!, packagingAdequate: false, evidenceNotes: ["Padding looks thin", "Weak carton"] },
+    });
+    const text = extractPdfText(await readFile(path.resolve(doc.pdfPath)));
+    expect(text).not.toContain("Observations from the photos");
+    expect(doc.emailBody).not.toMatch(/padding|weak/i);
+  });
+
   it("describes a partial loss as such in the subtitle", async () => {
     const base = sampleCase();
     const text = extractPdfText(

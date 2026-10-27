@@ -8,7 +8,7 @@ import { evidenceForPhotos } from "../evidence/merge";
 import { runtimeDir, safeFileStem, toStoredPath } from "../evidence/runtime-dir";
 import { getCarrierRules } from "../rules/carriers";
 import { persistRuntimeFile } from "../storage/runtime-files";
-import type { CarrierId, CaseRecord, ClaimBasis, ClaimDocument, Evidence } from "../types";
+import type { CarrierId, CaseRecord, ClaimBasis, ClaimDocument, DamageAssessment, Evidence } from "../types";
 import { buildClaimEmail, getMerchant } from "./claim-email";
 import {
   CARRIER_LABELS,
@@ -250,6 +250,21 @@ export function compensationBasisLines(basis: ClaimBasis): string[] {
   return lines;
 }
 
+/** Words a note uses when it talks about the packing, which the carrier may refuse a claim on. */
+const PACKAGING_NOTE = /packag|padding|cushion|wrap|insufficient|inadequate|weak/i;
+
+/**
+ * The model's evidence notes that may go into the carrier file. When it read the packaging as
+ * inadequate, the claim is kept and only the merchant is warned (guardrails.ts); but the notes are free
+ * text, and on a recorded run one said the padding looked thin: printed under "Observations from the
+ * photos" it would hand the carrier the very ground the merchant-only warning says it may refuse on
+ * (review of 27 Oct 2026). So those notes are dropped, the rest stays.
+ */
+function carrierFacingNotes(assessment: DamageAssessment): string[] {
+  if (assessment.packagingAdequate !== false) return assessment.evidenceNotes;
+  return assessment.evidenceNotes.filter((note) => !PACKAGING_NOTE.test(note));
+}
+
 /**
  * Build the carrier claim PDF (pdf-lib) and the ready-to-send e-mail, and save the PDF
  * under data/runtime/claims/<caseId>.pdf. The amount and the deadlines are printed from the
@@ -330,13 +345,13 @@ export async function buildClaimDocument(
         assessment.packagingAdequate === null ? "cannot be assessed from the photos" : "suited to the contents",
       );
     }
-    if (assessment.evidenceNotes.length > 0) {
+    const notes = carrierFacingNotes(assessment)
+      .map((note) => stripFigures(note))
+      .filter(Boolean);
+    if (notes.length > 0) {
       w.gap(2);
       w.text("Observations from the photos:", { bold: true, color: MUTED });
-      for (const note of assessment.evidenceNotes) {
-        const cleaned = stripFigures(note);
-        if (cleaned) w.bullet(cleaned);
-      }
+      for (const note of notes) w.bullet(note);
     }
   } else {
     w.text("No photo assessment is available for this file.", { color: MUTED });
