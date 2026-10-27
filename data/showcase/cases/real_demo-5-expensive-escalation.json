@@ -2,7 +2,7 @@
   "id": "real_demo-5-expensive-escalation",
   "report": {
     "id": "demo-5-expensive-escalation",
-    "receivedAt": "2026-10-27T12:07:43.874Z",
+    "receivedAt": "2026-10-27T13:03:22.246Z",
     "customerEmail": "sofia.rossi@example.com",
     "orderNumber": "#1005",
     "message": "The left ear cup of my headphones is cracked and one of the hinges is bent. The box has a big dent. I would like a replacement or my money back.",
@@ -32,8 +32,8 @@
       "city": "Strasbourg",
       "country": "FR"
     },
-    "createdAt": "2026-10-24T17:07:46.935Z",
-    "deliveredAt": "2026-10-26T17:07:46.935Z",
+    "createdAt": "2026-10-24T18:03:25.025Z",
+    "deliveredAt": "2026-10-26T18:03:25.025Z",
     "total": 349
   },
   "assessment": {
@@ -43,10 +43,10 @@
     "carrierLikelyAtFault": true,
     "packagingAdequate": null,
     "evidenceNotes": [
-      "left ear cup outer shell shattered with large hole and cracks",
-      "left headband hinge bent with exposed metal and wires",
-      "cardboard shipping box heavily dented and crushed on side",
-      "box label reads XW99001005ITS close to order tracking XW990010051TS"
+      "left ear cup outer shell cracked open with missing fragment",
+      "hinge/slider bent and exposed wires on left side",
+      "cardboard box heavily dented and creased",
+      "tracking label XW990010051TS visible matching order"
     ],
     "photoQuality": "ok"
   },
@@ -55,15 +55,15 @@
     "reasons": [
       "Damage to the goods is documented: broken product, severity major.",
       "The carrier is the likely cause of the damage.",
-      "The customer reported the damage 19.0 h after delivery, inside the 72 h reserve window (closes 2026-10-29T17:07Z).",
+      "The customer reported the damage 19.0 h after delivery, inside the 72 h reserve window (closes 2026-10-29T18:03Z).",
       "Maximum compensation: min(item value 349.00 EUR, 250.00 EUR per parcel, cap 250.00 EUR) = 250.00 EUR under Chronopost (professional terms) terms.",
-      "The claim must be filed by 2026-10-29T17:07Z (2 days left).",
+      "The claim must be filed by 2026-10-29T18:03Z (2 days left).",
       "Warning: the photos do not show whether the packaging was adequate; the carrier may refuse compensation if it was not.",
       "Note: Chronopost pays on supporting documents (purchase invoice dated no later than the shipping day, photos of the damage)."
     ],
     "maxCompensationEur": 250,
-    "claimDeadline": "2026-10-29T17:07:46.935Z",
-    "reserveDeadline": "2026-10-29T17:07:46.935Z",
+    "claimDeadline": "2026-10-29T18:03:25.025Z",
+    "reserveDeadline": "2026-10-29T18:03:25.025Z",
     "daysLeft": 2,
     "basis": {
       "termsLabel": "Chronopost (professional terms)",
@@ -79,14 +79,16 @@
     "carrierClaim": true,
     "confidence": 0.85,
     "reasons": [
-      "Order #1005 found for Sofia Rossi, Chronopost service Chrono 13, item value 349.00 EUR",
-      "Photos show broken product with severity major: left ear cup shattered, hinge bent, box dented, photoQuality ok, carrier likely at fault",
-      "compute_claim returned eligible=true with maximum compensation 250.00 EUR and claim deadline 2026-10-29T17:07:46.935Z",
-      "High order value 349.00 EUR requires human review before reshipment, carrier claim to be filed",
+      "Order #1005 found for Studio wireless headphones (349.00 EUR total).",
+      "Photo shows major broken product: left ear cup cracked open, hinge bent, box dented; tracking XW990010051TS visible.",
+      "Damage looks like rough transport, carrier likely at fault.",
+      "Reported 19.0 h after delivery inside 72 h reserve window, claim must be filed by 2026-10-29T18:03:25.025Z.",
+      "Maximum compensation 250.00 EUR under Chronopost (professional terms) terms: min(item value 349.00 EUR, 250.00 EUR per parcel, cap 250.00 EUR).",
+      "High order value 349.00 EUR requires human review before reshipment.",
       "Guardrail: order value is above 300 EUR"
     ],
     "needsHuman": true,
-    "customerReply": "Hello Sofia, thank you for your report and the photo. A member of our team is now reviewing your case and will get back to you very shortly. Best regards."
+    "customerReply": "Thank you for your report and the photo. A member of our team is now reviewing your case carefully and will get back to you shortly with the next steps."
   },
   "evidence": [
     {
@@ -99,14 +101,20 @@
   "document": {
     "pdfPath": "data/showcase/claims/real_demo-5-expensive-escalation.pdf",
     "emailSubject": "Damage claim - parcel XW990010051TS - order #1005",
-    "emailBody": "Dear Sir or Madam,\n\nI am writing on behalf of Maison Demo (demo merchant), sender of the parcel below, to report damage found when the parcel was opened.\n\n- Carrier: Chronopost (Chronopost Chrono 13)\n- Tracking number: XW990010051TS\n- Order: #1005\n- Weight: 0.95 kg\n- Value of the contents: €349.00\n- Delivered on: 26 October 2026\n- Damage reported on: 27 October 2026\n\nDamage found: Studio wireless headphones (product broken or damaged, major damage). The attached photos show the state of the parcel and of the product.\n\nCompensation claimed: €250.00, under the terms of your contract (details in the attached claim file).\nThis claim is filed in time: the claim deadline is 29 October 2026, 18:07 (Paris time).\nReserve deadline: 29 October 2026, 18:07 (Paris time).\n\nPlease find attached the claim file (PDF) and the photos. The purchase invoice of the contents follows or is attached separately.\nPlease confirm receipt of this claim and keep me informed of its progress.\n\nKind regards,\nMaison Demo (demo merchant)\n12 rue de la Démo, 75011 Paris, France\nclaims@maison-demo.example"
+    "emailBody": "Dear Sir or Madam,\n\nI am writing on behalf of Maison Demo (demo merchant), sender of the parcel below, to report damage found when the parcel was opened.\n\n- Carrier: Chronopost (Chronopost Chrono 13)\n- Tracking number: XW990010051TS\n- Order: #1005\n- Weight: 0.95 kg\n- Value of the contents: €349.00\n- Delivered on: 26 October 2026\n- Damage reported on: 27 October 2026\n\nDamage found: Studio wireless headphones (product broken or damaged, major damage). The attached photos show the state of the parcel and of the product.\n\nCompensation claimed: €250.00, under the terms of your contract (details in the attached claim file).\nThis claim is filed in time: the claim deadline is 29 October 2026, 19:03 (Paris time).\nReserve deadline: 29 October 2026, 19:03 (Paris time).\n\nPlease find attached the claim file (PDF) and the photos. The purchase invoice of the contents follows or is attached separately.\nPlease confirm receipt of this claim and keep me informed of its progress.\n\nKind regards,\nMaison Demo (demo merchant)\n12 rue de la Démo, 75011 Paris, France\nclaims@maison-demo.example"
   },
   "status": "needs_review",
   "engine": "muse-spark-1.3",
+  "engineDetail": {
+    "model": "muse-spark-1.3",
+    "host": "meta",
+    "label": "Muse Spark 1.3 (Meta Model API)",
+    "short": "Muse Spark 1.3"
+  },
   "trace": [
     {
-      "step": "Engine: muse-spark-1.3",
-      "at": "2026-10-27T15:07:43.875Z"
+      "step": "Engine: muse-spark-1.3 (Muse Spark 1.3 (Meta Model API))",
+      "at": "2026-10-27T16:03:22.247Z"
     },
     {
       "step": "Report received (1 photo(s) attached)",
@@ -114,12 +122,12 @@
         "orderNumber": "#1005",
         "language": "en"
       },
-      "at": "2026-10-27T15:07:43.878Z"
+      "at": "2026-10-27T16:03:22.250Z"
     },
     {
       "step": "Model note (step 1)",
-      "output": "Your headphone damage report is in — I'll pull your order and assess the photos.",
-      "at": "2026-10-27T15:07:46.935Z"
+      "output": "Investigating your headphone damage report — checking the order and evidence.",
+      "at": "2026-10-27T16:03:25.024Z"
     },
     {
       "step": "Tool: get_order",
@@ -148,22 +156,17 @@
             "city": "Strasbourg",
             "country": "FR"
           },
-          "createdAt": "2026-10-24T17:07:46.935Z",
-          "deliveredAt": "2026-10-26T17:07:46.935Z",
+          "createdAt": "2026-10-24T18:03:25.025Z",
+          "deliveredAt": "2026-10-26T18:03:25.025Z",
           "total": 349
         }
       },
-      "at": "2026-10-27T15:07:46.935Z"
-    },
-    {
-      "step": "Model note (step 2)",
-      "output": "Order confirmed — now I'll record the damage I see in your photos.",
-      "at": "2026-10-27T15:07:51.141Z"
+      "at": "2026-10-27T16:03:25.026Z"
     },
     {
       "step": "Tool: assess_photos",
       "tool": "assess_photos",
-      "input": "{\"carrierLikelyAtFault\":true,\"damageType\":\"broken_product\",\"evidenceNotes\":[\"left ear cup outer shell shattered with large hole and cracks\",\"left headband hinge bent with exposed metal and wires\",\"cardboard shipping box heavily dented and crushed on side\",\"box label reads XW99001005ITS close to order tracking XW990010051TS\"],\"item\":\"Studio wireless headphones\",\"packagingAdequate\":null,\"photoQuality\":\"ok\",\"severity\":\"major\"}",
+      "input": "{\"carrierLikelyAtFault\":true,\"damageType\":\"broken_product\",\"evidenceNotes\":[\"left ear cup outer shell cracked open with missing fragment\",\"hinge/slider bent and exposed wires on left side\",\"cardboard box heavily dented and creased\",\"tracking label XW990010051TS visible matching order\"],\"item\":\"Studio wireless headphones\",\"packagingAdequate\":null,\"photoQuality\":\"ok\",\"severity\":\"major\"}",
       "output": {
         "recorded": true,
         "assessment": {
@@ -173,20 +176,20 @@
           "carrierLikelyAtFault": true,
           "packagingAdequate": null,
           "evidenceNotes": [
-            "left ear cup outer shell shattered with large hole and cracks",
-            "left headband hinge bent with exposed metal and wires",
-            "cardboard shipping box heavily dented and crushed on side",
-            "box label reads XW99001005ITS close to order tracking XW990010051TS"
+            "left ear cup outer shell cracked open with missing fragment",
+            "hinge/slider bent and exposed wires on left side",
+            "cardboard box heavily dented and creased",
+            "tracking label XW990010051TS visible matching order"
           ],
           "photoQuality": "ok"
         }
       },
-      "at": "2026-10-27T15:07:51.141Z"
+      "at": "2026-10-27T16:03:29.136Z"
     },
     {
       "step": "Model note (step 3)",
-      "output": "I've confirmed major damage to the ear cup and box — now I'll gather the evidence to finalize your claim.",
-      "at": "2026-10-27T15:07:53.968Z"
+      "output": "Confirmed major damage. I'll outline the evidence for your case.",
+      "at": "2026-10-27T16:03:32.176Z"
     },
     {
       "step": "Tool: mark_damage",
@@ -198,7 +201,12 @@
         "method": "sam-3.1",
         "note": "SAM 3.1 outlined 2 regions matching \"ear cup\" (confidence 0.90, 0.86). The outline marks where the damage appears to be; it is not a damage verdict."
       },
-      "at": "2026-10-27T15:07:55.750Z"
+      "at": "2026-10-27T16:03:35.223Z"
+    },
+    {
+      "step": "Model note (step 4)",
+      "output": "Evidence marked. Now I'll verify carrier coverage and claim eligibility.",
+      "at": "2026-10-27T16:03:37.062Z"
     },
     {
       "step": "Tool: get_carrier_rules",
@@ -292,12 +300,7 @@
         ],
         "compensationCaveat": "Chronopost pays on supporting documents (purchase invoice dated no later than the shipping day, photos of the damage)."
       },
-      "at": "2026-10-27T15:07:57.562Z"
-    },
-    {
-      "step": "Model note (step 5)",
-      "output": "Carrier rules point to a possible claim — I'll verify the compensation maths next.",
-      "at": "2026-10-27T15:07:59.322Z"
+      "at": "2026-10-27T16:03:37.062Z"
     },
     {
       "step": "Tool: compute_claim",
@@ -308,15 +311,15 @@
         "reasons": [
           "Damage to the goods is documented: broken product, severity major.",
           "The carrier is the likely cause of the damage.",
-          "The customer reported the damage 19.0 h after delivery, inside the 72 h reserve window (closes 2026-10-29T17:07Z).",
+          "The customer reported the damage 19.0 h after delivery, inside the 72 h reserve window (closes 2026-10-29T18:03Z).",
           "Maximum compensation: min(item value 349.00 EUR, 250.00 EUR per parcel, cap 250.00 EUR) = 250.00 EUR under Chronopost (professional terms) terms.",
-          "The claim must be filed by 2026-10-29T17:07Z (2 days left).",
+          "The claim must be filed by 2026-10-29T18:03Z (2 days left).",
           "Warning: the photos do not show whether the packaging was adequate; the carrier may refuse compensation if it was not.",
           "Note: Chronopost pays on supporting documents (purchase invoice dated no later than the shipping day, photos of the damage)."
         ],
         "maxCompensationEur": 250,
-        "claimDeadline": "2026-10-29T17:07:46.935Z",
-        "reserveDeadline": "2026-10-29T17:07:46.935Z",
+        "claimDeadline": "2026-10-29T18:03:25.025Z",
+        "reserveDeadline": "2026-10-29T18:03:25.025Z",
         "daysLeft": 2,
         "basis": {
           "termsLabel": "Chronopost (professional terms)",
@@ -327,16 +330,16 @@
           "capEur": 250
         }
       },
-      "at": "2026-10-27T15:07:59.323Z"
+      "at": "2026-10-27T16:03:38.815Z"
     },
     {
       "step": "Guardrail: needsHuman confirmed: order value is above 300 EUR",
-      "at": "2026-10-27T15:08:09.081Z"
+      "at": "2026-10-27T16:03:43.170Z"
     },
     {
       "step": "Tool: finish_case",
       "tool": "draft_reply",
-      "input": "{\"carrierClaim\":true,\"confidence\":0.85,\"customerReply\":\"Hello Sofia, thank you for your report and the photo. A member of our team is now reviewing your case and will get back to you very shortly. Best regards.\",\"decision\":\"reship\",\"fraudSuspected\":false,\"needsHuman\":true,\"reasons\":[\"Order #1005 found for Sofia Rossi, Chronopost service Chrono 13, item value 349.00 EUR\",\"Photos show broken product with severity major: left ear cup shattered, hinge bent, box dented, photoQuality ok, carrier likely at fault\",\"compute_claim returned eligible=true with maximum compensation 250.00 EUR and claim deadline 2026-10-29T17:07:46.935Z\",\"High order value 349.00 EUR requires human review before reshipment, carrier claim to be filed\"]}",
+      "input": "{\"carrierClaim\":true,\"confidence\":0.85,\"customerReply\":\"Thank you for your report and the photo. A member of our team is now reviewing your case carefully and will get back to you shortly with the next steps.\",\"decision\":\"reship\",\"fraudSuspected\":false,\"needsHuman\":true,\"reasons\":[\"Order #1005 found for Studio wireless headphones (349.00 EUR total).\",\"Photo shows major broken product: left ear cup cracked open, hinge bent, box dented; tracking XW990010051TS visible.\",\"Damage looks like rough transport, carrier likely at fault.\",\"Reported 19.0 h after delivery inside 72 h reserve window, claim must be filed by 2026-10-29T18:03:25.025Z.\",\"Maximum compensation 250.00 EUR under Chronopost (professional terms) terms: min(item value 349.00 EUR, 250.00 EUR per parcel, cap 250.00 EUR).\",\"High order value 349.00 EUR requires human review before reshipment.\"]}",
       "output": {
         "accepted": true,
         "decision": {
@@ -344,21 +347,23 @@
           "carrierClaim": true,
           "confidence": 0.85,
           "reasons": [
-            "Order #1005 found for Sofia Rossi, Chronopost service Chrono 13, item value 349.00 EUR",
-            "Photos show broken product with severity major: left ear cup shattered, hinge bent, box dented, photoQuality ok, carrier likely at fault",
-            "compute_claim returned eligible=true with maximum compensation 250.00 EUR and claim deadline 2026-10-29T17:07:46.935Z",
-            "High order value 349.00 EUR requires human review before reshipment, carrier claim to be filed",
+            "Order #1005 found for Studio wireless headphones (349.00 EUR total).",
+            "Photo shows major broken product: left ear cup cracked open, hinge bent, box dented; tracking XW990010051TS visible.",
+            "Damage looks like rough transport, carrier likely at fault.",
+            "Reported 19.0 h after delivery inside 72 h reserve window, claim must be filed by 2026-10-29T18:03:25.025Z.",
+            "Maximum compensation 250.00 EUR under Chronopost (professional terms) terms: min(item value 349.00 EUR, 250.00 EUR per parcel, cap 250.00 EUR).",
+            "High order value 349.00 EUR requires human review before reshipment.",
             "Guardrail: order value is above 300 EUR"
           ],
           "needsHuman": true,
-          "customerReply": "Hello Sofia, thank you for your report and the photo. A member of our team is now reviewing your case and will get back to you very shortly. Best regards."
+          "customerReply": "Thank you for your report and the photo. A member of our team is now reviewing your case carefully and will get back to you shortly with the next steps."
         },
         "guardrailAdjustments": [
           "needsHuman confirmed: order value is above 300 EUR"
         ],
         "next": "Call draft_claim_document, then stop."
       },
-      "at": "2026-10-27T15:08:09.081Z"
+      "at": "2026-10-27T16:03:43.170Z"
     },
     {
       "step": "Tool: draft_claim_document",
@@ -369,15 +374,15 @@
         "pdfPath": "data/showcase/claims/real_demo-5-expensive-escalation.pdf",
         "emailSubject": "Damage claim - parcel XW990010051TS - order #1005"
       },
-      "at": "2026-10-27T15:08:11.140Z"
+      "at": "2026-10-27T16:03:44.847Z"
     },
     {
       "step": "Case ready for review: reship (needs a human)",
-      "at": "2026-10-27T15:08:11.140Z"
+      "at": "2026-10-27T16:03:44.847Z"
     }
   ],
-  "createdAt": "2026-10-27T15:07:43.875Z",
-  "updatedAt": "2026-10-27T15:08:11.140Z",
+  "createdAt": "2026-10-27T16:03:22.247Z",
+  "updatedAt": "2026-10-27T16:03:44.847Z",
   "recorded": {
     "recordedOn": "2026-10-27"
   }
