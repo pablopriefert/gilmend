@@ -42,12 +42,14 @@ import type {
   Engine,
   Evidence,
   Order,
+  PhotoIntegrity,
   TraceStep,
   VoiceNote,
 } from "@/lib/types";
 import { evidenceForPhotos } from "@/lib/evidence/merge";
 import { cn } from "@/lib/utils";
 import { CopyButton } from "./case/copy-button";
+import { IntegrityRow, type IntegrityMissing } from "./case/integrity-row";
 import { TraceTimeline } from "./case/trace-timeline";
 import { BUTTON_QUIET, Eyebrow, Fact, IconTile, Panel, Pill, riseStyle, type Tone } from "./case/ui";
 import { isStaleSource, noteVerification, type NoteFlag } from "./display-data";
@@ -138,6 +140,8 @@ export function EvidenceSection({
   evidence,
   voiceNote,
   inClaim = false,
+  integrity,
+  integrityMissing,
 }: {
   message: string;
   photos: string[];
@@ -145,6 +149,10 @@ export function EvidenceSection({
   voiceNote?: VoiceNote;
   /** The case carries a carrier claim, so the outlined image really goes into its PDF. */
   inClaim?: boolean;
+  /** What the photo integrity check found; absent on cases filed before it existed. */
+  integrity?: PhotoIntegrity;
+  /** Why there is no integrity result, when there is none. */
+  integrityMissing?: IntegrityMissing;
 }) {
   // Every photo the customer sent, each with its annotated version when the agent made one.
   const items: Evidence[] = evidenceForPhotos(photos, evidence);
@@ -229,6 +237,7 @@ export function EvidenceSection({
               </li>
             ))}
           </ul>
+          <IntegrityRow integrity={integrity} missing={integrityMissing} />
         </>
       )}
     </Panel>

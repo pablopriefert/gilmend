@@ -16,6 +16,7 @@ import {
   ScanEye,
   ScanSearch,
   ShieldAlert,
+  ShieldCheck,
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
@@ -49,6 +50,7 @@ const MODEL_NAME: Record<Engine, string> = {
 /** The friendly name and who does the work, for each tool of the agent loop. */
 const TOOL: Record<AgentToolName, { kind: Kind; icon: LucideIcon; title: string }> = {
   get_order: { kind: "code", icon: PackageSearch, title: "Looked up the order" },
+  check_photo_integrity: { kind: "code", icon: ShieldCheck, title: "Checked the photos for reuse and capture date" },
   assess_photos: { kind: "model", icon: ScanEye, title: "Read the photos and described the damage" },
   mark_damage: { kind: "sam", icon: ScanSearch, title: "Outlined what SAM matched on the photo" },
   carrier_rules: { kind: "code", icon: BookOpenCheck, title: "Loaded the carrier's rules" },
@@ -60,6 +62,7 @@ const TOOL: Record<AgentToolName, { kind: Kind; icon: LucideIcon; title: string 
 /** The tool name as the loop logs it ("Tool: get_carrier_rules") mapped to the trace's tool name. */
 const LOGGED_TOOL: Record<string, AgentToolName> = {
   get_order: "get_order",
+  check_photo_integrity: "check_photo_integrity",
   assess_photos: "assess_photos",
   mark_damage: "mark_damage",
   get_carrier_rules: "carrier_rules",

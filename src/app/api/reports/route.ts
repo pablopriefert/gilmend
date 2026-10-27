@@ -24,7 +24,7 @@ import { runtimeDir, toStoredPath } from "../_lib/runtime-files";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-// A real run is up to 8 model turns with photos: give it room, and let runAgent's own time
+// A real run is up to 9 model turns with photos: give it room, and let runAgent's own time
 // budget (90 s) end a slow run in a "needs a human" case before the platform kills the
 // function and the report is lost. 120 s is within Vercel's limit with Fluid Compute (the
 // default on new projects); a plan without it caps at 60 s and the build says so.

@@ -219,6 +219,12 @@ function plan(report: ReportPromptFields, seen: Seen): PlannedCall[] | null {
     ];
   }
 
+  // Right after the order, as the system prompt asks (it needs the delivery date). This tool is
+  // real code even in demo mode: only the model's reading of the photos is scripted.
+  if (!seen.called.has("check_photo_integrity")) {
+    return [{ name: "check_photo_integrity", args: {} }];
+  }
+
   if (!seen.called.has("assess_photos")) {
     // The structured reading first (even for a blurry photo), then the outlines, then the rules.
     const order = orderResult?.order as { carrier?: string } | undefined;
@@ -267,6 +273,21 @@ function plan(report: ReportPromptFields, seen: Seen): PlannedCall[] | null {
       args = { ...base, decision: "reship", carrierClaim: true, confidence: 0.9, reasons: ["Damage reported on a delivered parcel and the carrier claim is eligible according to compute_claim (scripted demo reading).", ...claimReasons.slice(0, 1)], needsHuman: false, customerReply: reply(report.language, "reship", name) };
     } else {
       args = { ...base, decision: "refund", carrierClaim: false, confidence: 0.8, reasons: ["Damage reported but no carrier claim is possible according to compute_claim; refunding the customer.", ...claimReasons.slice(0, 1)], needsHuman: false, customerReply: reply(report.language, "refund", name) };
+    }
+    // A model told of integrity signals hands the case to a person, without accusing anyone.
+    const signalCount = Array.isArray(seen.results.get("check_photo_integrity")?.signals)
+      ? (seen.results.get("check_photo_integrity")?.signals as unknown[]).length
+      : 0;
+    if (signalCount > 0 && scenario !== "injection") {
+      args = {
+        ...args,
+        needsHuman: true,
+        reasons: [
+          ...(args.reasons as string[]),
+          "The photo integrity check reported something to look at (see its result); a person should check the photos before anything is filed (scripted demo reading).",
+        ],
+        customerReply: reply(report.language, "review", name),
+      };
     }
     return [{ name: "finish_case", args }];
   }

@@ -48,5 +48,15 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Storage on a public deployment is explained in `docs/storage.md` (what is public, and how the shared
   Vercel Blob backend is switched on with `DAMAGE_DESK_STORAGE=blob`; the adapter,
   `src/lib/storage/blob-object-store.ts`, has been tested against a fake SDK only).
+- **Photo integrity (`src/lib/integrity/`).** `check_photo_integrity` is real code even in demo mode
+  (hashes with `sharp`, a tiny EXIF reader, no dependency): never label it a mock. A signal may only
+  force `needsHuman`; it must never drop a claim or reject a case. A photo with no EXIF is not a
+  signal. The hashes live on `CaseRecord.integrity`, so keep them when a case is rewritten. The demo
+  photos are exempt for their own demo case (order and e-mail of `data/demo-cases.json`) and are
+  never compared with other cases. Change the thresholds only with `scripts/measure-photo-hash.ts`
+  and update the figures in the comment and the README. A uniform photo (`isUniformHash`) is never
+  compared, and a photo keeps at most 5 matches on its record (`MAX_STORED_MATCHES`), the comparison
+  covers the 200 most recent cases (`MAX_COMPARED_CASES`): keep the record under 2 KB. What the model is shown
+  (`integrityForModel`) must hold nothing about another customer.
 - Do not commit, push, deploy or create a GitHub repository unless Pablo asks.
 

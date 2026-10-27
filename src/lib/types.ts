@@ -216,9 +216,10 @@ export type CaseStatus =
   | "rejected"
   | "sent_to_customer";
 
-/** The tools of the agent loop (the six of the spec, plus assess_photos: the structured reading of the photos). */
+/** The tools of the agent loop (the six of the spec, plus assess_photos: the structured reading of the photos, and check_photo_integrity). */
 export type AgentToolName =
   | "get_order"
+  | "check_photo_integrity"
   | "assess_photos"
   | "mark_damage"
   | "carrier_rules"
@@ -234,6 +235,90 @@ export interface TraceStep {
   output?: unknown;
   /** ISO date-time. */
   at: string;
+}
+
+/**
+ * Perceptual hashes of one photo (src/lib/integrity/image-hash.ts): two 64-bit hashes as 16 hex
+ * characters each. Small enough to live on the case, which is how a later report is compared with
+ * this one whatever storage backend holds the files.
+ */
+export interface PhotoHash {
+  dhash: string;
+  ahash: string;
+}
+
+export type IntegritySignalKind = "reused_photo" | "demo_photo_reused" | "captured_before_delivery";
+
+/** A photo of another case (or a demo photo) that looks like one of this report's photos. */
+export interface IntegrityMatch {
+  /** "case": a photo stored with another case. "demo": one of the demo photos shipped with the app. */
+  source: "case" | "demo";
+  /** Id of the other case, or of the demo case that owns the demo photo. */
+  caseId: string;
+  /**
+   * Same order number and same customer e-mail as this report: the same customer filing the same
+   * photo again for the same order. Expected, never a signal.
+   */
+  sameOrderAndCustomer: boolean;
+  /** Bits that differ out of 64, for each hash. */
+  dhashDistance: number;
+  ahashDistance: number;
+}
+
+export interface PhotoIntegrityPhoto {
+  /** Position in report.photos (0-based). */
+  index: number;
+  /** null when the file could not be read or decoded (see `unreadable`). */
+  hash: PhotoHash | null;
+  unreadable?: string;
+  /**
+   * The photo is too uniform (dark, blank, over-exposed) for its hash to mean anything: it was not
+   * compared with other photos, and its hash is not compared by later reports either.
+   */
+  uniform?: boolean;
+  /** The file carries an EXIF block (most apps strip it, so false is common and means nothing). */
+  hasExif: boolean;
+  /** Capture date as written in the file, "YYYY-MM-DDTHH:mm:ss", local time with no time zone. */
+  capturedAt: string | null;
+  /** The closest matches, at most 5 (MAX_STORED_MATCHES): a record must not grow with every re-filed photo. */
+  matches: IntegrityMatch[];
+  /** How many stored photos matched in all, when more than `matches` holds. Absent on older records. */
+  matchCount?: number;
+  /** How many of those belong to another order or customer. Absent on older records. */
+  otherMatchCount?: number;
+}
+
+/** A finding that forces a human to look. It never rejects a case by itself. */
+export interface IntegritySignal {
+  kind: IntegritySignalKind;
+  /** Position in report.photos (0-based). */
+  photoIndex: number;
+  /** Plain English for the merchant. Holds no other customer's name, e-mail or order. */
+  message: string;
+}
+
+/**
+ * The result of check_photo_integrity (src/lib/integrity/check.ts): deterministic checks on the
+ * customer's photos, run by code. It records what was compared as well as what was found, so a
+ * clean result says how little it proves.
+ */
+export interface PhotoIntegrity {
+  checkedAt: string;
+  /** "model": the model called the tool. "code": the loop ran it because the model had not. */
+  calledBy: "model" | "code";
+  photos: PhotoIntegrityPhoto[];
+  /** Earlier cases whose stored hashes were compared, and how many photo hashes that makes. */
+  comparedCases: number;
+  comparedPhotos: number;
+  /** Demo photos shipped with the app that were compared. */
+  comparedDemoPhotos: number;
+  /** Stored cases beyond the most recent ones that were left out of the comparison (absent when none). */
+  casesNotCompared?: number;
+  /** Delivery date the capture dates were compared with; null when there was none to compare with. */
+  deliveredAt: string | null;
+  signals: IntegritySignal[];
+  /** What was not checked or not conclusive, e.g. "no capture date: most apps strip it". */
+  notes: string[];
 }
 
 /**
@@ -265,4 +350,9 @@ export interface CaseRecord {
   updatedAt: string;
   /** Present on recorded showcase runs only. */
   recorded?: RecordedRun;
+  /**
+   * Photo integrity checks (reused photo, capture date). Absent on cases saved before the check
+   * existed: those carry no hash and cannot be compared with a later report.
+   */
+  integrity?: PhotoIntegrity;
 }

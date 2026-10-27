@@ -14,7 +14,12 @@ import {
 import { AGENT_TOOLS, DECISION_JSON_SCHEMA, TRACE_TOOL_NAME, parseDecision } from "./tools";
 
 const happyTurns = () => [
-  { calls: [["get_order", { orderNumber: "#1001" }]] as [string, unknown][] },
+  {
+    calls: [
+      ["get_order", { orderNumber: "#1001" }],
+      ["check_photo_integrity", {}],
+    ] as [string, unknown][],
+  },
   {
     calls: [
       ["mark_damage", { photoIndex: 0 }],
@@ -68,6 +73,7 @@ describe("runAgent: tool loop", () => {
     expect(c.document?.pdfPath).toBe("data/runtime/claim.pdf");
     expect(toolNamesInTrace(c)).toEqual([
       "get_order",
+      "check_photo_integrity",
       "mark_damage",
       "carrier_rules",
       "compute_claim",
@@ -415,10 +421,11 @@ describe("runAgent: engine labelling", () => {
 });
 
 describe("tool schemas and the Decision contract", () => {
-  it("exposes exactly the seven tools, with function-name-safe identifiers", () => {
+  it("exposes exactly the eight tools, with function-name-safe identifiers", () => {
     const names = AGENT_TOOLS.map((t) => t.function.name);
     expect(names).toEqual([
       "get_order",
+      "check_photo_integrity",
       "assess_photos",
       "mark_damage",
       "get_carrier_rules",

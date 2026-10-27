@@ -33,8 +33,15 @@ const nextConfig: NextConfig = {
   // next@16.4.0 with Turbopack (27 Oct 2026): the "/" key is applied to EVERY route (all eleven
   // traces hold the whole folder, about 5 MB), and without it the home page traced only the six case
   // files; the keys of the API routes and of the case page work on their own.
+  //
+  // The report route also reads the demo photos at run time (photo integrity: the demo photos are
+  // hashed to tell a demo case's own photo from the same photo filed for another order, see
+  // src/lib/integrity/demo-photo-hashes.ts). Without them the check would still run but compare
+  // against no demo photo, so a demo photo used for another order would go unflagged until a case
+  // held its hash. Not checked on a build trace: next build cannot run in the worktree it was written in.
   outputFileTracingIncludes: {
     "/api/demo-photo": ["./data/photos/**/*"],
+    "/api/reports": ["./data/photos/**/*"],
     ...Object.fromEntries(SHOWCASE_ROUTES.map((route) => [route, ["./data/showcase/**/*"]])),
     // The /eval page reads the committed evaluation (data/eval) from a computed path.
     "/eval": ["./data/eval/**/*"],
