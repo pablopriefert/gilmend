@@ -123,8 +123,10 @@ and what to conclude from what the tools return.
 
 **Guardrails run in code after the model answers and can only make a decision stricter.** A human
 is required when the confidence is below 0.7, the order is above 300 EUR, the order match is
-doubtful, there are fraud signals, the photos are too blurry, a tool failed, or the customer reply
-quotes a figure the tools did not return. Customer text is treated as untrusted data; a
+doubtful, there are fraud signals, the photos are too blurry, a tool failed, the customer reply
+quotes a figure the tools did not return, or Muse read the packaging as inadequate on a claim that
+is kept (the claim is not cancelled on that reading: it stays, with a merchant-only warning to check
+the packing before filing, and the carrier file says nothing about it). Customer text is treated as untrusted data; a
 prompt-injection attempt counts as a fraud signal.
 
 ## Which Meta models, and why

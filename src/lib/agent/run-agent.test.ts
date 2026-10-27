@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import { computeClaim as realComputeClaim } from "../rules/carriers";
 import { runAgent } from "./run-agent";
 import {
   ASSESSMENT_BROKEN,
@@ -27,6 +28,29 @@ const happyTurns = () => [
 
 const toolNamesInTrace = (c: { trace: { tool?: string }[] }) =>
   c.trace.map((t) => t.tool).filter(Boolean);
+
+describe("runAgent: a weak-packaging reading (27 Oct 2026)", () => {
+  it("keeps the claim and its PDF, warns the merchant, and asks for a human", async () => {
+    const turns = happyTurns();
+    turns[2] = {
+      calls: [["compute_claim", { assessment: { ...ASSESSMENT_BROKEN, packagingAdequate: false } }]] as [string, unknown][],
+    };
+    const provider = scriptedProvider(turns);
+    // The real claim maths: this is the code path that used to drop the claim.
+    const c = await runAgent(makeReport(), {
+      engine: "muse-spark-1.3",
+      provider,
+      deps: fakeDeps({ computeClaim: (...a) => realComputeClaim(...a) }),
+      now: NOW,
+    });
+    expect(c.claim?.eligible).toBe(true);
+    expect(c.claim?.maxCompensationEur).toBeGreaterThan(0);
+    expect(c.claim?.reasons.join(" ")).toMatch(/packaging may be judged inadequate/);
+    expect(c.decision).toMatchObject({ decision: "reship", carrierClaim: true, needsHuman: true });
+    expect(c.decision?.reasons.join(" ")).toMatch(/Guardrail: the photos suggest the packaging/);
+    expect(c.document).not.toBeNull();
+  });
+});
 
 describe("runAgent: tool loop", () => {
   it("runs the whole loop for an order that exists and builds the claim", async () => {

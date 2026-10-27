@@ -76,6 +76,16 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
     force("the photos were not read by the model, so the damage is not assessed");
   }
 
+  // The model read the packaging as inadequate, and the claim is still on (computeClaim keeps it
+  // eligible, 27 Oct 2026: a model's reading of a box must not silently cancel 52.90 EUR). A person
+  // checks the packing before anything is filed. Only when the claim is really kept: a decision
+  // without a carrier claim has nothing to file.
+  if (carrierClaim && ctx.claim?.eligible === true && ctx.assessment?.packagingAdequate === false) {
+    force(
+      "the photos suggest the packaging may be judged inadequate; the carrier may refuse compensation on that ground, so check the packing before filing the claim",
+    );
+  }
+
   if (confidence < CONFIDENCE_THRESHOLD) {
     force(`confidence ${confidence.toFixed(2)} is below ${CONFIDENCE_THRESHOLD}`);
   }

@@ -321,14 +321,15 @@ export async function buildClaimDocument(
     w.row("Item concerned", stripFigures(assessment.item) || "see the order");
     w.row("Type", DAMAGE_TYPE_LABEL[assessment.damageType]);
     w.row("Severity", SEVERITY_LABEL[assessment.severity]);
-    w.row(
-      "Packaging",
-      assessment.packagingAdequate === null
-        ? "cannot be assessed from the photos"
-        : assessment.packagingAdequate
-          ? "suited to the contents"
-          : "inadequate (to be examined)",
-    );
+    // The model's reading of the packaging is a merchant-side opinion: when it says "inadequate"
+    // the merchant is warned and checks the packing (guardrails.ts), and the carrier file states
+    // nothing about it rather than quoting an uncertain reading against the merchant's own claim.
+    if (assessment.packagingAdequate !== false) {
+      w.row(
+        "Packaging",
+        assessment.packagingAdequate === null ? "cannot be assessed from the photos" : "suited to the contents",
+      );
+    }
     if (assessment.evidenceNotes.length > 0) {
       w.gap(2);
       w.text("Observations from the photos:", { bold: true, color: MUTED });

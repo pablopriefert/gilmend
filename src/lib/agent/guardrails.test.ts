@@ -18,7 +18,7 @@ const assessmentOk: DamageAssessment = {
   damageType: "broken_product",
   severity: "major",
   carrierLikelyAtFault: true,
-  packagingAdequate: false,
+  packagingAdequate: true,
   evidenceNotes: [],
   photoQuality: "ok",
 };
@@ -77,6 +77,29 @@ describe("applyGuardrails", () => {
     const r = applyGuardrails(raw(), ctx({ order: null, claim: null }));
     expect(r.decision.needsHuman).toBe(true);
     expect(r.decision.carrierClaim).toBe(false);
+  });
+
+  it("keeps the claim but sends it to a human when the photos suggest inadequate packaging (27 Oct 2026)", () => {
+    const weak = ctx({ assessment: { ...assessmentOk, packagingAdequate: false } });
+    const r = applyGuardrails(raw(), weak);
+    expect(r.decision.carrierClaim).toBe(true);
+    expect(r.decision.needsHuman).toBe(true);
+    expect(r.decision.reasons.join(" ")).toMatch(/Guardrail: the photos suggest the packaging may be judged inadequate/);
+    expect(r.decision.reasons.join(" ")).toMatch(/check the packing before filing/);
+    expect(r.adjustments.join(" ")).toMatch(/needsHuman forced: the photos suggest the packaging/);
+  });
+
+  it("does not ask for a human over packaging when the packaging is fine, unknown, or no claim is kept", () => {
+    for (const packagingAdequate of [true, null]) {
+      const r = applyGuardrails(raw(), ctx({ assessment: { ...assessmentOk, packagingAdequate } }));
+      expect(r.decision.needsHuman).toBe(false);
+    }
+    // No carrier claim kept (the model declined it): nothing is filed, so nothing to check.
+    const noClaim = applyGuardrails(
+      raw({ carrierClaim: false }),
+      ctx({ assessment: { ...assessmentOk, packagingAdequate: false } }),
+    );
+    expect(noClaim.decision.needsHuman).toBe(false);
   });
 
   it("forces needsHuman on suspected fraud", () => {

@@ -89,7 +89,7 @@ export const ASSESSMENT_BROKEN = {
   damageType: "broken_product",
   severity: "major",
   carrierLikelyAtFault: true,
-  packagingAdequate: false,
+  packagingAdequate: true,
   evidenceNotes: ["Shards visible."],
   photoQuality: "ok",
 };

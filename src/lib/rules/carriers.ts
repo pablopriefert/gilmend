@@ -169,6 +169,22 @@ function isDomestic(country: string | undefined): boolean {
   return c === "" || c === "fr" || c === "france";
 }
 
+/**
+ * Merchant-only warning when the photos suggest weak packaging. Whether the carrier's terms
+ * exclude it is stated only for carriers whose notes in data/carriers.json record such a
+ * clause (Colissimo and Chronopost today); for the others we say we found none.
+ */
+export const PACKAGING_WARNING_PREFIX =
+  "Warning: the photos suggest the packaging may be judged inadequate; the carrier may refuse compensation on that ground.";
+
+function packagingWarning(rules: CarrierRulesDetailed): string {
+  const clauseRecorded = rules.notes.some((n) => /packaging/i.test(n));
+  const basis = clauseRecorded
+    ? `The ${rules.label} terms we read exclude unsuitable packaging.`
+    : `Our notes on ${rules.label} record no packaging exclusion, so this is a precaution.`;
+  return `${PACKAGING_WARNING_PREFIX} ${basis} Check the packing before filing.`;
+}
+
 // ---------------------------------------------------------------------------------------
 
 /**
@@ -260,9 +276,15 @@ export function computeClaim(
   }
 
   if (assessment.packagingAdequate === false) {
-    blockPermanent(
-      `${rules.label} excludes compensation when the packaging is unsuitable for the content, and the photos show inadequate packaging.`,
-    );
+    // Not a blocker (27 Oct 2026). Across four real runs of the same broken-vase photos Muse
+    // said "inadequate" twice (crumpled paper and open flaps, on a photo taken AFTER the box
+    // was opened), and each time a 52.90 EUR claim disappeared on one uncertain reading. The
+    // reading is a model's opinion about a box it cannot touch, and whether the packing was
+    // suitable is the carrier's call, not ours. So the claim stays computed, carries this
+    // merchant-only warning, and the guardrails send the case to a human (guardrails.ts).
+    // It must never reach the carrier: the PDF and the e-mail are written from `basis`, not
+    // from these reasons.
+    advice.push(packagingWarning(rules));
   } else if (assessment.packagingAdequate === null) {
     advice.push(
       "Warning: the photos do not show whether the packaging was adequate; the carrier may refuse compensation if it was not.",

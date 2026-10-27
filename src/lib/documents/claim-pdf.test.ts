@@ -91,6 +91,25 @@ describe("buildClaimDocument", () => {
     expect(text).not.toMatch(/Warning|Note:|may refuse|confirm this with the customer|may be lower|Maximum compensation: min\(/);
   });
 
+  it("keeps the merchant-only packaging warning and the packaging reading out of the carrier file", async () => {
+    const base = sampleCase();
+    const doc = await build({
+      id: "case-packaging",
+      assessment: { ...base.assessment!, packagingAdequate: false },
+      claim: {
+        ...base.claim!,
+        reasons: [
+          ...base.claim!.reasons,
+          "Warning: the photos suggest the packaging may be judged inadequate; the carrier may refuse compensation on that ground. The Colissimo terms we read exclude unsuitable packaging. Check the packing before filing.",
+        ],
+      },
+    });
+    const text = extractPdfText(await readFile(path.resolve(doc.pdfPath)));
+    expect(text).toContain("Maximum compensation claimed");
+    expect(text).not.toMatch(/inadequate|may refuse|Check the packing|judged|Packaging/);
+    expect(doc.emailBody).not.toMatch(/inadequate|may refuse|Check the packing|judged/);
+  });
+
   it("describes a partial loss as such in the subtitle", async () => {
     const base = sampleCase();
     const text = extractPdfText(

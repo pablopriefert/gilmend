@@ -367,10 +367,46 @@ describe("computeClaim: cases with nothing to claim", () => {
     expect(joined(c.reasons)).toMatch(/does not look caused by the carrier/);
   });
 
-  it("inadequate packaging is excluded by the carriers", () => {
+  it("a reading of inadequate packaging keeps the claim and warns the merchant (27 Oct 2026)", () => {
+    // Muse said "inadequate" on two of four runs of the same broken-vase photos; the claim must
+    // not vanish on that reading. It stays eligible, with the full amount and its deadlines.
+    const adequate = run({ packagingAdequate: true });
     const c = run({ packagingAdequate: false });
-    expect(c.eligible).toBe(false);
-    expect(joined(c.reasons)).toMatch(/unsuitable for the content/);
+    expect(c.eligible).toBe(true);
+    expect(c.maxCompensationEur).toBe(adequate.maxCompensationEur);
+    expect(c.maxCompensationEur).toBeGreaterThan(0);
+    expect(c.claimDeadline).toBe(adequate.claimDeadline);
+    expect(c.basis).toEqual(adequate.basis);
+    expect(joined(c.reasons)).toMatch(
+      /Warning: the photos suggest the packaging may be judged inadequate; the carrier may refuse compensation on that ground\./,
+    );
+    expect(joined(c.reasons)).toMatch(/Check the packing before filing\./);
+  });
+
+  it("states a packaging exclusion only for carriers whose recorded terms have one", () => {
+    // Colissimo and Chronopost notes record the clause; Mondial Relay's do not, and we do not
+    // claim a rule we have not read.
+    expect(joined(run({ packagingAdequate: false }).reasons)).toMatch(
+      /terms we read exclude unsuitable packaging/,
+    );
+    const chronopost = computeClaim(
+      makeOrder({ carrier: "chronopost", service: "Chrono 13" }),
+      makeAssessment({ packagingAdequate: false }),
+      reportAfter(HOUR),
+      afterDelivery(2 * HOUR),
+    );
+    expect(joined(chronopost.reasons)).toMatch(/terms we read exclude unsuitable packaging/);
+    const mondial = joined(
+      computeClaim(
+        makeOrder({ carrier: "mondial_relay", service: "Mondial Relay Point Relais", weightKg: 1.5 }),
+        makeAssessment({ packagingAdequate: false }),
+        reportAfter(HOUR),
+        afterDelivery(2 * HOUR),
+        { parcelRefusedAtDelivery: true },
+      ).reasons,
+    );
+    expect(mondial).toMatch(/record no packaging exclusion, so this is a precaution/);
+    expect(mondial).not.toMatch(/terms we read exclude/);
   });
 
   it("unknown packaging adequacy only warns", () => {
