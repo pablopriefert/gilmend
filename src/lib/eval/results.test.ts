@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { evalDir, loadEvalResults, loadLatestEval, parseEvalResults } from "./results";
+import { compareCommits, evalDir, loadEvalResults, loadLatestEval, parseEvalResults } from "./results";
 import { makeResults } from "./test-helpers";
 
 let dir: string;
@@ -23,6 +23,15 @@ describe("parseEvalResults", () => {
     const results = makeResults({ pricing: null, estimatedCostUsd: null });
     results.cases[0].runs[0].usage = null;
     expect(parseEvalResults(JSON.parse(JSON.stringify(results)))).toEqual(results);
+  });
+
+  it("accepts the recorded settings, and a file that predates them", () => {
+    const withSettings = makeResults({ settings: { reasoningEffort: "medium", apiHost: "api.meta.ai" } });
+    expect(parseEvalResults(JSON.parse(JSON.stringify(withSettings))).settings).toEqual({ reasoningEffort: "medium", apiHost: "api.meta.ai" });
+    expect(parseEvalResults(JSON.parse(JSON.stringify(makeResults()))).settings).toBeUndefined();
+    const bad = JSON.parse(JSON.stringify(withSettings));
+    bad.settings.apiHost = 3;
+    expect(() => parseEvalResults(bad)).toThrow(/settings\.apiHost/);
   });
 
   it("refuses the mock engine: a script is not a measurement", () => {
@@ -74,5 +83,26 @@ describe("evalDir", () => {
   it("defaults to data/eval and can be redirected", () => {
     expect(evalDir({})).toBe(path.join(process.cwd(), "data", "eval"));
     expect(evalDir({ DAMAGE_DESK_EVAL_DIR: "/somewhere" })).toBe("/somewhere");
+  });
+});
+
+describe("compareCommits", () => {
+  it("is the same commit when the short sha is the start of the deployed one", () => {
+    expect(compareCommits("0eab783", "0eab7831c2d4e5f60718293a4b5c6d7e8f901234")).toEqual({ kind: "same" });
+    expect(compareCommits("0EAB783", "0eab7831c2d4e5f6")).toEqual({ kind: "same" });
+  });
+
+  it("differs when another commit is deployed, naming both", () => {
+    expect(compareCommits("0eab783", "9999999c2d4e5f60718293a4b5c6d7e8f901234")).toEqual({ kind: "differs", measured: "0eab783", deployed: "9999999" });
+  });
+
+  it("differs, with no measured commit, for a file that was not run in a git checkout", () => {
+    expect(compareCommits(null, "9999999c2d4e")).toEqual({ kind: "differs", measured: null, deployed: "9999999" });
+  });
+
+  it("claims nothing when the host reports no commit (local development)", () => {
+    expect(compareCommits("0eab783", undefined)).toEqual({ kind: "not-compared" });
+    expect(compareCommits("0eab783", "  ")).toEqual({ kind: "not-compared" });
+    expect(compareCommits(null, null)).toEqual({ kind: "not-compared" });
   });
 });

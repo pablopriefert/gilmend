@@ -1,8 +1,9 @@
 import type { DecisionKind, Engine } from "../types";
 
-// The shape of a committed evaluation (data/eval/<date>-<engine>.json), written by
-// scripts/eval.ts and read by the /eval page. Everything in it is fictitious data (the six demo
-// cases) plus counts and timings: no customer text, no reply, no key.
+// The shape of a committed evaluation (data/eval/<date>-<engine>.json), written by scripts/eval.ts
+// and read by the /eval page. Everything in it is fictitious data (the six demo cases): counts,
+// decisions, timings and the model's short reasons, which quote the fictitious names and orders of
+// the fixtures. No real customer text, no reply, no key.
 
 /** What the demo case file says we expect (data/demo-cases.json, `expected`). */
 export interface EvalExpectation {
@@ -93,6 +94,14 @@ export interface EvalPricing {
   source: string;
 }
 
+/** What the environment sets that changes what is measured (see settings.ts). */
+export interface EvalSettings {
+  /** Reasoning effort sent to the model, or "provider default" when none was set. */
+  reasoningEffort: string;
+  /** API host that answered ("api.meta.ai"), or "custom endpoint"; never a key or a private URL. */
+  apiHost: string;
+}
+
 export interface EvalResults {
   schemaVersion: 1;
   /** ISO date-time the evaluation started. */
@@ -109,7 +118,9 @@ export interface EvalResults {
   /** True when the working tree had uncommitted changes while it ran. */
   dirty: boolean;
   pricing: EvalPricing | null;
-  /** Estimated cost of the whole evaluation, upper bound (cache discounts ignored); null when no usage came back. */
+  /** Optional: the first committed file predates it (shown as "not recorded"). */
+  settings?: EvalSettings;
+  /** Estimated cost of the whole evaluation at the prices above, cache discounts ignored (an estimate, not a bound); null when no usage came back. */
   estimatedCostUsd: number | null;
   cases: EvalCaseResult[];
 }

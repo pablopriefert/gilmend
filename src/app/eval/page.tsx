@@ -25,5 +25,7 @@ export default function EvalPage() {
     );
   }
   if (!latest) return <EvalEmpty />;
-  return <EvalReport results={latest.results} file={latest.file} />;
+  // The commit this site was built from (Vercel sets it; absent in local development). The page
+  // compares it with the commit that was measured and says so when they differ.
+  return <EvalReport results={latest.results} file={latest.file} deployedCommit={process.env.VERCEL_GIT_COMMIT_SHA} />;
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   META_PRICING,
   costGuard,
+  mayStartAnotherRun,
   median,
   parseSamNote,
   runCostUsd,
@@ -36,15 +37,12 @@ describe("scoreRun", () => {
     expect(m).toMatchObject({ decision: true, carrierClaim: false, needsHuman: false, claimEligible: true, all: false });
   });
 
-  it("never counts a run that did not finish as a full match", () => {
-    // The fallback answer of a timed-out run (no_action, needs a human) can agree on some fields:
-    // that is not a success.
-    const m = scoreRun(
-      { ...EXPECT_RESHIP, decision: "no_action", acceptableDecisions: ["no_action"], carrierClaim: false, needsHuman: true, claimEligible: false },
-      { completed: false, decision: "no_action", carrierClaim: false, needsHuman: true, claimEligible: false },
-    );
-    expect(m.decision).toBe(true);
-    expect(m.all).toBe(false);
+  it("credits nothing to a run that did not finish, not even a field its fallback answer happens to agree on", () => {
+    // runAgent's fallback for a timeout is no_action with a human: on a case that expects exactly
+    // that, every field would match. A timeout is not a decision (review of 27 Oct 2026).
+    const expectsNoAction = { ...EXPECT_RESHIP, decision: "no_action" as const, acceptableDecisions: ["no_action" as const], carrierClaim: false, needsHuman: true, claimEligible: false };
+    const m = scoreRun(expectsNoAction, { completed: false, decision: "no_action", carrierClaim: false, needsHuman: true, claimEligible: false });
+    expect(m).toEqual({ decision: false, carrierClaim: false, needsHuman: false, claimEligible: false, all: false });
   });
 
   it("treats a missing observation (null) as a miss", () => {
@@ -131,6 +129,27 @@ describe("costGuard", () => {
   });
 });
 
+describe("mayStartAnotherRun", () => {
+  const base = { spentUsd: 0, maxRunCostUsd: 0.1, inFlight: 0, limitUsd: 1, yes: false };
+
+  it("allows a run while spent plus the dearest run so far stays under the limit", () => {
+    expect(mayStartAnotherRun({ ...base, spentUsd: 0.85 })).toBe(true);
+  });
+
+  it("refuses a run that could take the total over the limit", () => {
+    expect(mayStartAnotherRun({ ...base, spentUsd: 0.95 })).toBe(false);
+  });
+
+  it("counts the runs already under way as if each cost the dearest run", () => {
+    expect(mayStartAnotherRun({ ...base, spentUsd: 0.75, inFlight: 2 })).toBe(false); // 0.75 + 3 x 0.1
+    expect(mayStartAnotherRun({ ...base, spentUsd: 0.6, inFlight: 2 })).toBe(true);
+  });
+
+  it("never overrides --yes", () => {
+    expect(mayStartAnotherRun({ ...base, spentUsd: 50, yes: true })).toBe(true);
+  });
+});
+
 describe("summarizeCase", () => {
   const caseOf = (runs: EvalRun[]): EvalCaseResult => ({ id: "demo-1", title: "Broken vase", expected: EXPECT_RESHIP, runs });
 
@@ -166,6 +185,37 @@ describe("summarizeCase", () => {
     const s = summarizeCase(caseOf([makeRun({ run: 1 }), none]));
     expect(s.medianSamRegions).toBe(5);
     expect(s.samRuns).toBe(1);
+  });
+
+  it("counts a run that did not finish apart, never as a decision, a claim or a human review", () => {
+    // The timed-out run as run-case.ts stores it: nothing observed. A file written before that fix
+    // could still hold the fallback answer, so the summary must not trust those fields either.
+    const timedOut = makeRun({
+      run: 3,
+      completed: false,
+      failure: "Agent did not reach a decision in time",
+      decision: "no_action",
+      carrierClaim: false,
+      needsHuman: true,
+      claimEligible: false,
+      claimAmountEur: null,
+      matches: { decision: false, carrierClaim: false, needsHuman: false, claimEligible: false, all: false },
+    });
+    const s = summarizeCase(caseOf([makeRun({ run: 1 }), makeRun({ run: 2 }), timedOut]));
+    expect(s.completed).toBe(2);
+    expect(s.notFinished).toBe(1);
+    expect(s.decisionCounts).toEqual({ reship: 2 });
+    expect(s.needsHumanCount).toBe(0);
+    expect(s.matched).toMatchObject({ decision: 2, carrierClaim: 2, needsHuman: 2, claimEligible: 2, all: 2 });
+    // One run that gave nothing is not "the same answer every run".
+    expect(s.stable).toBe(false);
+  });
+
+  it("counts the runs where the code, not the model, asked SAM", () => {
+    const byCode = (run: number) => makeRun({ run, sam: { method: "sam-3.1", regions: 1, concepts: ["torn cardboard"], calledByCode: true, requests: 1 } });
+    const s = summarizeCase(caseOf([byCode(1), makeRun({ run: 2 }), byCode(3)]));
+    expect(s.samCalledByCodeRuns).toBe(2);
+    expect(s.samRuns).toBe(3);
   });
 
   it("leaves tokens null when no run returned usage", () => {

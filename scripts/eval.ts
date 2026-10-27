@@ -8,10 +8,18 @@
 //  - it refuses the mock: a scripted answer scored against our expectations would measure nothing;
 //  - it runs the first run alone, projects the cost of all of them from the tokens that run used,
 //    and stops above --max-cost (default $5) unless --yes is given;
+//  - it then keeps the money actually spent, and does not start a run that could take the total over
+//    --max-cost (assuming it costs as much as the dearest run so far), unless --yes is given;
 //  - runs go one after the other unless --concurrency says otherwise.
 // The key comes from .env.local through `tsx --env-file` and is never printed. The agent runs on the
 // fictitious fixture orders and the demo photos; nothing it generates is saved outside a throwaway
-// folder, and the results file holds counts, decisions and timings only (no customer text, no reply).
+// folder (the runtime folder is redirected and the shared Blob store is switched off), and the
+// results file holds counts, decisions, timings and the model's short reasons (fictitious names and
+// orders only; no real customer text, no reply, no key).
+//
+// Only a run of every demo case that went to the end is written to data/eval/, because the /eval
+// page presents that folder as "the evaluation". A run of a subset (--cases) or one stopped by the
+// cost guard is written to a temporary folder instead, and its path is printed.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -22,9 +30,11 @@ import { evalDir } from "../src/lib/eval/results";
 import {
   META_PRICING,
   costGuard,
+  mayStartAnotherRun,
   runCostUsd,
   summarizeResults,
 } from "../src/lib/eval/score";
+import { describeEvalSettings } from "../src/lib/eval/settings";
 import type { EvalPricing, EvalResults, EvalRun } from "../src/lib/eval/types";
 import { getProvider } from "../src/lib/providers";
 import { loadDemoCases } from "../src/lib/store/demo-cases";
@@ -168,17 +178,42 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Annotated photos and claim PDFs are persisted through the storage backend the environment
+  // names. docs/storage.md sets DAMAGE_DESK_STORAGE=blob for a deployment, and an .env.local copied
+  // from it would make every eval run upload photos and PDFs to the shared private Blob store. An
+  // evaluation never needs that: force local files, which the throwaway folder below redirects
+  // (27 Oct 2026, review finding: the "nothing is saved" promise only covered the runtime folder).
+  if (process.env.DAMAGE_DESK_STORAGE?.trim().toLowerCase() === "blob") {
+    console.log("[eval] DAMAGE_DESK_STORAGE=blob is ignored for this evaluation: local files in a throwaway folder are used.");
+  }
+  process.env.DAMAGE_DESK_STORAGE = "file";
+
   // Generated PDFs and annotated photos go to a throwaway folder, never to data/runtime/.
   const scratch = process.env.DAMAGE_DESK_RUNTIME_DIR ? null : mkdtempSync(path.join(os.tmpdir(), "gilmend-eval-"));
   if (scratch) process.env.DAMAGE_DESK_RUNTIME_DIR = scratch;
 
   const provider = getProvider(o.engine, env);
-  // Round by round (run 1 of every case, then run 2...), so an interrupted evaluation is balanced.
+  // Round by round (run 1 of every case, then run 2...), so that stopping early leaves every case
+  // with the same number of runs, give or take the round that was under way.
   const tasks = Array.from({ length: o.runs }, (_, i) => demos.map((demo) => ({ demo, run: i + 1 }))).flat();
   const done = new Map<string, EvalRun[]>(demos.map((d) => [d.id, []]));
+  let spentUsd = 0;
+  let maxRunCostUsd = 0;
+  let inFlight = 0;
+  let stoppedByCost = false;
   const execute = async (t: (typeof tasks)[number]) => {
-    const result = await runEvalCase({ demo: t.demo, run: t.run, engine: o.engine, provider, env, root: process.cwd() });
+    inFlight++;
+    let result: EvalRun;
+    try {
+      result = await runEvalCase({ demo: t.demo, run: t.run, engine: o.engine, provider, env, root: process.cwd() });
+    } finally {
+      inFlight--;
+    }
     done.get(t.demo.id)!.push(result);
+    // A run whose cost is unknown is counted at the dearest run so far: unknown is not free.
+    const cost = pricing ? runCostUsd(result, pricing) : null;
+    maxRunCostUsd = Math.max(maxRunCostUsd, cost ?? 0);
+    spentUsd += cost ?? maxRunCostUsd;
     console.log(describeRun(t.demo.id, result, o.runs));
     if (!result.matches.all) for (const reason of result.reasons) console.log(`        reason: ${reason}`);
     return result;
@@ -198,25 +233,41 @@ async function main(): Promise<void> {
 
     const queue = tasks.slice(1);
     const worker = async () => {
-      for (let t = queue.shift(); t; t = queue.shift()) await execute(t);
+      while (queue.length > 0) {
+        // The projection came from one run; this checks what has really been spent before each
+        // further run, and stops the whole queue at the first refusal.
+        if (stoppedByCost || !mayStartAnotherRun({ spentUsd, maxRunCostUsd, inFlight, limitUsd: o.maxCostUsd, yes: o.yes })) {
+          if (!stoppedByCost) {
+            stoppedByCost = true;
+            console.error(
+              `[eval] Stopping: $${spentUsd.toFixed(2)} spent, and the next run could cost up to $${maxRunCostUsd.toFixed(2)}, which would pass the $${o.maxCostUsd.toFixed(2)} limit. Re-run with --yes to go on.`,
+            );
+          }
+          return;
+        }
+        await execute(queue.shift()!);
+      }
     };
     await Promise.all(Array.from({ length: Math.min(o.concurrency, Math.max(queue.length, 1)) }, worker));
   } finally {
     if (scratch) rmSync(scratch, { recursive: true, force: true });
   }
 
-  const cases = demos.map((d) => ({
-    id: d.id,
-    title: d.title,
-    expected: {
-      decision: d.expected.decision,
-      acceptableDecisions: d.expected.acceptableDecisions,
-      carrierClaim: d.expected.carrierClaim,
-      needsHuman: d.expected.needsHuman,
-      claimEligible: d.expected.claimEligible,
-    },
-    runs: done.get(d.id)!.sort((a, b) => a.run - b.run),
-  }));
+  const cases = demos
+    .map((d) => ({
+      id: d.id,
+      title: d.title,
+      expected: {
+        decision: d.expected.decision,
+        acceptableDecisions: d.expected.acceptableDecisions,
+        carrierClaim: d.expected.carrierClaim,
+        needsHuman: d.expected.needsHuman,
+        claimEligible: d.expected.claimEligible,
+      },
+      runs: done.get(d.id)!.sort((a, b) => a.run - b.run),
+    }))
+    // A stopped evaluation may not have reached every case.
+    .filter((c) => c.runs.length > 0);
   const allRuns = cases.flatMap((c) => c.runs);
   const costs = allRuns.map((r) => (pricing ? runCostUsd(r, pricing) : null));
   const results: EvalResults = {
@@ -231,18 +282,29 @@ async function main(): Promise<void> {
     // The results file itself is committed afterwards, so it must not make the tree "dirty".
     dirty: (git(["status", "--porcelain", "--", ".", ":!data/eval"]) ?? "").length > 0,
     pricing,
+    settings: describeEvalSettings(o.engine, env),
     estimatedCostUsd: costs.length > 0 && costs.every((c): c is number => c !== null) ? costs.reduce((a, b) => a + b, 0) : null,
     cases,
   };
 
-  const dir = evalDir();
+  // Only a complete evaluation of every demo case belongs in data/eval (see the header).
+  const complete = !stoppedByCost && demos.length === all.length;
+  const dir = complete ? evalDir() : mkdtempSync(path.join(os.tmpdir(), "gilmend-eval-out-"));
   const stem = `${startedAt.toISOString().slice(0, 10)}-${o.engine}`;
   let file = path.join(dir, `${stem}.json`);
   for (let n = 2; existsSync(file); n++) file = path.join(dir, `${stem}-${n}.json`);
   writeFileSync(file, `${JSON.stringify(results, null, 2)}\n`, { flag: "wx" });
 
   printSummary(results);
-  console.log(`\n[eval] written: ${path.relative(process.cwd(), file)}`);
+  if (complete) {
+    console.log(`\n[eval] written: ${path.relative(process.cwd(), file)}`);
+  } else {
+    console.log(
+      `\n[eval] ${stoppedByCost ? "Stopped by the cost guard" : "Only some of the demo cases were run"}: the result is NOT in data/eval ` +
+        `(the /eval page shows a complete evaluation only). Written to ${file}`,
+    );
+    if (stoppedByCost) process.exitCode = 2;
+  }
 }
 
 function printSummary(results: EvalResults): void {
@@ -262,7 +324,8 @@ function printSummary(results: EvalResults): void {
   );
   console.log(
     `Median ${secs(s.medianDurationMs)} a run, ${s.totalTokens ?? "unknown"} tokens, ${s.samRequests} SAM requests, ` +
-      `estimated cost ${results.estimatedCostUsd === null ? "unknown" : `$${results.estimatedCostUsd.toFixed(2)}`} (upper bound).`,
+      `estimated cost ${results.estimatedCostUsd === null ? "unknown" : `$${results.estimatedCostUsd.toFixed(2)}`} ` +
+      `(estimate at the published starting price, cache discounts ignored).`,
   );
 }
 

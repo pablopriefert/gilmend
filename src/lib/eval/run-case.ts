@@ -111,23 +111,27 @@ export async function runEvalCase(opts: RunEvalOptions): Promise<EvalRun> {
   const lateError = steps.find((s) => s.startsWith("Agent error after the decision was recorded"));
   const completed = !gaveUp;
   const decision = record.decision;
-  const observed = {
-    completed,
-    decision: decision?.decision ?? null,
-    carrierClaim: decision?.carrierClaim ?? null,
-    needsHuman: decision?.needsHuman ?? null,
-    // No computed claim (a blurry photo never reaches compute_claim) counts as not eligible.
-    claimEligible: record.claim?.eligible ?? false,
-  };
+  // A run that gave up carries runAgent's fallback answer ("no_action", needs a human). That is not
+  // something the agent decided, so nothing of it is recorded as observed (review of 27 Oct 2026).
+  const observed = completed
+    ? {
+        completed,
+        decision: decision?.decision ?? null,
+        carrierClaim: decision?.carrierClaim ?? null,
+        needsHuman: decision?.needsHuman ?? null,
+        // No computed claim (a blurry photo never reaches compute_claim) counts as not eligible.
+        claimEligible: record.claim?.eligible ?? false,
+      }
+    : { completed, decision: null, carrierClaim: null, needsHuman: null, claimEligible: null };
   const sam = parseSamNote(record.evidence);
 
   return {
     run,
     failure: gaveUp ?? lateError ?? null,
     ...observed,
-    claimAmountEur: record.claim?.eligible ? record.claim.maxCompensationEur : null,
+    claimAmountEur: completed && record.claim?.eligible ? record.claim.maxCompensationEur : null,
     claimDocument: record.document !== null,
-    confidence: decision?.confidence ?? null,
+    confidence: completed ? (decision?.confidence ?? null) : null,
     guardrails: steps.filter((s) => s.startsWith("Guardrail: ")).map((s) => s.slice("Guardrail: ".length)),
     reasons: (decision?.reasons ?? []).slice(0, REASONS_KEPT).map((r) => r.slice(0, REASON_CHARS)),
     sam: { ...sam, calledByCode: steps.some((s) => s.startsWith("Evidence fallback:")), requests: samRequests },

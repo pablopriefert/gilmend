@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import type { DecisionKind } from "../types";
-import type { EvalCaseResult, EvalExpectation, EvalResults, EvalRun } from "./types";
+import type { EvalCaseResult, EvalExpectation, EvalResults, EvalRun, EvalSettings } from "./types";
 
 // Reading and validating the committed evaluations (data/eval/*.json). The file is ours, but it is
 // parsed like input: a half-written or hand-edited file must fail loudly with the name of the
@@ -152,6 +152,14 @@ export function parseEvalResults(raw: unknown): EvalResults {
       source: str(p, "source", "pricing"),
     };
   }
+  let settings: EvalSettings | undefined;
+  if (raw.settings !== undefined) {
+    if (!isObj(raw.settings)) fail("settings", "must be an object");
+    settings = {
+      reasoningEffort: str(raw.settings, "reasoningEffort", "settings"),
+      apiHost: str(raw.settings, "apiHost", "settings"),
+    };
+  }
   const generatedAt = str(raw, "generatedAt", "file");
   if (Number.isNaN(Date.parse(generatedAt))) fail("generatedAt", "must be an ISO date-time");
   return {
@@ -165,6 +173,7 @@ export function parseEvalResults(raw: unknown): EvalResults {
     commit: nullable(raw, "commit", "file", isStr, "a string"),
     dirty: bool(raw, "dirty", "file"),
     pricing,
+    ...(settings ? { settings } : {}),
     estimatedCostUsd: nullable(raw, "estimatedCostUsd", "file", isNum, "a number"),
     cases: cases.map((c, i) => parseCase(c, `cases[${i}]`)),
   };
@@ -200,4 +209,24 @@ export function loadEvalResults(dir: string = evalDir()): LoadedEval[] {
 /** The most recent committed evaluation, or null when there is none. */
 export function loadLatestEval(dir: string = evalDir()): LoadedEval | null {
   return loadEvalResults(dir)[0] ?? null;
+}
+
+export type CommitComparison =
+  | { kind: "not-compared" }
+  | { kind: "same" }
+  | { kind: "differs"; measured: string | null; deployed: string };
+
+/**
+ * Is the code that was measured the code that is deployed? `deployed` is the commit the host
+ * reports (VERCEL_GIT_COMMIT_SHA, a full 40-character sha); the file holds a short one. Without a
+ * deployed commit (local development) nothing can be said, so nothing is claimed. A file with no
+ * commit cannot be matched to the deployment either: that counts as different, said as such.
+ */
+export function compareCommits(measured: string | null, deployed: string | null | undefined): CommitComparison {
+  const d = deployed?.trim().toLowerCase();
+  if (!d) return { kind: "not-compared" };
+  const m = measured?.trim().toLowerCase();
+  if (!m) return { kind: "differs", measured: null, deployed: d.slice(0, 7) };
+  if (d.startsWith(m) || m.startsWith(d)) return { kind: "same" };
+  return { kind: "differs", measured: m, deployed: d.slice(0, 7) };
 }

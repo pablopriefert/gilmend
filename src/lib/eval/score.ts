@@ -18,15 +18,18 @@ import type {
  * Prices of Muse Spark 1.3 (Standard mode) on the Meta Model API: $1.25 per million input tokens
  * and $4.25 per million output tokens ("pay-as-you-go pricing starts at", dev.meta.ai/resources/blog/
  * build-with-muse-spark, read 27 Oct 2026), and $2.50 per 1,000 SAM images (a comment of
- * src/lib/evidence/mark-damage.ts, from the same documentation). Cached input is billed lower by
- * Meta, but the page we read gave no figure we could check, so the estimate ignores it: it is an
- * upper bound.
+ * src/lib/evidence/mark-damage.ts, from the same documentation, not re-read since). Cached input is
+ * billed lower by Meta, but the page we read gave no figure we could check, so the estimate ignores
+ * it. That makes it an estimate at the published starting price and nothing more: a cache discount
+ * would lower it, a higher price tier would raise it, and we cannot say which way the truth lies
+ * (review of 27 Oct 2026: it was first called an "upper bound", which nothing verifies).
  */
 export const META_PRICING: EvalPricing = {
   inputPerMillionTokensUsd: 1.25,
   outputPerMillionTokensUsd: 4.25,
   samPerRequestUsd: 2.5 / 1000,
-  source: "Meta Model API pricing page (dev.meta.ai), read 27 Oct 2026; cache discounts ignored",
+  source:
+    "Meta Model API pricing page (dev.meta.ai), \"starts at\" prices, read 27 Oct 2026; SAM price as quoted in src/lib/evidence/mark-damage.ts, not re-checked; cache discounts ignored",
 };
 
 /** Observed values of one run, before they are compared with what we expected. */
@@ -41,10 +44,14 @@ export interface Observed {
 /**
  * Compare a run with the case's expectation. A decision counts when it is one of the acceptable
  * ones (the merchant policy can go either way on some cases), not only the primary one. A run that
- * did not finish never counts as fully matching, even if its fallback answer happens to agree on a
- * field: a timeout is not a success.
+ * did not finish matches nothing, field by field: runAgent's fallback answer for a timeout
+ * ("no_action", needs a human) is not something the agent observed, and on a case that expects
+ * no_action it would otherwise be credited as a correct decision (review of 27 Oct 2026).
  */
 export function scoreRun(expected: EvalExpectation, observed: Observed): EvalMatches {
+  if (!observed.completed) {
+    return { decision: false, carrierClaim: false, needsHuman: false, claimEligible: false, all: false };
+  }
   const decision = observed.decision !== null && expected.acceptableDecisions.includes(observed.decision);
   const carrierClaim = observed.carrierClaim === expected.carrierClaim;
   const needsHuman = observed.needsHuman === expected.needsHuman;
@@ -54,7 +61,7 @@ export function scoreRun(expected: EvalExpectation, observed: Observed): EvalMat
     carrierClaim,
     needsHuman,
     claimEligible,
-    all: observed.completed && decision && carrierClaim && needsHuman && claimEligible,
+    all: decision && carrierClaim && needsHuman && claimEligible,
   };
 }
 
@@ -164,6 +171,24 @@ export function costGuard(opts: {
     : { estimateUsd, allowed: false, reason: `Estimated cost $${estimateUsd.toFixed(2)} for ${totalRuns} runs is over the $${limitUsd.toFixed(2)} limit. Re-run with --yes, or with fewer --runs.` };
 }
 
+/**
+ * The running guard, checked before every run after the first. costGuard projects from one run, and
+ * the first task is not always a typical one (case 1 is the most expensive at about 53k tokens, a
+ * blurry-photo case about 22k), and nothing re-checked the spending once it had passed. This one
+ * keeps the money actually spent and assumes the next run, and each one already under way, costs as
+ * much as the dearest run seen so far. It never overrides --yes, which means "spend anyway".
+ */
+export function mayStartAnotherRun(opts: {
+  spentUsd: number;
+  maxRunCostUsd: number;
+  inFlight: number;
+  limitUsd: number;
+  yes: boolean;
+}): boolean {
+  if (opts.yes) return true;
+  return opts.spentUsd + (opts.inFlight + 1) * opts.maxRunCostUsd <= opts.limitUsd;
+}
+
 // ---- summaries ---------------------------------------------------------------------------------
 
 export interface CaseSummary {
@@ -173,7 +198,10 @@ export interface CaseSummary {
   runs: number;
   /** Runs where the agent reached a decision. */
   completed: number;
+  /** Runs that did not finish (timeout, provider error): counted apart, never as a decision. */
+  notFinished: number;
   matched: { decision: number; carrierClaim: number; needsHuman: number; claimEligible: number; all: number };
+  /** Decisions of the runs that finished (an unfinished run's fallback answer is not one). */
   decisionCounts: Partial<Record<DecisionKind, number>>;
   /** Runs that ended with a carrier claim. */
   carrierClaimCount: number;
@@ -190,6 +218,8 @@ export interface CaseSummary {
   /** Median number of SAM regions on the runs that outlined something; null when none did. */
   medianSamRegions: number | null;
   samRuns: number;
+  /** Runs where the code, not the model, asked SAM (the evidence fallback in run-agent.ts). */
+  samCalledByCodeRuns: number;
   totalTokens: number | null;
 }
 
@@ -197,9 +227,11 @@ export function summarizeCase(c: EvalCaseResult): CaseSummary {
   const runs = c.runs;
   const count = (pick: (r: EvalRun) => boolean) => runs.filter(pick).length;
   const decisionCounts: Partial<Record<DecisionKind, number>> = {};
-  for (const r of runs) if (r.decision) decisionCounts[r.decision] = (decisionCounts[r.decision] ?? 0) + 1;
+  // Only finished runs: runAgent's fallback for a timeout ("no_action") would otherwise show up as
+  // something the agent decided.
+  for (const r of runs) if (r.completed && r.decision) decisionCounts[r.decision] = (decisionCounts[r.decision] ?? 0) + 1;
   const modalEntry = (Object.entries(decisionCounts) as [DecisionKind, number][]).sort((a, b) => b[1] - a[1])[0];
-  const key = (r: EvalRun) => `${r.decision}|${r.carrierClaim}|${r.needsHuman}`;
+  const key = (r: EvalRun) => `${r.completed}|${r.decision}|${r.carrierClaim}|${r.needsHuman}`;
   const amounts = runs.map((r) => r.claimAmountEur).filter((a): a is number => a !== null);
   const sam = runs.filter((r) => r.sam.regions > 0).map((r) => r.sam.regions);
   const tokens = runs.map((r) => r.usage?.totalTokens).filter((t): t is number => typeof t === "number");
@@ -209,6 +241,7 @@ export function summarizeCase(c: EvalCaseResult): CaseSummary {
     expected: c.expected,
     runs: runs.length,
     completed: count((r) => r.completed),
+    notFinished: count((r) => !r.completed),
     matched: {
       decision: count((r) => r.matches.decision),
       carrierClaim: count((r) => r.matches.carrierClaim),
@@ -217,15 +250,17 @@ export function summarizeCase(c: EvalCaseResult): CaseSummary {
       all: count((r) => r.matches.all),
     },
     decisionCounts,
-    carrierClaimCount: count((r) => r.carrierClaim === true),
-    needsHumanCount: count((r) => r.needsHuman === true),
+    carrierClaimCount: count((r) => r.completed && r.carrierClaim === true),
+    needsHumanCount: count((r) => r.completed && r.needsHuman === true),
     modal: modalEntry ? { decision: modalEntry[0], count: modalEntry[1] } : null,
-    stable: runs.length > 0 && new Set(runs.map(key)).size === 1,
+    // A run that did not finish is not an answer, so a case with one is never "the same every run".
+    stable: runs.length > 0 && runs.every((r) => r.completed) && new Set(runs.map(key)).size === 1,
     claimAmountEur: amounts.length ? { min: Math.min(...amounts), max: Math.max(...amounts) } : null,
     medianDurationMs: median(runs.map((r) => r.durationMs)),
     medianToolCalls: median(runs.map((r) => r.toolCalls)),
     medianSamRegions: median(sam),
     samRuns: sam.length,
+    samCalledByCodeRuns: count((r) => r.sam.calledByCode),
     totalTokens: tokens.length ? tokens.reduce((a, b) => a + b, 0) : null,
   };
 }

@@ -40,7 +40,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   hand and do not add a file that did not come from a real run: the page presents it as measured, and
   `src/lib/eval/committed.test.ts` re-scores every run and refuses a mock engine, a secret or a file
   scored against expectations that `data/demo-cases.json` no longer states (re-run it then). A run spends
-  real credits (about $1.20 for 18 runs on Muse Spark 1.3): ask Pablo first.
+  real credits (about $1.20 for 18 runs on Muse Spark 1.3): ask Pablo first. The committed file names the
+  commit it was measured on; `/eval` warns when the deployed commit (`VERCEL_GIT_COMMIT_SHA`) differs, so
+  re-run `npm run eval -- --runs 3` on the final `main` (after every branch is merged) and commit that
+  file. Only a run of every case is written to `data/eval/`; the cost is an estimate at Meta's published
+  starting price, never called an upper bound.
 - Storage on a public deployment is explained in `docs/storage.md` (what is public, and how the shared
   Vercel Blob backend is switched on with `DAMAGE_DESK_STORAGE=blob`; the adapter,
   `src/lib/storage/blob-object-store.ts`, has been tested against a fake SDK only).

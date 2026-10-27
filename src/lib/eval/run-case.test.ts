@@ -115,6 +115,8 @@ describe("runEvalCase", () => {
       deps: fakeDeps(),
     });
     expect(run.completed).toBe(false);
+    // The fallback answer of a run that gave up is not recorded as something the agent decided.
+    expect(run).toMatchObject({ decision: null, carrierClaim: null, needsHuman: null, claimEligible: null, claimAmountEur: null });
     expect(run.failure).toMatch(/could not finish|did not reach a decision/i);
     expect(run.matches.all).toBe(false);
   });

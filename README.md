@@ -358,8 +358,14 @@ recordings of those three said "marks where the damage appears to be" and "damag
 `npm run eval -- --runs 3` runs the six cases N times each on the real **Muse Spark 1.3** and SAM 3.1,
 sequentially, and scores every run against the outcome in `data/demo-cases.json` (decision, carrier
 claim, human review, claim eligibility). It refuses the demo mock, projects its cost from the first run
-and stops above $5 without `--yes`, and writes [`data/eval/`](data/eval) (counts, decisions, timings:
-no customer text). The app shows the latest file on its `/eval` page, linked from the footer.
+and stops above $5 without `--yes` (it also checks what it has really spent before each further run),
+and writes [`data/eval/`](data/eval): counts, decisions, timings and the model's short reasons (fictitious
+names and orders only). A run of a subset of the cases, or one stopped by the cost guard, is written to a
+temporary folder instead, because the app shows the latest file on its `/eval` page (linked from the
+footer) as the evaluation of all the cases. The run keeps local files in a throwaway folder whatever
+`DAMAGE_DESK_STORAGE` says, so nothing it generates reaches the shared Blob store. The file records the
+reasoning effort and API host it ran with (the first committed file predates that and the page says "not
+recorded").
 
 The 18 runs of 27 Oct 2026 (17:43 UTC, commit `0eab783`):
 
@@ -378,8 +384,16 @@ the case to a human (confidence 0.90, "heavily motion-blurred"); the other two r
 variance the section above already saw on 27 Oct, now counted. In case 5 the case file's first choice is
 a refund and the agent chose to reship every time; both are listed as acceptable there, so it counts as a
 match, and the page shows it as "Refund or Reship" against "Reship x3". Median 28.2 s a run, 767,000
-tokens and 22 SAM requests in all, about $1.18 at the published Standard prices (an upper bound: it
-bills every token at the full input price, although the API reported 425,000 of them as served from its cache).
+tokens and 22 SAM requests in all, about $1.18 as an estimate at Meta's published starting price ($1.25 per million input tokens, $4.25 per
+million output tokens; the SAM price of $2.50 per 1,000 images comes from a code comment, not a re-checked
+source), with cache discounts ignored although the API reported 425,000 of those tokens as served from its
+cache. It is not a bound: a discount would lower it, a higher price tier would raise it.
+
+**These figures describe commit `0eab783`, not necessarily the agent deployed today.** Other changes to the
+prompt, guardrails and tools have landed since, and that commit may not exist on `main` after a squash merge.
+The `/eval` page compares the commit in the file with the one the site is deployed from
+(`VERCEL_GIT_COMMIT_SHA`) and says so when they differ. Before submitting, re-run
+`npm run eval -- --runs 3` on the final `main` (about $1.20) and commit the new file.
 
 This is **six cases times three runs, not a benchmark**: too few runs to put a rate on, on the same six
 cases the agent was tuned on, against expectations we wrote ourselves, on AI-generated photos. It shows

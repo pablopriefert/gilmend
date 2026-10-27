@@ -1,4 +1,5 @@
-import { AlertTriangle, CheckCircle2, FlaskConical, GitCommitHorizontal, Terminal, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FlaskConical, GitCommitHorizontal, GitCompareArrows, Terminal, XCircle } from "lucide-react";
+import { compareCommits } from "@/lib/eval/results";
 import { summarizeResults, type CaseSummary } from "@/lib/eval/score";
 import type { EvalCaseResult, EvalResults, EvalRun } from "@/lib/eval/types";
 import type { DecisionKind } from "@/lib/types";
@@ -13,20 +14,33 @@ import { DECISION_LABEL, formatDateTime, formatEur } from "../format";
 const yesNo = (b: boolean) => (b ? "Yes" : "No");
 const seconds = (ms: number | null) => (ms === null ? "n/a" : `${(ms / 1000).toFixed(1)} s`);
 const outOf = (n: number, total: number) => `${n} of ${total} ${total === 1 ? "run" : "runs"}`;
-const percent = (n: number, total: number) => (total === 0 ? "" : ` (${Math.round((n / total) * 100)}%)`);
+const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+const numberWord = (n: number) => WORDS[n] ?? String(n);
 const compact = new Intl.NumberFormat("en-GB", { notation: "compact", maximumFractionDigits: 1 });
+
+const usd = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+
+/** The prices behind the cost estimate, in words: Meta's published starting price, or hand-set ones. */
+function priceBasis(results: EvalResults): string {
+  const p = results.pricing;
+  if (!p) return "no known price";
+  const figures = `$${usd.format(p.inputPerMillionTokensUsd)}/$${usd.format(p.outputPerMillionTokensUsd)} per M tokens in/out`;
+  return p.source.startsWith("Meta Model API")
+    ? `Meta's published starting price (${figures})`
+    : `the prices set by hand (${figures})`;
+}
 
 function expectedDecision(c: CaseSummary): string {
   return c.expected.acceptableDecisions.map((d) => DECISION_LABEL[d]).join(" or ");
 }
 
-function observedDecisions(counts: Partial<Record<DecisionKind, number>>): string {
-  const entries = Object.entries(counts) as [DecisionKind, number][];
-  if (entries.length === 0) return "No decision";
-  return entries
+function observedDecisions(counts: Partial<Record<DecisionKind, number>>, notFinished: number): string {
+  const entries = (Object.entries(counts) as [DecisionKind, number][])
     .sort((a, b) => b[1] - a[1])
-    .map(([d, n]) => `${DECISION_LABEL[d]} ×${n}`)
-    .join(", ");
+    .map(([d, n]) => `${DECISION_LABEL[d]} ×${n}`);
+  // A run that did not finish is counted on its own: its fallback answer is not a decision.
+  if (notFinished > 0) entries.push(`Not finished ×${notFinished}`);
+  return entries.length === 0 ? "No decision" : entries.join(", ");
 }
 
 function amountRange(c: CaseSummary): string {
@@ -45,9 +59,14 @@ function missedFields(run: EvalRun): string[] {
 }
 
 function RunPill({ run }: { run: EvalRun }) {
-  const what = run.completed
-    ? `${run.decision ? DECISION_LABEL[run.decision] : "No decision"}${run.carrierClaim ? ", claim" : ""}${run.needsHuman ? ", human" : ""}`
-    : "Not finished";
+  if (!run.completed) {
+    return (
+      <Pill tone="warn" icon={AlertTriangle}>
+        Run {run.run}: not finished{run.failure ? ` (${run.failure})` : ""}
+      </Pill>
+    );
+  }
+  const what = `${run.decision ? DECISION_LABEL[run.decision] : "No decision"}${run.carrierClaim ? ", claim" : ""}${run.needsHuman ? ", human" : ""}`;
   if (run.matches.all) {
     return (
       <Pill tone="ok" icon={CheckCircle2}>
@@ -58,7 +77,7 @@ function RunPill({ run }: { run: EvalRun }) {
   const missed = missedFields(run);
   return (
     <Pill tone="warn" icon={AlertTriangle}>
-      Run {run.run}: {what}. Missed {missed.length > 0 ? missed.join(", ") : "the run did not finish"}
+      Run {run.run}: {what}. Missed {missed.length > 0 ? missed.join(", ") : "an expectation"}
     </Pill>
   );
 }
@@ -100,7 +119,7 @@ function CaseCard({ result, summary, index }: { result: EvalCaseResult; summary:
           <Eyebrow>Observed</Eyebrow>
           <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
             <Fact label="Decision">
-              {observedDecisions(summary.decisionCounts)}
+              {observedDecisions(summary.decisionCounts, summary.notFinished)}
               <span className="block text-xs text-muted">{outOf(matched.decision, runs)} acceptable</span>
             </Fact>
             <Fact label="Carrier claim kept">
@@ -123,6 +142,11 @@ function CaseCard({ result, summary, index }: { result: EvalCaseResult; summary:
               ) : (
                 <span className="tabular">
                   {summary.medianSamRegions} {summary.medianSamRegions === 1 ? "region" : "regions"} (median), {outOf(summary.samRuns, runs)}
+                </span>
+              )}
+              {summary.samCalledByCodeRuns > 0 && (
+                <span className="block text-xs text-muted">
+                  called by code, not the model, in {outOf(summary.samCalledByCodeRuns, runs)}
                 </span>
               )}
             </Fact>
@@ -189,9 +213,10 @@ function Framing({ cases, runsPerCase }: { cases: number; runsPerCase: number })
       <strong>
         {cases} cases × {runsPerCase} {runsPerCase === 1 ? "run" : "runs"}: a sanity check on the demo, not a benchmark.
       </strong>{" "}
-      That is too few runs to put a rate on, so a case that went {runsPerCase} of {runsPerCase} can still fail one run in ten. These
-      are also the six cases the agent was built and tuned on (its prompt, guardrails and SAM concepts were adjusted while looking
-      at them), so this shows how repeatable it is on them, not how it does on parcels it has never seen. What counts as right is
+      That is too few runs to put a rate on: {runsPerCase} of {runsPerCase} rules out very little, and such a case could still fail
+      often on other runs. These are also the {numberWord(cases)} {cases === 1 ? "case" : "cases"} the agent was built and tuned on
+      (its prompt, guardrails and SAM concepts were adjusted while looking at them), so this shows how repeatable it is on them,
+      not how it does on parcels it has never seen. What counts as right is
       what we wrote down ourselves in <code className="font-mono text-[13px]">data/demo-cases.json</code>; the orders are
       fictitious and the photos are AI-generated stand-ins. Amounts and deadlines come from code, not from the model, and the SAM
       column counts the regions it outlined, not whether the outline is right.
@@ -199,8 +224,43 @@ function Framing({ cases, runsPerCase }: { cases: number; runsPerCase: number })
   );
 }
 
-export function EvalReport({ results, file }: { results: EvalResults; file: string }) {
+/**
+ * Shown when the commit that was measured is not the commit this site runs: other changes to the
+ * prompt, guardrails or tools may have landed since, and the figures below describe the measured
+ * code, not necessarily the agent the visitor can try. Nothing shows when the host reports no commit
+ * (local development) or when the two are the same.
+ */
+function CommitNote({ measured, deployed }: { measured: string | null; deployed: string }) {
+  return (
+    <Note tone="warn" icon={GitCompareArrows}>
+      <strong>
+        {measured ? (
+          <>
+            Measured on commit <code className="font-mono text-[13px]">{measured}</code>
+          </>
+        ) : (
+          "Measured on an unknown commit"
+        )}
+        ; the agent deployed here (<code className="font-mono text-[13px]">{deployed}</code>) is not that one.
+      </strong>{" "}
+      Its code may have changed since, so these figures describe the measured version, not necessarily the agent you can try on this
+      site. The command below re-runs the evaluation on whatever code you check out.
+    </Note>
+  );
+}
+
+export function EvalReport({
+  results,
+  file,
+  deployedCommit,
+}: {
+  results: EvalResults;
+  file: string;
+  /** Commit the site is deployed from (VERCEL_GIT_COMMIT_SHA); undefined outside a deployment. */
+  deployedCommit?: string | null;
+}) {
   const summary = summarizeResults(results);
+  const commit = compareCommits(results.commit, deployedCommit);
   const runs = summary.totalRuns;
   const cases = summary.cases.length;
   const costKnown = results.estimatedCostUsd !== null;
@@ -210,12 +270,15 @@ export function EvalReport({ results, file }: { results: EvalResults; file: stri
         <Eyebrow>Evaluation</Eyebrow>
         <h1 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight text-ink sm:text-5xl">How the agent holds up</h1>
         <p className="mt-4 text-base leading-relaxed text-muted sm:text-lg">
-          The six demo cases, each run {results.runsPerCase} {results.runsPerCase === 1 ? "time" : "times"} on {results.engineLabel},
+          The {numberWord(cases)} demo {cases === 1 ? "case" : "cases"}, each run {results.runsPerCase}{" "}
+          {results.runsPerCase === 1 ? "time" : "times"} on {results.engineLabel},
           scored against the outcome we expected, with how much the runs varied.
         </p>
       </header>
 
       <Framing cases={cases} runsPerCase={results.runsPerCase} />
+
+      {commit.kind === "differs" && <CommitNote measured={commit.measured} deployed={commit.deployed} />}
 
       <section aria-labelledby="eval-summary" className="flex flex-col gap-4">
         <h2 id="eval-summary" className="sr-only">
@@ -225,7 +288,7 @@ export function EvalReport({ results, file }: { results: EvalResults; file: stri
           <Tile
             label="Every expectation met"
             figure={`${summary.matched.all}/${runs}`}
-            caption={`runs${percent(summary.matched.all, runs)}: decision, carrier claim, human review and claim eligibility all as expected`}
+            caption="runs: decision, carrier claim, human review and claim eligibility all as expected"
           />
           <Tile
             label="Same answer every run"
@@ -246,7 +309,7 @@ export function EvalReport({ results, file }: { results: EvalResults; file: stri
             figure={costKnown ? `$${results.estimatedCostUsd!.toFixed(2)}` : "unknown"}
             caption={
               costKnown
-                ? `for all ${runs} runs, an upper bound that bills every token at the full price: ${summary.totalTokens === null ? "no" : compact.format(summary.totalTokens)} tokens${summary.cachedTokens > 0 ? ` (${compact.format(summary.cachedTokens)} served from the provider's cache)` : ""} and ${summary.samRequests} SAM requests`
+                ? `for all ${runs} runs, an estimate at ${priceBasis(results)}, cache discounts ignored: ${summary.totalTokens === null ? "no" : compact.format(summary.totalTokens)} tokens${summary.cachedTokens > 0 ? ` (${compact.format(summary.cachedTokens)} served from the provider's cache)` : ""} and ${summary.samRequests} SAM requests`
                 : "the provider returned no token usage, so no cost is claimed"
             }
           />
@@ -275,8 +338,9 @@ export function EvalReport({ results, file }: { results: EvalResults; file: stri
       <Panel id="eval-reproduce" title="Reproduce it" icon={Terminal}>
         <p className="text-sm leading-relaxed text-muted">
           Needs a <code className="font-mono text-[13px]">MODEL_API_KEY</code> in <code className="font-mono text-[13px]">.env.local</code>.
-          It spends real credits, refuses the demo mock, and stops before the other runs if the projected cost is over $5 (add{" "}
-          <code className="font-mono text-[13px]">--yes</code> to go on).
+          It spends real credits, refuses the demo mock, and stops when the projected cost would go over $5 (add{" "}
+          <code className="font-mono text-[13px]">--yes</code> to go on). Reasoning effort and API host come from the environment, not
+          from the command: set them as shown below to match.
         </p>
         <pre className="mt-4 overflow-x-auto rounded-xl border border-border bg-surface-muted px-4 py-3 text-sm text-ink">
           <code className="font-mono">{results.command}</code>
@@ -299,6 +363,8 @@ export function EvalReport({ results, file }: { results: EvalResults; file: stri
           <Fact label="Results file">
             <span className="font-mono text-[13px]">data/eval/{file}</span>
           </Fact>
+          <Fact label="Reasoning effort">{results.settings ? results.settings.reasoningEffort : "not recorded in this file"}</Fact>
+          <Fact label="API host">{results.settings ? results.settings.apiHost : "not recorded in this file"}</Fact>
           <Fact label="Cost estimate based on">{results.pricing ? results.pricing.source : "no price for this engine"}</Fact>
         </dl>
         {summary.runsWithoutUsage > 0 && (
