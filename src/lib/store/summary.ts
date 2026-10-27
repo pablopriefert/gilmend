@@ -94,3 +94,29 @@ export function summarizeCases(all: CaseRecord[], now: Date = new Date()): Cases
     dueCaseIds: due.map((c) => c.id),
   };
 }
+
+export interface RecordedRunsSummary {
+  /** How many recorded showcase runs are listed. */
+  count: number;
+  /** Sum of maxCompensationEur of the recorded runs that held money when they were run. */
+  recoverableEur: number;
+  /** Day of the most recent recording (YYYY-MM-DD), null when there is none. */
+  asOf: string | null;
+}
+
+/**
+ * The figure of the recorded showcase runs, kept apart from the live counter (final review of
+ * 27 Oct 2026: on a fresh deployment the counter reads 0 because these runs are excluded, and a
+ * judge saw an empty product). It is computed from the recorded cases themselves, each read as of
+ * its own recording (the same frozen clock the list uses, `caseClock`), so the amount is what
+ * those runs found on that day, never a number written here. A recorded run a visitor rejected
+ * (the stored copy) stops counting, like a live one.
+ */
+export function summarizeRecordedRuns(all: CaseRecord[]): RecordedRunsSummary {
+  const recorded = all.filter((c) => c.recorded);
+  const cents = recorded
+    .filter((c) => isRecoverable(c, new Date(c.createdAt)))
+    .reduce((sum, c) => sum + Math.round((c.claim?.maxCompensationEur ?? 0) * 100), 0);
+  const days = recorded.map((c) => c.recorded!.recordedOn).sort();
+  return { count: recorded.length, recoverableEur: cents / 100, asOf: days.length > 0 ? days[days.length - 1] : null };
+}

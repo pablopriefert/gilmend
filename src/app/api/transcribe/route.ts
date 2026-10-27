@@ -3,7 +3,7 @@ import { MAX_VOICE_BYTES, MAX_VOICE_SECONDS, VOICE_MODEL } from "@/lib/voice/lim
 import { issueVoiceReceipt } from "@/lib/voice/token";
 import { TranscribeError, transcribeAudio } from "@/lib/voice/transcribe";
 import { inspectWav } from "@/lib/voice/wav";
-import { accessCodeRequired, hasValidAccessCode } from "../_lib/access";
+import { requireAccessCode } from "../_lib/access";
 import { clientKey, rateLimit } from "../_lib/rate-limit";
 import { errorResponse } from "../_lib/responses";
 
@@ -43,8 +43,9 @@ function isUploadedFile(value: FormDataEntryValue | null): value is File {
  * signed and only present on a real transcription (see lib/voice/token.ts). The audio is held in
  * memory for the call and never written to disk.
  *
- * Without MODEL_API_KEY, or on a public deployment without the access code, it answers a
- * labelled canned transcript (`demo: true`) instead of failing, as POST /api/reports does.
+ * Without MODEL_API_KEY it answers a labelled canned transcript (`demo: true`) instead of
+ * failing, as POST /api/reports does. On a public deployment (DAMAGE_DESK_ACCESS_CODE set) the
+ * `x-access-code` header must carry the code, else 401 (and 429 after too many wrong codes).
  */
 export async function POST(request: Request): Promise<Response> {
   const limited =
@@ -56,6 +57,14 @@ export async function POST(request: Request): Promise<Response> {
     res.headers.set("Retry-After", String(limited.retryAfterSeconds));
     return res;
   }
+
+  // On a public deployment (access code set) dictation needs the code too, as filing a report
+  // does: refused before the audio is read. Locally (no code set) this does nothing.
+  const refused = requireAccessCode(
+    request,
+    "Dictating a message on this public demo needs the access code from the submission. Type the message instead.",
+  );
+  if (refused) return refused;
 
   const declaredLength = Number(request.headers.get("content-length") ?? "0");
   if (declaredLength > MAX_BODY_BYTES) {
@@ -88,10 +97,8 @@ export async function POST(request: Request): Promise<Response> {
   const language = typeof languageField === "string" ? languageField.trim().toLowerCase() : "";
   const knownLanguage = language === "en" || language === "fr" ? language : undefined;
 
-  // Same two reasons as the reports route, in the same order.
-  let fellBackReason: "no_credentials" | "access_code" | null = null;
-  if (!hasModelKey()) fellBackReason = "no_credentials";
-  else if (accessCodeRequired() && !hasValidAccessCode(request)) fellBackReason = "access_code";
+  // Without a key the form still gets a labelled canned text (the access code was checked above).
+  const fellBackReason: "no_credentials" | null = hasModelKey() ? null : "no_credentials";
 
   if (fellBackReason) {
     return Response.json(

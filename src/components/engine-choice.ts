@@ -10,7 +10,7 @@ export interface EngineAvailability {
   /** OPENROUTER_API_KEY is set: the cheap test engine is offered. */
   openRouter?: boolean;
   openRouterDetail?: EngineDetail;
-  /** DAMAGE_DESK_ACCESS_CODE is set: a real engine needs the code, else the report runs in demo mode. */
+  /** DAMAGE_DESK_ACCESS_CODE is set: every new report (demo mode included) and every dictation needs the code. */
   accessCodeRequired?: boolean;
 }
 

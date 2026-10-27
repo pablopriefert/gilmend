@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeEngine } from "@/lib/config";
 import { DEMO_SCENARIOS } from "./demo-scenarios";
@@ -226,14 +226,43 @@ describe("demo case buttons", () => {
 
 describe("access code on a public deployment", () => {
   const PUBLIC = { museKey: true, openWeights: false, accessCodeRequired: true };
+  // The code is remembered for the tab: a test that typed one must not leave it to the next.
+  beforeEach(() => window.sessionStorage.clear());
 
-  it("says real engines need the code and shows the demo-mode outcome without it", () => {
+  it("tells the judges, above the form, to use the access code, and what happens without it", () => {
+    render(<ReportForm availability={PUBLIC} />);
+    const notice = screen.getByTestId("access-code-notice");
+    expect(notice).toHaveTextContent("Judges: use the access code from the submission to run the real agent.");
+    expect(notice).toHaveTextContent(/accepts no new report, not even in demo mode/);
+    expect(within(notice).getByRole("link", { name: "Cases page" })).toHaveAttribute("href", "/");
+    // Above the fields, not after them.
+    expect(notice.compareDocumentPosition(screen.getByLabelText("Order number")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows no notice on a local run", () => {
+    render(<ReportForm availability={NONE} />);
+    expect(screen.queryByTestId("access-code-notice")).not.toBeInTheDocument();
+  });
+
+  it("says nothing is accepted without the code, then which engine runs once it is typed", () => {
     render(<ReportForm availability={PUBLIC} />);
     expect(screen.getByLabelText("Access code")).toBeInTheDocument();
-    expect(screen.getByText(/This report will run as/).textContent).toMatch(/DEMO MODE/);
-    expect(screen.getByText(/needs the access code/)).toBeInTheDocument();
+    expect(screen.getByText(/nothing is accepted until you enter the access code/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Access code"), { target: { value: "judges-2026" } });
     expect(screen.getByText(/This report will run as/).textContent).toMatch(/Muse Spark/);
+    expect(screen.queryByText(/nothing is accepted/)).not.toBeInTheDocument();
+  });
+
+  it("does not send a report without the code: it says so and moves to the code field", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReportForm availability={PUBLIC} />);
+    fill("#1001", "camille.laurent@example.com", "My vase arrived broken");
+    attach(image());
+    submit();
+    expect(await screen.findByRole("alert")).toHaveTextContent(/access code from the submission/);
+    expect(screen.getByLabelText("Access code")).toHaveFocus();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("sends the code with the report", async () => {

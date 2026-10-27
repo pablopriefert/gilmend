@@ -57,12 +57,14 @@ export function EngineSwitch({
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
         This report will run as <EngineBadge engine={willRunAs} detail={detailFor(willRunAs, availability)} />
-        {willRunAs === "demo-mock" && value !== "demo-mock" && (
-          <span className="text-muted">
-            {availability.accessCodeRequired && !hasAccess
-              ? "(a real engine needs the access code of this demo)"
-              : "(the requested engine is not configured on this server)"}
-          </span>
+        {availability.accessCodeRequired && !hasAccess ? (
+          // The server takes no report at all without the code (demo mode included).
+          <span className="text-muted">(nothing is accepted until you enter the access code of this demo)</span>
+        ) : (
+          willRunAs === "demo-mock" &&
+          value !== "demo-mock" && (
+            <span className="text-muted">(the requested engine is not configured on this server)</span>
+          )
         )}
       </p>
     </fieldset>

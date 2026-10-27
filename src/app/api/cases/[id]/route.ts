@@ -1,6 +1,6 @@
 import { getCase, updateCase } from "@/lib/store/cases";
 import type { CaseRecord, CaseStatus, TraceStep } from "@/lib/types";
-import { accessCodeRequired, hasValidAccessCode } from "../../_lib/access";
+import { requireAccessCode } from "../../_lib/access";
 import { errorResponse, failureResponse, isValidCaseId } from "../../_lib/responses";
 
 export const dynamic = "force-dynamic";
@@ -32,16 +32,16 @@ export async function GET(_request: Request, { params }: RouteContext): Promise<
  * Body: `{ status?: "approved" | "rejected" | "needs_review", customerReply?: string }`.
  * Approving only marks the case approved ("ready to send"); nothing is sent to a carrier or
  * a customer. Editing replaces the drafted customer reply. Every change is added to the trace.
- * When DAMAGE_DESK_ACCESS_CODE is set, the `x-access-code` header must carry it (else 401).
+ * When DAMAGE_DESK_ACCESS_CODE is set, the `x-access-code` header must carry it (else 401, and
+ * 429 after too many wrong codes).
  */
 export async function PATCH(request: Request, { params }: RouteContext): Promise<Response> {
   const { id } = await params;
   if (!isValidCaseId(id)) return errorResponse(404, "not_found", "Case not found.");
   // On a public deployment (DAMAGE_DESK_ACCESS_CODE set) any visitor could approve, reject or
   // rewrite the reply of any case: changing one needs the shared demo code.
-  if (accessCodeRequired() && !hasValidAccessCode(request)) {
-    return errorResponse(401, "access_code_required", "Enter the access code of this demo to change a case.");
-  }
+  const refused = requireAccessCode(request, "Enter the access code of this demo to change a case.");
+  if (refused) return refused;
 
   let body: unknown;
   try {

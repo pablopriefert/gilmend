@@ -45,13 +45,23 @@ describe("recorded runs in the UI", () => {
 
   it("the header says recorded runs are listed but not counted", () => {
     render(<CasesDashboard cases={[recorded(), { ...recorded(), id: "second" }]} error={null} now={NOW} />);
-    expect(screen.getByTestId("recorded-note")).toHaveTextContent("2 recorded runs (real Muse runs saved with the code) are listed below but not counted.");
+    expect(screen.getByTestId("recorded-note")).toHaveTextContent("2 recorded runs (real Muse runs saved with the code) are listed below but not counted in the live counter.");
     expect(screen.getByTestId("counter").textContent).toBe("€0 recoverable this month · 0 claims due this week");
+  });
+
+  it("the header shows a second, labelled figure for the recorded runs, computed from them and dated", () => {
+    // Looked at on 4 Nov: the live counter is 0 (recorded runs are excluded) and the recorded figure
+    // is what the runs found on the day they were made, even though their deadline has passed since.
+    const second = { ...recorded(), id: "second", claim: { ...recorded().claim!, maxCompensationEur: 25 } };
+    render(<CasesDashboard cases={[recorded(), second]} error={null} now={LATER} />);
+    expect(screen.getByTestId("counter").textContent).toBe("€0 recoverable this month · 0 claims due this week");
+    expect(screen.getByTestId("recorded-counter").textContent).toBe("Recorded runs: €80.20 recoverable (as of 27 Oct 2026)");
   });
 
   it("the header says nothing about recorded runs when there are none", () => {
     render(<CasesDashboard cases={[makeCase()]} error={null} now={NOW} />);
     expect(screen.queryByTestId("recorded-note")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("recorded-counter")).not.toBeInTheDocument();
   });
 
   it("the case page explains the recording and keeps the actions available", () => {

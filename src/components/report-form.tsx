@@ -29,6 +29,9 @@ type LanguageChoice = "auto" | "en" | "fr";
 const PRIVATE_DICTATION_ERROR =
   "This message was dictated with the Meta API, so it cannot run privately. Clear it and type it, or pick another engine.";
 
+const ACCESS_CODE_NEEDED =
+  "Enter the access code from the submission to send a report. This public demo takes no new report without it.";
+
 const INPUT_CLASS =
   "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm placeholder:text-muted aria-[invalid=true]:border-danger";
 
@@ -197,6 +200,13 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
       return;
     }
 
+    // The server refuses it anyway (401); saying so here saves a round trip and a wrong guess.
+    if (availability.accessCodeRequired && !hasAccess) {
+      setServerError(ACCESS_CODE_NEEDED);
+      document.getElementById("access-code")?.focus();
+      return;
+    }
+
     setSubmitting(true);
     try {
       const body = new FormData();
@@ -251,6 +261,25 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
             the photos, decides and prepares the carrier claim. Nothing is sent to anyone.
           </p>
         </div>
+
+        {availability.accessCodeRequired && (
+          // On a public deployment the code gates every new report, demo mode included, so a judge
+          // must be told before filling the form (final review of 27 Oct 2026).
+          <div
+            role="note"
+            data-testid="access-code-notice"
+            className="rounded-lg border border-border bg-accent-soft p-3 text-sm"
+          >
+            <p className="font-semibold">Judges: use the access code from the submission to run the real agent.</p>
+            <p className="mt-1 text-muted">
+              Without it this public demo accepts no new report, not even in demo mode. The recorded runs on the{" "}
+              <Link href="/" className="font-medium underline underline-offset-2">
+                Cases page
+              </Link>{" "}
+              are real runs of the agent and need no code.
+            </p>
+          </div>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field id="orderNumber" label="Order number" error={errors.orderNumber}>
@@ -388,7 +417,7 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
             id="access-code"
             value={accessCode}
             onChange={setAccessCode}
-            hint="This public demo runs in demo mode for everyone. Real engines (Muse, open weights) need the access code. Never type real customer data here."
+            hint="Needed to send a report or dictate one (the real engines and demo mode alike). Never type real customer data here."
           />
         )}
 
