@@ -115,7 +115,9 @@ export function EvidenceSection({
               ? ": no speech model was called, the text below is not what was said."
               : voiceNote.edited
                 ? ", edited by the customer after transcription."
-                : ", sent as transcribed."}
+                : voiceNote.partial
+                  ? ", sent as transcribed, with typed text added."
+                  : ", sent as transcribed."}
           </span>
         </p>
       )}

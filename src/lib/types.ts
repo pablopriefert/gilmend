@@ -67,8 +67,10 @@ export interface VoiceNote {
   durationMs: number;
   /** True when no real transcription happened (no key, no access code): canned text. */
   demo: boolean;
-  /** True when the customer changed the transcript before sending. */
+  /** True when a transcript is no longer in the message word for word (the customer changed it). */
   edited: boolean;
+  /** True when the message also holds typed text around or between the transcripts. */
+  partial?: boolean;
 }
 
 export type DamageType =

@@ -26,6 +26,9 @@ interface PhotoItem {
 
 type LanguageChoice = "auto" | "en" | "fr";
 
+const PRIVATE_DICTATION_ERROR =
+  "This message was dictated with the Meta API, so it cannot run privately. Clear it and type it, or pick another engine.";
+
 const INPUT_CLASS =
   "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm placeholder:text-muted aria-[invalid=true]:border-danger";
 
@@ -85,18 +88,24 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
   const [submitting, setSubmitting] = useState(false);
   const [loadedDemo, setLoadedDemo] = useState<string | null>(null);
   const [loadingDemo, setLoadingDemo] = useState(false);
-  // Set once a voice message was transcribed into the message box; sent with the report so
-  // the case can say how the text was written.
-  const [voice, setVoice] = useState<VoiceResult | null>(null);
+  // Every voice message transcribed into the message box so far, with the server's receipt for
+  // each; sent with the report so the server (not this page) says how the text was written.
+  const [voice, setVoice] = useState<VoiceResult[]>([]);
+  // A clip is being recorded or transcribed: its text is not in the message yet.
+  const [voiceBusy, setVoiceBusy] = useState(false);
   const [accessCode, setAccessCode] = useAccessCode();
   const hasAccess = accessCode.trim() !== "";
+  const runsAs = effectiveEngine(engine, availability, hasAccess);
+  // Dictation is a call to the Meta Model API, which a private run promises never to make.
+  const privateRun = runsAs === "open-weights";
+  const dictatedWithMeta = voice.some((clip) => !clip.demo);
   const fileInput = useRef<HTMLInputElement>(null);
   const orderRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const messageRef = useRef<HTMLTextAreaElement>(null);
 
   function onVoiceTranscript(result: VoiceResult): void {
-    setVoice(result);
+    setVoice((clips) => [...clips, result]);
     // Never overwrite what the customer already typed: the transcript goes after it.
     setMessage((current) => (current.trim() ? `${current.trimEnd()}\n\n${result.transcript}` : result.transcript));
     setErrors((e) => ({ ...e, message: undefined }));
@@ -147,7 +156,7 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
       setOrderNumber(s.orderNumber);
       setEmail(s.email);
       setMessage(s.message);
-      setVoice(null);
+      setVoice([]);
       setLanguage(s.language);
       setErrors({});
       setLoadedDemo(s.title);
@@ -163,6 +172,17 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
     if (submitting) return;
     setServerError(null);
     setSavedCaseId(null);
+
+    // The recording is still open, or its text has not come back: sending now would leave the
+    // dictation out of a report that then claims to be typed.
+    if (voiceBusy) {
+      setServerError("Stop the recording and wait for the transcript before sending the report.");
+      return;
+    }
+    if (privateRun && dictatedWithMeta) {
+      setServerError(PRIVATE_DICTATION_ERROR);
+      return;
+    }
 
     const found = validateReport({ orderNumber, email, message }, photos.map((p) => p.file));
     setErrors(found);
@@ -185,14 +205,17 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
       body.set("message", message.trim());
       body.set("engine", engine);
       if (language !== "auto") body.set("language", language);
-      if (voice && message.trim()) {
+      if (voice.length > 0 && message.trim()) {
+        // The transcripts and their receipts: the server checks the receipts and works out for
+        // itself what was kept, changed or typed around them.
         body.set(
           "voiceNote",
           JSON.stringify({
-            durationMs: voice.durationMs,
-            demo: voice.demo,
-            // Edited when the transcript is no longer in the message as it was dictated.
-            edited: !message.includes(voice.transcript),
+            clips: voice.map((clip) => ({
+              transcript: clip.transcript,
+              durationMs: clip.durationMs,
+              token: clip.voiceReceipt,
+            })),
           }),
         );
       }
@@ -217,8 +240,6 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
       setSubmitting(false);
     }
   }
-
-  const runsAs = effectiveEngine(engine, availability, hasAccess);
 
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
@@ -274,7 +295,7 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
             onChange={(e) => {
               setMessage(e.target.value);
               // Emptied and retyped: it is a typed message now, not a dictated one.
-              if (e.target.value.trim() === "") setVoice(null);
+              if (e.target.value.trim() === "") setVoice([]);
             }}
             rows={5}
             placeholder="My vase arrived broken…"
@@ -282,12 +303,24 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
             aria-describedby={errors.message ? "message-error" : "message-hint"}
             className={INPUT_CLASS}
           />
-          <VoiceRecorder
-            language={language}
-            accessCode={accessCode}
-            disabled={submitting}
-            onTranscript={onVoiceTranscript}
-          />
+          {privateRun ? (
+            <>
+              <p className="text-xs text-muted">Voice input uses the Meta API, which is unavailable in private mode.</p>
+              {dictatedWithMeta && (
+                <p role="alert" className="text-sm text-danger">
+                  {PRIVATE_DICTATION_ERROR}
+                </p>
+              )}
+            </>
+          ) : (
+            <VoiceRecorder
+              language={language}
+              accessCode={accessCode}
+              disabled={submitting}
+              onTranscript={onVoiceTranscript}
+              onBusyChange={setVoiceBusy}
+            />
+          )}
         </Field>
 
         <Field id="language" label="Customer language">

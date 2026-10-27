@@ -1,5 +1,6 @@
 import { hasModelKey } from "@/lib/config";
 import { MAX_VOICE_BYTES, MAX_VOICE_SECONDS, VOICE_MODEL } from "@/lib/voice/limits";
+import { issueVoiceReceipt } from "@/lib/voice/token";
 import { TranscribeError, transcribeAudio } from "@/lib/voice/transcribe";
 import { inspectWav } from "@/lib/voice/wav";
 import { accessCodeRequired, hasValidAccessCode } from "../_lib/access";
@@ -38,7 +39,8 @@ function isUploadedFile(value: FormDataEntryValue | null): value is File {
  * POST /api/transcribe: speech to text for a spoken damage report.
  * multipart/form-data with `audio` (a mono 16-bit PCM WAV at 16 or 24 kHz, at most
  * MAX_VOICE_SECONDS long: the browser encodes it) and an optional `language` ("en" or "fr").
- * Answers `{ transcript, durationMs, model, demo, fellBackReason }`. The audio is held in
+ * Answers `{ transcript, durationMs, model, demo, fellBackReason, voiceReceipt }`; the receipt is
+ * signed and only present on a real transcription (see lib/voice/token.ts). The audio is held in
  * memory for the call and never written to disk.
  *
  * Without MODEL_API_KEY, or on a public deployment without the access code, it answers a
@@ -106,14 +108,18 @@ export async function POST(request: Request): Promise<Response> {
 
   try {
     const result = await transcribeAudio(bytes, { language: knownLanguage });
+    // Our own header reading, as the API's audioDurationMs can be missing.
+    const durationMs = result.durationMs || wav.durationMs;
     return Response.json(
       {
         transcript: result.transcript,
-        // Our own header reading, as the API's audioDurationMs can be missing.
-        durationMs: result.durationMs || wav.durationMs,
+        durationMs,
         model: VOICE_MODEL,
         demo: false,
         fellBackReason: null,
+        // Proof, for POST /api/reports, that these words came out of the speech model. Only a
+        // real transcription gets one: a canned demo text never does.
+        voiceReceipt: issueVoiceReceipt(result.transcript, durationMs),
       },
       { headers: { "Cache-Control": "no-store" } },
     );

@@ -277,6 +277,11 @@ describe("case page: voice message", () => {
       <CaseView caseRecord={withNote({ model: "muse-voice-transcribe-1.0", durationMs: 12_400, demo: false, edited: true })} rules={makeRules()} now={NOW} />,
     );
     expect(screen.getByText(/edited by the customer after transcription/)).toBeInTheDocument();
+
+    rerender(
+      <CaseView caseRecord={withNote({ model: "muse-voice-transcribe-1.0", durationMs: 12_400, demo: false, edited: false, partial: true })} rules={makeRules()} now={NOW} />,
+    );
+    expect(screen.getByText(/sent as transcribed, with typed text added/)).toBeInTheDocument();
   });
 
   it("never attributes a canned transcript to the speech model", () => {

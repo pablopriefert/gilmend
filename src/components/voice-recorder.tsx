@@ -11,6 +11,8 @@ export interface VoiceResult {
   model: string;
   /** Canned text: the server could not transcribe for real (no key, no access code). */
   demo: boolean;
+  /** Signed proof that the server transcribed this text (absent on a demo transcript). */
+  voiceReceipt?: string;
 }
 
 type Phase = "idle" | "recording" | "transcribing";
@@ -51,11 +53,14 @@ export function VoiceRecorder({
   accessCode,
   disabled,
   onTranscript,
+  onBusyChange,
 }: {
   language: "auto" | "en" | "fr";
   accessCode: string;
   disabled?: boolean;
   onTranscript: (result: VoiceResult) => void;
+  /** True while a clip is being recorded or transcribed: the form must not be sent meanwhile. */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   // Decided after mount so the server render and the first client render agree.
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -71,10 +76,14 @@ export function VoiceRecorder({
   const startedAt = useRef(0);
   const mounted = useRef(true);
   // The props can change while a clip is being recorded or sent: the callback side reads the latest.
-  const latest = useRef({ language, accessCode, onTranscript });
+  const latest = useRef({ language, accessCode, onTranscript, onBusyChange });
   useEffect(() => {
-    latest.current = { language, accessCode, onTranscript };
+    latest.current = { language, accessCode, onTranscript, onBusyChange };
   });
+
+  useEffect(() => {
+    latest.current.onBusyChange?.(phase !== "idle");
+  }, [phase]);
 
   useEffect(() => {
     mounted.current = true;
@@ -83,6 +92,8 @@ export function VoiceRecorder({
     return () => {
       // Leaving the page must switch the microphone (and its browser indicator) off.
       mounted.current = false;
+      // A recorder removed from the page (private mode) must not leave the form believing it is busy.
+      latest.current.onBusyChange?.(false);
       if (timer.current) clearInterval(timer.current);
       const r = recorder.current;
       if (r && r.state !== "inactive") {
@@ -126,6 +137,7 @@ export function VoiceRecorder({
         durationMs: data.durationMs ?? 0,
         model: data.model ?? (demo ? "demo-mock" : "muse-voice-transcribe-1.0"),
         demo,
+        voiceReceipt: demo ? undefined : data.voiceReceipt,
       });
       setStatus(
         demo
@@ -218,7 +230,9 @@ export function VoiceRecorder({
         <button
           type="button"
           onClick={() => (recording ? stop() : void start())}
-          disabled={disabled || phase === "transcribing"}
+          // Stop stays available while recording even if the form is busy: the microphone must
+          // always be possible to close.
+          disabled={(disabled && !recording) || phase === "transcribing"}
           className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 ${
             recording ? "border-danger bg-danger-soft text-danger" : "border-border bg-surface hover:bg-background"
           }`}

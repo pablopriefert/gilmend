@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeCase } from "@/components/fixtures";
 import type { CaseRecord, DamageReport } from "@/lib/types";
+import { issueVoiceReceipt } from "@/lib/voice/token";
 import { resetRateLimits } from "../_lib/rate-limit";
 
 const runAgent = vi.fn<(report: DamageReport, opts: { engine: string; caseId?: string }) => Promise<CaseRecord>>();
@@ -300,22 +301,75 @@ describe("POST /api/reports on Vercel (read-only project folder)", () => {
 });
 
 describe("POST /api/reports, voice note", () => {
-  const note = (over: Record<string, unknown> = {}) => JSON.stringify({ durationMs: 5000, demo: false, edited: false, ...over });
+  const KEY = "fake-key-for-test"; // secret-factice
+  const SAID = "Hi, my vase arrived broken this morning.";
+  /** What the form sends after a real dictation: the transcript and the receipt /api/transcribe signed. */
+  const dictated = (transcript = SAID, durationMs = 5000) =>
+    JSON.stringify({ clips: [{ transcript, durationMs, token: issueVoiceReceipt(transcript, durationMs, { MODEL_API_KEY: KEY }) }] });
 
-  it("stores the voice note label on the report, as a real transcription when the server has a key", async () => {
-    vi.stubEnv("MODEL_API_KEY", "fake-key-for-test"); // secret-factice
-    await POST(reportRequest({ fields: { voiceNote: note({ edited: true }) } }));
+  it("stores the voice note on the report, as a real transcription when the receipt checks out", async () => {
+    vi.stubEnv("MODEL_API_KEY", KEY);
+    await POST(reportRequest({ fields: { voiceNote: dictated() } }));
     expect(runAgent.mock.calls[0][0].voiceNote).toEqual({
       model: "muse-voice-transcribe-1.0",
       durationMs: 5000,
       demo: false,
-      edited: true,
+      edited: false,
+      partial: false,
     });
   });
 
+  it("works out edited from the message that was sent, not from what the browser says", async () => {
+    vi.stubEnv("MODEL_API_KEY", KEY);
+    await POST(reportRequest({ fields: { voiceNote: dictated("May vas arrived broken, order 1001.") } }));
+    expect(runAgent.mock.calls[0][0].voiceNote).toMatchObject({ demo: false, edited: true });
+  });
+
   it("cannot claim a real transcription when the server has no key", async () => {
-    await POST(reportRequest({ fields: { voiceNote: note() } }));
+    await POST(reportRequest({ fields: { voiceNote: dictated() } }));
     expect(runAgent.mock.calls[0][0].voiceNote).toMatchObject({ model: "demo-mock", demo: true });
+  });
+
+  it("does not believe the old label alone: a typed message cannot pass for a Muse transcription", async () => {
+    vi.stubEnv("MODEL_API_KEY", KEY);
+    // A public deployment with a key and an access code, a request WITHOUT the code: /api/transcribe
+    // would only have answered canned text, so no receipt exists and none can be invented.
+    vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", "judges-2026");
+    const forged = JSON.stringify({ durationMs: 5000, demo: false });
+    const noReceipt = JSON.stringify({ clips: [{ transcript: SAID, durationMs: 5000 }] });
+    const fakeReceipt = JSON.stringify({ clips: [{ transcript: SAID, durationMs: 5000, token: "e30.e30" }] });
+    for (const voiceNote of [forged, noReceipt, fakeReceipt]) {
+      runAgent.mockClear();
+      const res = await POST(reportRequest({ fields: { voiceNote } }));
+      expect(res.status).toBe(201);
+      const note = runAgent.mock.calls[0][0].voiceNote;
+      expect(note === undefined || note.demo).toBe(true);
+      expect(note?.model ?? "demo-mock").toBe("demo-mock");
+    }
+  });
+
+  it("refuses a private run for a message that was really dictated with the Meta API", async () => {
+    vi.stubEnv("MODEL_API_KEY", KEY);
+    vi.stubEnv("OPEN_WEIGHTS_BASE_URL", "https://weights.example.test/v1");
+    vi.stubEnv("OPEN_WEIGHTS_MODEL", "muse-glimmer");
+    const res = await POST(reportRequest({ fields: { voiceNote: dictated(), engine: "open-weights" } }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("voice_not_private");
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(saveCase).not.toHaveBeenCalled();
+  });
+
+  it("still runs privately for a typed message, and for a canned demo dictation that called nothing", async () => {
+    vi.stubEnv("MODEL_API_KEY", KEY);
+    vi.stubEnv("OPEN_WEIGHTS_BASE_URL", "https://weights.example.test/v1");
+    vi.stubEnv("OPEN_WEIGHTS_MODEL", "muse-glimmer");
+    const typed = await POST(reportRequest({ fields: { engine: "open-weights" } }));
+    expect(typed.status).toBe(201);
+    expect(runAgent.mock.calls[0][1].engine).toBe("open-weights");
+    const canned = JSON.stringify({ clips: [{ transcript: SAID, durationMs: 5000 }] });
+    const demo = await POST(reportRequest({ fields: { voiceNote: canned, engine: "open-weights" } }));
+    expect(demo.status).toBe(201);
+    expect(runAgent.mock.calls[1][0].voiceNote).toMatchObject({ demo: true });
   });
 
   it("ignores a malformed label and leaves typed messages without one", async () => {

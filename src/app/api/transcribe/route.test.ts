@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { verifyVoiceReceipt } from "@/lib/voice/token";
 import { encodeWav } from "@/lib/voice/wav";
 import { resetRateLimits } from "../_lib/rate-limit";
 
@@ -40,13 +41,16 @@ describe("POST /api/transcribe, demo mode", () => {
   it("without a key answers a labelled canned transcript and calls no model", async () => {
     const res = await POST(request());
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({
+    const body = await res.json();
+    expect(body).toMatchObject({
       demo: true,
       model: "demo-mock",
       fellBackReason: "no_credentials",
       durationMs: 3000,
       transcript: expect.stringContaining("vase"),
     });
+    // A canned text never comes with a receipt: it must not pass for a real transcription later.
+    expect(body).not.toHaveProperty("voiceReceipt");
     expect(transcribeAudio).not.toHaveBeenCalled();
   });
 
@@ -59,7 +63,9 @@ describe("POST /api/transcribe, demo mode", () => {
     vi.stubEnv("MODEL_API_KEY", "k"); // secret-factice
     vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", "judges-2026");
     const without = await POST(request());
-    expect(await without.json()).toMatchObject({ demo: true, fellBackReason: "access_code" });
+    const canned = await without.json();
+    expect(canned).toMatchObject({ demo: true, fellBackReason: "access_code" });
+    expect(canned).not.toHaveProperty("voiceReceipt");
     const wrong = await POST(request({ headers: { "x-access-code": "nope" } }));
     expect((await wrong.json()).fellBackReason).toBe("access_code");
     expect(transcribeAudio).not.toHaveBeenCalled();
@@ -73,14 +79,18 @@ describe("POST /api/transcribe, real mode", () => {
     transcribeAudio.mockResolvedValue({ transcript: "My vase arrived broken.", durationMs: 3120, model: "muse-voice-transcribe-1.0" });
     const res = await POST(request({ fields: { language: "en" } }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
+    const body = await res.json();
+    expect(body).toEqual({
       transcript: "My vase arrived broken.",
       durationMs: 3120,
       model: "muse-voice-transcribe-1.0",
       demo: false,
       fellBackReason: null,
+      voiceReceipt: expect.any(String),
     });
     expect(transcribeAudio.mock.calls[0][1]).toEqual({ language: "en" });
+    // The receipt is what lets /api/reports call the message a Muse transcription.
+    expect(verifyVoiceReceipt(body.voiceReceipt, "My vase arrived broken.")).toBe(3120);
   });
 
   it("accepts the right access code on a public deployment", async () => {

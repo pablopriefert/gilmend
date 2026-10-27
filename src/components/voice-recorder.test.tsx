@@ -71,7 +71,7 @@ describe("VoiceRecorder", () => {
   it("records, uploads the WAV with the access code and language, and hands over the transcript", async () => {
     const fetchMock = mockTranscribe({
       ok: true,
-      body: { transcript: "My vase arrived broken.", durationMs: 3100, model: "muse-voice-transcribe-1.0", demo: false },
+      body: { transcript: "My vase arrived broken.", durationMs: 3100, model: "muse-voice-transcribe-1.0", demo: false, voiceReceipt: "receipt.sig" },
     });
     const onTranscript = setup({ language: "en", accessCode: " judges-2026 " });
 
@@ -88,6 +88,7 @@ describe("VoiceRecorder", () => {
       durationMs: 3100,
       model: "muse-voice-transcribe-1.0",
       demo: false,
+      voiceReceipt: "receipt.sig",
     });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/transcribe");
@@ -170,6 +171,47 @@ describe("VoiceRecorder", () => {
       vi.advanceTimersByTime(84_000);
     });
     expect(FakeRecorder.instances[0].state).toBe("inactive");
+  });
+
+  it("never passes on a receipt for a demo transcript, whatever the answer carries", async () => {
+    mockTranscribe({ ok: true, body: { transcript: "Hello.", durationMs: 1, model: "demo-mock", demo: true, voiceReceipt: "smuggled.sig" } });
+    const onTranscript = setup();
+    start();
+    await screen.findByRole("button", { name: "Stop recording" });
+    stop();
+    await waitFor(() => expect(onTranscript).toHaveBeenCalled());
+    expect(onTranscript.mock.calls[0][0].voiceReceipt).toBeUndefined();
+  });
+
+  it("keeps Stop recording usable when the form becomes busy, so the microphone can always be closed", async () => {
+    const { rerender } = render(<VoiceRecorder language="auto" accessCode="" onTranscript={vi.fn()} />);
+    start();
+    await screen.findByRole("button", { name: "Stop recording" });
+    rerender(<VoiceRecorder language="auto" accessCode="" disabled onTranscript={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Stop recording" })).toBeEnabled();
+  });
+
+  it("tells the form while it is busy (recording, then transcribing) and when it is free again", async () => {
+    mockTranscribe({ ok: true, body: { transcript: "Hello.", durationMs: 1, model: "x", demo: false } });
+    const onBusyChange = vi.fn();
+    setup({ onBusyChange });
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+    start();
+    await screen.findByRole("button", { name: "Stop recording" });
+    expect(onBusyChange).toHaveBeenLastCalledWith(true);
+    stop();
+    await screen.findByRole("button", { name: "Record a voice message" });
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(false));
+  });
+
+  it("frees the form when it is removed from the page mid-recording", async () => {
+    const onBusyChange = vi.fn();
+    const { unmount } = render(<VoiceRecorder language="auto" accessCode="" onTranscript={vi.fn()} onBusyChange={onBusyChange} />);
+    start();
+    await screen.findByRole("button", { name: "Stop recording" });
+    expect(onBusyChange).toHaveBeenLastCalledWith(true);
+    unmount();
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
   });
 
   it("can be disabled (while the report is being sent)", () => {
