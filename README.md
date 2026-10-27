@@ -22,7 +22,7 @@ language. The merchant reviews the case and clicks **Approve**, **Edit** or **Re
 Nothing is sent without a click, and this app sends nothing at all: the claim and the reply are
 drafts that the merchant files or sends.
 
-**Live demo: https://damage-desk-ten.vercel.app** (the six recorded runs are open to everyone;
+**Live demo: https://gilmend.vercel.app** (the six recorded runs are open to everyone;
 filing a new report needs the access code given in the hackathon submission).
 
 Built for the Meta Global AI Developer Hackathon, Startups track, theme "Build for Your World".
@@ -371,7 +371,7 @@ computed from the recordings. Everything in them is fictitious, and a test
 
 ## Deploy to Vercel
 
-**Deployed on 27 Oct 2026** at https://damage-desk-ten.vercel.app (Vercel project linked to this
+**Deployed on 27 Oct 2026** at https://gilmend.vercel.app (Vercel project linked to this
 repository: every push to `main` redeploys). The checklist it followed, in this order:
 
 1. Keep `next` at 16.4.1 or later (16.4.0 has critical advisories) and `npm audit` clean; re-run
@@ -437,7 +437,7 @@ Storage, the Blob store).
   computed maximum may be higher than the real indemnity.
 - **Nothing is filed.** The app files no claim and sends no e-mail; a human does.
 - **Not legal advice.** The rules are our reading of public terms and statutes.
-- **Public deployment** (https://damage-desk-ten.vercel.app, `next` 16.4.1, `undici` 6.29.1,
+- **Public deployment** (https://gilmend.vercel.app, `next` 16.4.1, `undici` 6.29.1,
   `npm audit` clean on 27 Oct 2026) runs on a private Vercel Blob store: one real report was filed
   there and read back on several requests. Rate limits and the daily cap of real runs are in
   memory, per instance. The merchant actions are serialised inside one instance; across instances
