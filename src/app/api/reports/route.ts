@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { runAgent } from "@/lib/agent/run-agent";
 import { resolveEngine } from "@/lib/config";
+import { parseVoiceNote } from "@/lib/voice/note";
 import { saveCase } from "@/lib/store/cases";
 import type { CaseRecord, DamageReport, Engine } from "@/lib/types";
 import {
@@ -107,12 +108,27 @@ export async function POST(request: Request): Promise<Response> {
     buffers.push({ bytes, kind });
   }
 
+  // Read before the engine is resolved: whether the message was really dictated (and so went to
+  // the Model API) decides whether a private run is allowed, and must be known before a daily
+  // slot of real runs is taken.
+  const voiceNote = parseVoiceNote(form.get("voiceNote"), fields.message.trim());
+
   const requested = text(form, "engine");
   const requestedEngine: Engine = (ENGINES as readonly string[]).includes(requested)
     ? (requested as Engine)
     : "muse-spark-1.3";
   // Without credentials this resolves to "demo-mock": the case then says so (DEMO MODE).
   let engine = resolveEngine(requestedEngine);
+  // "A private run never calls the Model API": dictation is a call to it (Muse Voice Transcribe),
+  // so a message that was really transcribed there cannot be filed as a private run. Refused
+  // rather than silently labelled: the customer decides to retype it or to pick another engine.
+  if (engine === "open-weights" && voiceNote && !voiceNote.demo) {
+    return errorResponse(
+      400,
+      "voice_not_private",
+      "This message was dictated with the Meta Model API, so it cannot run privately. Type it instead, or pick another engine.",
+    );
+  }
   // A real engine spends credits or wakes a GPU. On a public deployment (access code set) it
   // needs the code, and it is capped per day; otherwise the report runs in labelled DEMO MODE.
   let fellBackReason: "no_credentials" | "access_code" | "daily_limit" | null =
@@ -155,6 +171,8 @@ export async function POST(request: Request): Promise<Response> {
     message: fields.message.trim(),
     photos: photoPaths,
     language,
+    // Present when the message was dictated: labelled on the case and told to the agent.
+    voiceNote,
   };
 
   // The case exists BEFORE the agent runs, as "new": if the function is cut by the platform

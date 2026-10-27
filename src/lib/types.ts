@@ -76,6 +76,24 @@ export interface DamageReport {
   photos: string[];
   /** ISO 639-1 code of the customer's language ("en", "fr"...), used for the reply. */
   language: string;
+  /** Present when the message was dictated instead of typed (see POST /api/transcribe). */
+  voiceNote?: VoiceNote;
+}
+
+/**
+ * How a message that started as a voice note was transcribed. The audio itself is never
+ * stored: only the text the customer reviewed, and this label.
+ */
+export interface VoiceNote {
+  /** Speech-to-text model, or "demo-mock" when the transcript was a labelled canned one. */
+  model: string;
+  durationMs: number;
+  /** True when no real transcription happened (no key, no access code): canned text. */
+  demo: boolean;
+  /** True when a transcript is no longer in the message word for word (the customer changed it). */
+  edited: boolean;
+  /** True when the message also holds typed text around or between the transcripts. */
+  partial?: boolean;
 }
 
 export type DamageType =
