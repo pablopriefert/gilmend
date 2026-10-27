@@ -3,6 +3,8 @@ import { makeCase } from "@/components/fixtures";
 import type { CaseRecord, PhotoIntegrity } from "../types";
 import {
   EXIF_TOLERANCE_HOURS,
+  MAX_COMPARED_CASES,
+  MAX_STORED_MATCHES,
   checkPhotoIntegrity,
   integrityForModel,
   type IntegrityCache,
@@ -11,7 +13,7 @@ import {
 } from "./check";
 import { loadDemoPhotoHashes } from "./demo-photo-hashes";
 import { hashImage } from "./image-hash";
-import { demoPhotoBytes, recompress, syntheticPhoto } from "./test-helpers";
+import { demoPhotoBytes, flatPhoto, noisyDarkPhoto, recompress, syntheticPhoto } from "./test-helpers";
 
 const DELIVERED = "2026-10-25T14:00:00.000Z";
 
@@ -153,6 +155,124 @@ describe("reused photo", () => {
     );
     expect(result.signals.map((s) => s.photoIndex)).toEqual([1]);
     expect(result.signals[0].message).toMatch(/^Photo 2 /);
+  });
+});
+
+describe("photos too uniform to compare (27 Oct 2026)", () => {
+  const OTHER = { order: "#1002", email: "hugo.bernard@example.com" };
+
+  it("gives no signal for two different flat photos filed for two orders, and says why", async () => {
+    // Black for the earlier case, white now: both hashed to all zeros, and used to match at distance 0.
+    const black = await storedCase("case_black", await flatPhoto(0, 0, 0), OTHER);
+    const result = await checkPhotoIntegrity(input(), deps({ p1: await flatPhoto(255, 255, 255) }, [black]));
+    expect(result.signals).toEqual([]);
+    expect(result.photos[0]).toMatchObject({ uniform: true, matches: [] });
+    expect(result.notes.join(" ")).toMatch(/Photo 1 is too uniform \(dark, blank or over-exposed\) to compare/);
+    // The stored flat photo does not count as something this report was compared with.
+    expect(result.comparedCases).toBe(0);
+    expect(result.comparedPhotos).toBe(0);
+  });
+
+  it("gives no signal for two different near-black noisy photos", async () => {
+    const earlier = await storedCase("case_dark", await noisyDarkPhoto(1), OTHER);
+    const result = await checkPhotoIntegrity(input(), deps({ p1: await noisyDarkPhoto(2) }, [earlier]));
+    expect(result.signals).toEqual([]);
+    expect(result.photos[0].uniform).toBe(true);
+    expect(result.notes.join(" ")).toMatch(/too uniform/);
+  });
+
+  it("still compares the other photos of the same report", async () => {
+    const picture = await syntheticPhoto(7);
+    const earlier = await storedCase("case_other", picture, OTHER);
+    const result = await checkPhotoIntegrity(
+      input({ report: { photos: ["p1", "p2"], orderNumber: "#1001", customerEmail: "camille.laurent@example.com" } }),
+      deps({ p1: await flatPhoto(0, 0, 0), p2: await recompress(picture) }, [earlier]),
+    );
+    expect(result.signals.map((s) => [s.kind, s.photoIndex])).toEqual([["reused_photo", 1]]);
+    expect(result.notes.join(" ")).toMatch(/Photo 1 is too uniform/);
+    expect(result.photos[1].uniform).toBeUndefined();
+  });
+
+  it("tells the model the photo could not be compared", async () => {
+    const result = await checkPhotoIntegrity(input(), deps({ p1: await flatPhoto(0, 0, 0) }));
+    expect(integrityForModel(result)).toMatchObject({ photos: [{ photo: 1, hashed: true, comparable: false }] });
+  });
+});
+
+describe("bounds on the comparison (review of 27 Oct 2026)", () => {
+  /** The same stored case under another id, without hashing the photo again. */
+  const copyOf = (c: CaseRecord, id: string): CaseRecord => ({ ...c, id });
+
+  it(`compares only the ${MAX_COMPARED_CASES} most recent cases, and says so`, async () => {
+    const picture = await syntheticPhoto(7);
+    const matching = await storedCase("case_old_match", picture);
+    const filler = await storedCase("case_filler", await syntheticPhoto(20));
+    // Newest first, as listCases returns them: the matching case is the 201st.
+    const cases = [
+      ...Array.from({ length: MAX_COMPARED_CASES }, (_, i) => copyOf(filler, `case_f${i}`)),
+      matching,
+    ];
+    const result = await checkPhotoIntegrity(input(), deps({ p1: picture }, cases));
+    expect(result.signals).toEqual([]);
+    expect(result.comparedCases).toBe(MAX_COMPARED_CASES);
+    expect(result.casesNotCompared).toBe(1);
+    expect(result.notes.join(" ")).toMatch(new RegExp(`${MAX_COMPARED_CASES} most recent cases only: 1 older case was left out`));
+  });
+
+  it("still catches a match inside the most recent cases", async () => {
+    const picture = await syntheticPhoto(7);
+    const matching = await storedCase("case_new_match", picture);
+    const filler = await storedCase("case_filler", await syntheticPhoto(20));
+    const cases = [matching, ...Array.from({ length: MAX_COMPARED_CASES + 5 }, (_, i) => copyOf(filler, `case_f${i}`))];
+    const result = await checkPhotoIntegrity(input(), deps({ p1: picture }, cases));
+    expect(result.signals.map((s) => s.kind)).toEqual(["reused_photo"]);
+    expect(result.casesNotCompared).toBe(6);
+  });
+
+  it("does not count the run's own case against the limit, and says nothing when nothing was left out", async () => {
+    const filler = await storedCase("case_filler", await syntheticPhoto(20));
+    const cases = [copyOf(filler, "case_new"), ...Array.from({ length: MAX_COMPARED_CASES }, (_, i) => copyOf(filler, `case_f${i}`))];
+    const result = await checkPhotoIntegrity(input(), deps({ p1: await syntheticPhoto(1) }, cases));
+    expect(result.casesNotCompared).toBeUndefined();
+    expect(result.notes.join(" ")).not.toMatch(/most recent cases only/);
+  });
+
+  it(`keeps the ${MAX_STORED_MATCHES} closest matches of a photo filed again and again, with the true count, in under 2 KB`, async () => {
+    const picture = await syntheticPhoto(7);
+    const base = await storedCase("case_m0", picture);
+    // 20 earlier cases of 20 other customers with the very same picture; the 20th is a slightly different file.
+    const cases = Array.from({ length: 20 }, (_, i) => copyOf(base, `case_m${i}`));
+    cases[19] = await storedCase("case_m19", await recompress(picture));
+    const result = await checkPhotoIntegrity(input(), deps({ p1: picture }, cases));
+
+    const photo = result.photos[0];
+    expect(photo.matches).toHaveLength(MAX_STORED_MATCHES);
+    expect(photo.matchCount).toBe(20);
+    expect(photo.otherMatchCount).toBe(20);
+    // Closest first: the copy at distance 0 is kept, the re-save is not.
+    expect(photo.matches.every((m) => m.dhashDistance === 0 && m.ahashDistance === 0)).toBe(true);
+    // The signal keeps the true number.
+    expect(result.signals).toHaveLength(1);
+    expect(result.signals[0].message).toMatch(/already filed in 20 other cases/);
+    // The record stays small however often the picture was filed.
+    expect(JSON.stringify(result).length).toBeLessThan(2048);
+    // The model sees the true count too.
+    expect(integrityForModel(result)).toMatchObject({ photos: [{ otherOrderOrCustomerMatches: 20, sameOrderAndCustomerMatches: 0 }] });
+  });
+
+  it("keeps the same-customer note when the cap drops the matches that showed it", async () => {
+    const picture = await syntheticPhoto(7);
+    const base = await storedCase("case_m0", picture);
+    const cases = [
+      ...Array.from({ length: 8 }, (_, i) => copyOf(base, `case_m${i}`)),
+      await storedCase("case_same", await recompress(picture), { order: "#1001", email: "camille.laurent@example.com" }),
+    ];
+    const result = await checkPhotoIntegrity(input(), deps({ p1: picture }, cases));
+    expect(result.photos[0].matches).toHaveLength(MAX_STORED_MATCHES);
+    expect(result.photos[0].matchCount).toBe(9);
+    expect(result.photos[0].otherMatchCount).toBe(8);
+    expect(result.notes.join(" ")).toMatch(/same order and customer/);
+    expect(integrityForModel(result)).toMatchObject({ photos: [{ otherOrderOrCustomerMatches: 8, sameOrderAndCustomerMatches: 1 }] });
   });
 });
 

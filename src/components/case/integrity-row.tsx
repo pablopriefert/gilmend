@@ -34,6 +34,9 @@ function describeMatch(m: IntegrityMatch) {
   return m.sameOrderAndCustomer ? "Same order and customer: a report filed again" : "A different order or customer";
 }
 
+/** "…ab12": enough of a case id to tell two links apart, for the eye and for a screen reader. */
+const shortId = (caseId: string): string => `…${caseId.slice(-4)}`;
+
 function PhotoReuse({ photo }: { photo: PhotoIntegrityPhoto }) {
   const n = photo.index + 1;
   if (!photo.hash) {
@@ -43,7 +46,11 @@ function PhotoReuse({ photo }: { photo: PhotoIntegrityPhoto }) {
       </li>
     );
   }
+  if (photo.uniform) {
+    return <li>Photo {n}: too uniform (dark, blank or over-exposed) to compare.</li>;
+  }
   if (photo.matches.length === 0) return <li>Photo {n}: no match.</li>;
+  const more = (photo.matchCount ?? photo.matches.length) - photo.matches.length;
   return (
     <li>
       Photo {n}: looks like
@@ -51,8 +58,12 @@ function PhotoReuse({ photo }: { photo: PhotoIntegrityPhoto }) {
         {photo.matches.map((m, i) => (
           <li key={`${m.caseId}-${i}`}>
             {m.source === "case" ? (
-              <Link href={`/cases/${encodeURIComponent(m.caseId)}`} className="font-medium text-accent underline underline-offset-2">
-                another case
+              <Link
+                href={`/cases/${encodeURIComponent(m.caseId)}`}
+                aria-label={`Open case ${shortId(m.caseId)}`}
+                className="font-medium text-accent underline underline-offset-2"
+              >
+                case {shortId(m.caseId)}
               </Link>
             ) : (
               "a demo photo"
@@ -63,6 +74,11 @@ function PhotoReuse({ photo }: { photo: PhotoIntegrityPhoto }) {
             </span>
           </li>
         ))}
+        {more > 0 && (
+          <li className="list-none text-muted">
+            and {more} more {more === 1 ? "match" : "matches"}, not listed (the {photo.matches.length} closest are shown).
+          </li>
+        )}
       </ul>
     </li>
   );

@@ -99,7 +99,7 @@ describe("IntegrityRow: signals", () => {
   it("links the other case and shows the capture date as written, with the hash distances", () => {
     render(<IntegrityRow integrity={flagged} />);
     const row = screen.getByTestId("integrity");
-    expect(within(row).getByRole("link", { name: "another case" })).toHaveAttribute("href", "/cases/case_abc");
+    expect(within(row).getByRole("link", { name: "Open case …_abc" })).toHaveAttribute("href", "/cases/case_abc");
     expect(row).toHaveTextContent("A different order or customer");
     expect(row).toHaveTextContent("hash distance 3/64 and 5/64");
     expect(row).toHaveTextContent("taken 10 Oct 2026, 09:30 (as written in the file, no time zone)");
@@ -223,5 +223,48 @@ describe("the case page", () => {
   it("says the check has not run yet on a case the agent has not finished", () => {
     render(<CaseView caseRecord={makeCase({ status: "new", decision: null })} rules={null} now={NOW} />);
     expect(screen.getByTestId("integrity")).toHaveTextContent(/has not reached it/);
+  });
+});
+
+describe("IntegrityRow: several matches, a uniform photo", () => {
+  const match = (caseId: string) => ({
+    source: "case" as const,
+    caseId,
+    sameOrderAndCustomer: false,
+    dhashDistance: 1,
+    ahashDistance: 2,
+  });
+
+  it("gives every link to another case its own name, so a screen reader can tell them apart", () => {
+    const photo = { index: 0, hash: HASH, hasExif: false, capturedAt: null, matches: [match("case_aaaa1111"), match("case_bbbb2222")] };
+    render(<IntegrityRow integrity={integrity({ photos: [photo] })} />);
+    const links = within(screen.getByTestId("integrity")).getAllByRole("link");
+    const names = links.map((l) => l.getAttribute("aria-label"));
+    expect(names).toEqual(["Open case …1111", "Open case …2222"]);
+    expect(new Set(names).size).toBe(names.length);
+    // The visible text is part of the accessible name (WCAG 2.5.3).
+    links.forEach((l) => expect(l.getAttribute("aria-label")).toContain(l.textContent));
+  });
+
+  it("says how many more matches are not listed", () => {
+    const photo = {
+      index: 0,
+      hash: HASH,
+      hasExif: false,
+      capturedAt: null,
+      matches: ["a", "b", "c", "d", "e"].map((x) => match(`case_${x}000`)),
+      matchCount: 20,
+      otherMatchCount: 20,
+    };
+    render(<IntegrityRow integrity={integrity({ photos: [photo] })} />);
+    expect(screen.getByTestId("integrity")).toHaveTextContent("and 15 more matches, not listed (the 5 closest are shown).");
+  });
+
+  it("says a uniform photo was not compared, instead of 'no match'", () => {
+    const photo = { index: 0, hash: HASH, uniform: true, hasExif: false, capturedAt: null, matches: [] };
+    render(<IntegrityRow integrity={integrity({ photos: [photo] })} />);
+    const row = screen.getByTestId("integrity");
+    expect(row).toHaveTextContent("Photo 1: too uniform (dark, blank or over-exposed) to compare.");
+    expect(row).not.toHaveTextContent("Photo 1: no match.");
   });
 });

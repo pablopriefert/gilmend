@@ -23,8 +23,10 @@ const cache = new Map<string, Promise<DemoPhotoHash[]>>();
 
 async function compute(root: string): Promise<DemoPhotoHash[]> {
   const out: DemoPhotoHash[] = [];
+  let expected = 0;
   for (const demo of loadDemoCases()) {
     for (const photo of demo.report.photos) {
+      expected++;
       const file = resolveDemoPhoto(photo, root);
       if (!file) continue;
       let hash: PhotoHash | null = null;
@@ -36,6 +38,10 @@ async function compute(root: string): Promise<DemoPhotoHash[]> {
       if (hash) out.push({ caseId: demo.id, orderNumber: demo.report.orderNumber, customerEmail: demo.report.customerEmail, hash });
     }
   }
+  // Not silent: if the photos were not shipped with the deployment (outputFileTracingIncludes for
+  // /api/reports not taking effect), the headline beat (the vase filed for another order) would show
+  // "No signal" live. Once per process (the result is cached); no path, no customer data.
+  if (out.length < expected) console.warn(`[integrity] hashed ${out.length} of ${expected} demo photos`);
   return out;
 }
 

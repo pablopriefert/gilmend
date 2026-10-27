@@ -165,10 +165,21 @@ the photos.
 
 - **Same photo, another order.** Every photo gets two 64-bit perceptual hashes (dHash and aHash,
   computed with `sharp` after the EXIF rotation, `src/lib/integrity/image-hash.ts`). They are stored
-  on the case (the whole integrity record is under 2 KB), and each new report is compared with the
-  hashes of every stored case, so it works across serverless instances and storage backends. A match
-  with a case of another order **or** another customer is a signal; the same customer filing the
-  same photo again for the same order is not.
+  on the case, and each new report is compared with the hashes of the 200 most recent stored cases
+  (the result says when older ones were left out), so it works across serverless instances and
+  storage backends. A match with a case of another order **or** another customer is a signal; the
+  same customer filing the same photo again for the same order is not. A photo keeps at most its 5
+  closest matches on the record, with the true count, so a record stays under 2 KB (asserted in
+  `check.test.ts` with 20 matching cases) however often one picture is filed.
+- **Uniform photos are not compared.** A dark, blank, over-exposed or lens-covered photo hashes to
+  (nearly) all zeros whatever it shows, so two unrelated ones would "match". Such a photo (fewer than 6
+  or more than 58 bits set in aHash, or fewer than 4 or more than 60 in dHash, `isUniformHash`) is
+  skipped, as the new photo and as a stored one, and the result says so. The six demo photos have 27
+  to 40 bits set in dHash and 28 to 35 in aHash, so they are never skipped. A real photo of a bright
+  object on a black background can fall outside the range: it costs a missed match, never a false one.
+- **Bounded.** The check never waits longer than what is left of the run's time budget (at least
+  5 s); a timeout is a tool error and sends the case to a human. It also runs when a run ends without
+  `finish_case` (model failure, time budget, step cap), so every saved case carries its hashes.
 - **Demo photos.** The six demo photos are public and reused by design, so they are never compared
   with other cases. They are compared with every report: a demo photo used by its own demo case
   (order and e-mail match, `#` and capitals ignored) is fine any number of times; the same photo
@@ -495,8 +506,11 @@ Storage, the Blob store).
   normal and proves nothing; a clean result does not prove the photos are genuine. Cases filed
   before the check hold no hash, so the first reports on a fresh deployment have little to compare
   with. The thresholds were measured on the six demo photos and synthetic pictures, not on a
-  collection of real customer photos. Each report reads every stored case to compare hashes (one
-  read per case on Blob): fine for a demo's dozens of cases, not for thousands, like the case list.
+  collection of real customer photos. Each report still reads every stored case (one Blob read per
+  case, like the case list) before it compares the 200 most recent: the cap bounds the comparison
+  and the record, the time-budget timeout bounds the latency, and neither makes thousands of cases
+  cheap. Check on a Vercel preview before filming that a report's Integrity row says "6 demo photos"
+  (if the photos were not shipped, the server logs `[integrity] hashed 0 of 6 demo photos`).
 - **The demo photos are AI-generated** (Muse Image), not photographs of damaged parcels. A real
   photo may read differently.
 - **Carrier figures are the public standard terms**, some from a dated source and one window

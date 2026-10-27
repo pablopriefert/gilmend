@@ -48,6 +48,24 @@ import {
   type ModelToolName,
 } from "./tools";
 
+/** Rejects when `work` takes longer than `ms` (the timer is cleared as soon as it settles). */
+class TimeoutError extends Error {}
+
+async function withTimeout<T>(work: Promise<T>, ms: number, what: string): Promise<T> {
+  if (!Number.isFinite(ms)) return work;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new TimeoutError(`${what} timed out after ${Math.round(ms / 1000)} s`)), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Damage types whose evidence SAM can outline (the item, its pieces or the box). */
 const EVIDENCE_DAMAGE_TYPES: readonly DamageType[] = ["broken_product", "crushed_packaging", "opened_parcel"];
 
@@ -77,6 +95,13 @@ const MIN_EVIDENCE_FALLBACK_MS = 20_000;
 /** Number of SAM calls the fallback may make: the remaining time is shared between them. */
 const EVIDENCE_FALLBACK_SAM_CALLS = 3;
 const MIN_SAM_CALL_TIMEOUT_MS = 5_000;
+/**
+ * The integrity check (it reads every stored case) never waits longer than what is left of the time
+ * budget, but at least this long: it is plain code and usually takes well under a second, and the
+ * guardrails need its answer. A timeout is a tool error, so the case goes to a human (review of
+ * 27 Oct 2026: nothing bounded it, and finish_case runs it after the loop's last budget check).
+ */
+export const MIN_INTEGRITY_TIMEOUT_MS = 5_000;
 
 /** The collaborators of the loop. Injectable so tests never touch disk, network or other lots. */
 export interface AgentDeps {
@@ -171,6 +196,9 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
   // the tool before get_order the date is unknown, and the check is run again once it is.
   let integrityDeliveredAt = null as string | null;
   const integrityCache: IntegrityCache = {};
+  // A check that timed out is not started again (each try could wait the whole timeout): the case
+  // goes to a human through the tool error it already counted.
+  let integrityTimedOut = false;
   const caseId = opts.caseId ?? `case_${randomUUID()}`;
   const startedAt = Date.now();
   const budgetMs = opts.timeBudgetMs ?? (engine === "demo-mock" ? Infinity : DEFAULT_TIME_BUDGET_MS);
@@ -396,14 +424,26 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
   /** Runs the integrity checks with what the run knows now (the delivery date of the order, once found). */
   async function runIntegrity(calledBy: "model" | "code"): Promise<PhotoIntegrity> {
     const deliveredAt = order?.deliveredAt ?? null;
-    const result = await deps.checkPhotoIntegrity({
-      report,
-      caseId,
-      deliveredAt,
-      calledBy,
-      now,
-      cache: integrityCache,
-    });
+    const timeoutMs = Math.max(MIN_INTEGRITY_TIMEOUT_MS, budgetMs - (Date.now() - startedAt));
+    if (integrityTimedOut) throw new Error("photo integrity check already timed out in this run");
+    let result: PhotoIntegrity;
+    try {
+      result = await withTimeout(
+        deps.checkPhotoIntegrity({
+          report,
+          caseId,
+          deliveredAt,
+          calledBy,
+          now,
+          cache: integrityCache,
+        }),
+        timeoutMs,
+        "photo integrity check",
+      );
+    } catch (e) {
+      if (e instanceof TimeoutError) integrityTimedOut = true;
+      throw e;
+    }
     integrity = result;
     integrityDeliveredAt = deliveredAt;
     return result;
@@ -415,12 +455,14 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
    * before the order (so without a delivery date to compare), the code runs it and says so in the
    * trace. A failure counts as a tool error, which sends the case to a human.
    */
-  async function ensureIntegrity(): Promise<void> {
+  async function ensureIntegrity(runEnded = false): Promise<void> {
     const deliveredAt = order?.deliveredAt ?? null;
     if (integrity && integrityDeliveredAt === deliveredAt) return;
     const why = integrity
       ? "the order was found after the model's check, so the capture dates are compared with its delivery date now"
-      : "the model did not call check_photo_integrity";
+      : runEnded
+        ? "the run ended before the model finished, and the case must still carry the photo hashes"
+        : "the model did not call check_photo_integrity";
     try {
       const result = await runIntegrity("code");
       log(`Photo integrity check run by the code (${why}).`, {
@@ -652,6 +694,11 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
 
   // ---- wrap up ----------------------------------------------------------------------
 
+  // A run that ends without finish_case (model failure, time budget, step cap) never reached the
+  // guardrail that runs the check. It is plain code and needs no model: run it so that every saved
+  // case carries its hashes and a later report reusing the photo is caught (review of 27 Oct 2026).
+  // The fallback decision below already sends the case to a human.
+  if (!integrity && !toolErrors.includes("check_photo_integrity")) await ensureIntegrity(true);
   await ensureEvidence();
 
   // The model decided a claim is due but never drafted it (step limit, or it stopped):

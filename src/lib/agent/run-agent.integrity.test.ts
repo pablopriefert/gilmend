@@ -13,7 +13,7 @@ import type { IntegrityInput } from "../integrity/check";
 import { demoPhotoBytes, syntheticPhoto } from "../integrity/test-helpers";
 import { hashImage } from "../integrity/image-hash";
 import type { PhotoIntegrity } from "../types";
-import { runAgent } from "./run-agent";
+import { MIN_INTEGRITY_TIMEOUT_MS, runAgent } from "./run-agent";
 import {
   ASSESSMENT_BROKEN,
   NOW,
@@ -156,6 +156,126 @@ describe("check_photo_integrity called by the model", () => {
   });
 });
 
+describe("a run that ends without finish_case still carries the photo hashes (review of 27 Oct 2026)", () => {
+  /** What a stored hash looks like once the check has run on a photo. */
+  const withHash = () =>
+    cleanIntegrity({
+      calledBy: "code",
+      photos: [
+        { index: 0, hash: { dhash: "0123456789abcdef", ahash: "fedcba9876543210" }, hasExif: false, capturedAt: null, matches: [] },
+      ],
+    });
+
+  it("runs the check when the model call fails at step 1, and says in the trace that the code did", async () => {
+    const check = vi.fn<Check>(async () => withHash());
+    const provider = scriptedProvider([{ throws: new Error("connection reset") }]);
+    const c = await runAgent(makeReport(), {
+      engine: "muse-spark-1.3",
+      provider,
+      deps: fakeDeps({ checkPhotoIntegrity: check }),
+      now: NOW,
+    });
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(check.mock.calls[0][0].calledBy).toBe("code");
+    expect(c.integrity?.photos[0].hash).toEqual({ dhash: "0123456789abcdef", ahash: "fedcba9876543210" });
+    const step = c.trace.find((x) => /Photo integrity check run by the code/.test(x.step));
+    expect(step?.step).toMatch(/the run ended before the model finished/);
+    expect(step?.tool).toBe("check_photo_integrity");
+    // The case still goes to a human.
+    expect(c.decision).toMatchObject({ decision: "no_action", needsHuman: true });
+  });
+
+  it("does the same when the time budget is already spent", async () => {
+    const check = vi.fn<Check>(async () => withHash());
+    const c = await runAgent(makeReport(), {
+      engine: "muse-spark-1.3",
+      provider: scriptedProvider([{ calls: [["get_order", {}]] as Calls }]),
+      deps: fakeDeps({ checkPhotoIntegrity: check }),
+      timeBudgetMs: 0,
+    });
+    expect(c.integrity?.photos[0].hash).not.toBeNull();
+    expect(c.decision?.needsHuman).toBe(true);
+  });
+
+  it("runs the check once only when the model never calls finish_case", async () => {
+    const check = vi.fn<Check>(async () => withHash());
+    await runAgent(makeReport(), {
+      engine: "muse-spark-1.3",
+      provider: scriptedProvider([{ content: "I think it is broken." }, { content: "Still broken." }]),
+      deps: fakeDeps({ checkPhotoIntegrity: check }),
+      now: NOW,
+    });
+    expect(check).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not run it a second time when the model already called it", async () => {
+    const check = vi.fn<Check>(async () => withHash());
+    const c = await runAgent(makeReport(), {
+      engine: "muse-spark-1.3",
+      provider: scriptedProvider([
+        { calls: [["get_order", {}], ["check_photo_integrity", {}]] as Calls },
+        { throws: new Error("boom") },
+      ]),
+      deps: fakeDeps({ checkPhotoIntegrity: check }),
+      now: NOW,
+    });
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(c.integrity?.calledBy).toBe("code"); // the stub says "code"; what counts is that there was no second call
+  });
+});
+
+describe("the integrity check is bounded by the time budget (review of 27 Oct 2026)", () => {
+  it("a check that never answers becomes a tool error at the end of the budget, and the case goes to a human", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const check = vi.fn<Check>(() => new Promise<PhotoIntegrity>(() => {}));
+      // The integrity tool is called by the model; the budget is short, so the wait is the minimum.
+      const run = runAgent(makeReport(), {
+        engine: "muse-spark-1.3",
+        provider: scriptedProvider(turns()),
+        deps: fakeDeps({ checkPhotoIntegrity: check }),
+        now: NOW,
+        timeBudgetMs: 1_000,
+      });
+      // Not yet: the minimum wait is MIN_INTEGRITY_TIMEOUT_MS, not the 1 s left of the budget.
+      await vi.advanceTimersByTimeAsync(MIN_INTEGRITY_TIMEOUT_MS - 1);
+      expect(check).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(10 * MIN_INTEGRITY_TIMEOUT_MS);
+      const c = await run;
+      expect(c.integrity).toBeUndefined();
+      expect(c.trace.some((t) => /^Tool error: check_photo_integrity/.test(t.step) && /timed out/.test(JSON.stringify(t.output)))).toBe(true);
+      // Not started again by finish_case or the wrap-up: each try would wait the whole timeout.
+      expect(check).toHaveBeenCalledTimes(1);
+      expect(c.decision?.needsHuman).toBe(true);
+      expect(c.decision?.reasons.join(" ")).toMatch(/check_photo_integrity/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("waits for the check as long as the budget allows (a slow store is not a failure)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let release!: (i: PhotoIntegrity) => void;
+      const check = vi.fn<Check>(() => new Promise<PhotoIntegrity>((r) => (release = r)));
+      const run = runAgent(makeReport(), {
+        engine: "muse-spark-1.3",
+        provider: scriptedProvider(turns()),
+        deps: fakeDeps({ checkPhotoIntegrity: check }),
+        now: NOW,
+        timeBudgetMs: 60_000,
+      });
+      await vi.advanceTimersByTimeAsync(20_000);
+      release(cleanIntegrity());
+      const c = await run;
+      expect(c.integrity).toBeDefined();
+      expect(c.decision?.needsHuman).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("check_photo_integrity run by the code", () => {
   it("runs before the guardrails when the model never called it, and says so in the trace", async () => {
     const t = turns();
@@ -224,19 +344,6 @@ describe("check_photo_integrity run by the code", () => {
     });
     expect(c.decision?.needsHuman).toBe(true);
     expect(c.trace.some((x) => /^Tool error: photo integrity check failed \(boom\)/.test(x.step))).toBe(true);
-  });
-
-  it("has no integrity on a case that never reached a decision", async () => {
-    const check = vi.fn<Check>(async () => cleanIntegrity());
-    const c = await runAgent(makeReport(), {
-      engine: "muse-spark-1.3",
-      provider: scriptedProvider([{ throws: new Error("model down") }]),
-      deps: fakeDeps({ checkPhotoIntegrity: check }),
-      now: NOW,
-    });
-    expect(c.integrity).toBeUndefined();
-    expect(check).not.toHaveBeenCalled();
-    expect(c.decision?.needsHuman).toBe(true);
   });
 });
 

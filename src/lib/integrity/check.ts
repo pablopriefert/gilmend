@@ -10,7 +10,7 @@ import type {
 } from "../types";
 import { loadDemoPhotoHashes, type DemoPhotoHash } from "./demo-photo-hashes";
 import { readPhotoExif } from "./exif";
-import { compareHashes, hashImage, isPhotoHash } from "./image-hash";
+import { compareHashes, hashImage, isPhotoHash, isUniformHash } from "./image-hash";
 
 // Deterministic checks on the evidence the customer sent, run by code. The agent sees the result
 // as a tool result (check_photo_integrity), the guardrails act on it (any signal sends the case
@@ -36,6 +36,21 @@ import { compareHashes, hashImage, isPhotoHash } from "./image-hash";
 export const EXIF_TOLERANCE_HOURS = 12;
 
 const HOUR_MS = 3_600_000;
+
+/**
+ * Only this many of the most recent stored cases are compared with a report (listCases is newest
+ * first). Added on 27 Oct 2026 after review: the comparison used to grow with every case the public
+ * deployment collects. It bounds the work and what the result says; the case store still reads every
+ * case to list them (one Blob read each), which is what INTEGRITY_TIMEOUT in run-agent.ts bounds.
+ */
+export const MAX_COMPARED_CASES = 200;
+
+/**
+ * A photo keeps at most this many matches on its record, the closest first (whatever their number,
+ * `matchCount` holds it): someone who files one picture again and again must not make each new
+ * record, and the case page, grow with every filing.
+ */
+export const MAX_STORED_MATCHES = 5;
 
 export interface IntegrityDeps {
   /** Every stored case (their `integrity` holds the hashes to compare with). */
@@ -126,12 +141,14 @@ export async function checkPhotoIntegrity(input: IntegrityInput, deps: Integrity
   const sameCustomerAndOrder = (order: string, email: string) =>
     orderKey(order) === reportOrder && emailKey(email) === reportEmail;
 
-  // The hashes already stored on other cases, one entry per photo.
+  // The hashes already stored on other cases, one entry per photo, from the most recent cases only.
+  // A stored photo that is too uniform to mean anything (isUniformHash) is not compared either.
   const stored: { caseId: string; order: string; email: string; hash: PhotoHash }[] = [];
   let comparedCases = 0;
-  for (const c of cases) {
-    if (c.id === caseId) continue;
-    const hashes = (c.integrity?.photos ?? []).map((p) => p.hash).filter(isPhotoHash);
+  const others = cases.filter((c) => c.id !== caseId);
+  const casesNotCompared = Math.max(0, others.length - MAX_COMPARED_CASES);
+  for (const c of others.slice(0, MAX_COMPARED_CASES)) {
+    const hashes = (c.integrity?.photos ?? []).map((p) => p.hash).filter(isPhotoHash).filter((h) => !isUniformHash(h));
     if (hashes.length === 0) continue;
     comparedCases++;
     for (const hash of hashes) stored.push({ caseId: c.id, order: c.report.orderNumber, email: c.report.customerEmail, hash });
@@ -144,10 +161,15 @@ export async function checkPhotoIntegrity(input: IntegrityInput, deps: Integrity
   const missingCapture: number[] = [];
   const unreadable: number[] = [];
   const noDeliveryToCompare: number[] = [];
+  const uniform: number[] = [];
+  let sameCustomerMatch = false;
 
   for (const f of facts) {
     const matches: IntegrityMatch[] = [];
-    if (f.hash) {
+    if (f.hash && isUniformHash(f.hash)) {
+      // Dark, blank or over-exposed: every such photo hashes alike, so a "match" would say nothing.
+      uniform.push(f.index);
+    } else if (f.hash) {
       const demoHits = demos
         .map((d) => ({ d, cmp: compareHashes(f.hash as PhotoHash, d.hash) }))
         .filter((x) => x.cmp.match);
@@ -212,19 +234,38 @@ export async function checkPhotoIntegrity(input: IntegrityInput, deps: Integrity
       missingCapture.push(f.index);
     }
 
+    // Counted before the cap below, so the signals, the note and the counts keep the true numbers.
+    const otherMatchCount = matches.filter((m) => !m.sameOrderAndCustomer).length;
+    if (matches.length > otherMatchCount) sameCustomerMatch = true;
+    const kept = [...matches]
+      .sort((a, b) => a.dhashDistance + a.ahashDistance - (b.dhashDistance + b.ahashDistance))
+      .slice(0, MAX_STORED_MATCHES);
+
     photos.push({
       index: f.index,
       hash: f.hash,
       ...(f.unreadable ? { unreadable: f.unreadable } : {}),
+      ...(f.hash && uniform.includes(f.index) ? { uniform: true } : {}),
       hasExif: f.hasExif,
       capturedAt: f.capturedAt,
-      matches,
+      matches: kept,
+      ...(matches.length > kept.length ? { matchCount: matches.length, otherMatchCount } : {}),
     });
   }
 
   const nums = (xs: number[]) => xs.map((i) => i + 1).join(", ");
   if (unreadable.length > 0) {
     notes.push(`Photo ${nums(unreadable)} could not be read or decoded, so it was neither hashed nor compared.`);
+  }
+  if (uniform.length > 0) {
+    notes.push(
+      `Photo ${nums(uniform)} is too uniform (dark, blank or over-exposed) to compare: such photos all look alike to a hash, so it was not compared with other photos.`,
+    );
+  }
+  if (casesNotCompared > 0) {
+    notes.push(
+      `Compared with the ${MAX_COMPARED_CASES} most recent cases only: ${casesNotCompared} older ${plural(casesNotCompared, "case was", "cases were")} left out.`,
+    );
   }
   if (missingCapture.length > 0) {
     notes.push(
@@ -244,8 +285,7 @@ export async function checkPhotoIntegrity(input: IntegrityInput, deps: Integrity
       `Capture date of photo ${nums(consistent.map((p) => p.index))} is consistent with the delivery date (compared with a ${EXIF_TOLERANCE_HOURS} h margin: EXIF has no time zone). A capture date can be edited, so this proves little.`,
     );
   }
-  const sameCustomer = photos.flatMap((p) => p.matches).filter((m) => m.sameOrderAndCustomer);
-  if (sameCustomer.length > 0) {
+  if (sameCustomerMatch) {
     notes.push(
       "A photo also appears in a case of the same order and customer (or is the demo photo of its own demo case): a report filed again is expected, not a signal.",
     );
@@ -258,11 +298,15 @@ export async function checkPhotoIntegrity(input: IntegrityInput, deps: Integrity
     comparedCases,
     comparedPhotos: stored.length,
     comparedDemoPhotos: demos.length,
+    ...(casesNotCompared > 0 ? { casesNotCompared } : {}),
     deliveredAt: Number.isNaN(delivered) ? null : deliveredAt,
     signals,
     notes,
   };
 }
+
+const otherMatches = (p: PhotoIntegrityPhoto): number =>
+  p.otherMatchCount ?? p.matches.filter((m) => !m.sameOrderAndCustomer).length;
 
 /**
  * What the model is told (and what goes to the trace). The messages hold nothing about another
@@ -274,9 +318,10 @@ export function integrityForModel(i: PhotoIntegrity): Record<string, unknown> {
     photos: i.photos.map((p) => ({
       photo: p.index + 1,
       hashed: p.hash !== null,
+      comparable: p.hash !== null && !p.uniform,
       captureDate: p.capturedAt,
-      sameOrderAndCustomerMatches: p.matches.filter((m) => m.sameOrderAndCustomer).length,
-      otherOrderOrCustomerMatches: p.matches.filter((m) => !m.sameOrderAndCustomer).length,
+      sameOrderAndCustomerMatches: (p.matchCount ?? p.matches.length) - otherMatches(p),
+      otherOrderOrCustomerMatches: otherMatches(p),
     })),
     comparedWith: { earlierCases: i.comparedCases, photos: i.comparedPhotos, demoPhotos: i.comparedDemoPhotos },
     signals: i.signals.map((s) => s.message),

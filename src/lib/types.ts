@@ -271,11 +271,21 @@ export interface PhotoIntegrityPhoto {
   /** null when the file could not be read or decoded (see `unreadable`). */
   hash: PhotoHash | null;
   unreadable?: string;
+  /**
+   * The photo is too uniform (dark, blank, over-exposed) for its hash to mean anything: it was not
+   * compared with other photos, and its hash is not compared by later reports either.
+   */
+  uniform?: boolean;
   /** The file carries an EXIF block (most apps strip it, so false is common and means nothing). */
   hasExif: boolean;
   /** Capture date as written in the file, "YYYY-MM-DDTHH:mm:ss", local time with no time zone. */
   capturedAt: string | null;
+  /** The closest matches, at most 5 (MAX_STORED_MATCHES): a record must not grow with every re-filed photo. */
   matches: IntegrityMatch[];
+  /** How many stored photos matched in all, when more than `matches` holds. Absent on older records. */
+  matchCount?: number;
+  /** How many of those belong to another order or customer. Absent on older records. */
+  otherMatchCount?: number;
 }
 
 /** A finding that forces a human to look. It never rejects a case by itself. */
@@ -302,6 +312,8 @@ export interface PhotoIntegrity {
   comparedPhotos: number;
   /** Demo photos shipped with the app that were compared. */
   comparedDemoPhotos: number;
+  /** Stored cases beyond the most recent ones that were left out of the comparison (absent when none). */
+  casesNotCompared?: number;
   /** Delivery date the capture dates were compared with; null when there was none to compare with. */
   deliveredAt: string | null;
   signals: IntegritySignal[];

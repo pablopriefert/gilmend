@@ -7,8 +7,9 @@ import {
   hammingDistance,
   hashImage,
   isPhotoHash,
+  isUniformHash,
 } from "./image-hash";
-import { DEMO_PHOTO_NAMES, demoPhotoBytes, recompress, syntheticPhoto } from "./test-helpers";
+import { DEMO_PHOTO_NAMES, demoPhotoBytes, flatPhoto, noisyDarkPhoto, recompress, syntheticPhoto } from "./test-helpers";
 
 describe("hashImage", () => {
   it("gives two 64-bit hashes as 16 hex characters, and the same ones every time", async () => {
@@ -122,5 +123,26 @@ describe("hammingDistance and isPhotoHash", () => {
     expect(isPhotoHash({ dhash: "0123456789abcdef" })).toBe(false);
     expect(isPhotoHash(null)).toBe(false);
     expect(isPhotoHash("0123456789abcdef")).toBe(false);
+  });
+});
+
+describe("isUniformHash: a featureless photo carries no information", () => {
+  it("hashes any flat photo to nothing, which is why it must not be compared (27 Oct 2026)", async () => {
+    const black = (await hashImage(await flatPhoto(0, 0, 0)))!;
+    const white = (await hashImage(await flatPhoto(255, 255, 255)))!;
+    const brown = (await hashImage(await flatPhoto(120, 80, 40, 300, 900)))!;
+    // The defect: three unrelated pictures are all at distance 0 from each other.
+    expect(compareHashes(black, white)).toMatchObject({ match: true, dhashDistance: 0, ahashDistance: 0 });
+    expect(compareHashes(black, brown).match).toBe(true);
+    for (const h of [black, white, brown]) expect(isUniformHash(h)).toBe(true);
+  });
+
+  it("also catches near-black noise, which dark and lens-covered shots look like", async () => {
+    for (const seed of [1, 2, 3, 4]) expect(isUniformHash((await hashImage(await noisyDarkPhoto(seed)))!), `seed ${seed}`).toBe(true);
+  });
+
+  it("never calls a demo photo or an ordinary picture uniform", async () => {
+    for (const n of DEMO_PHOTO_NAMES) expect(isUniformHash((await hashImage(demoPhotoBytes(n)))!), n).toBe(false);
+    for (let seed = 1; seed <= 30; seed++) expect(isUniformHash((await hashImage(await syntheticPhoto(seed)))!), `picture ${seed}`).toBe(false);
   });
 });

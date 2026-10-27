@@ -12,7 +12,8 @@
 //
 // What this does NOT catch, and the case page says so: a photo that was cropped by more than a few
 // percent, mirrored, rotated, or heavily edited, and a photo of a screen showing another photo.
-// It is a cheap signal for the lazy re-use of a file, not forensic image matching.
+// A photo whose thumbnail is nearly flat (dark, blank, over-exposed, lens covered) is not compared at
+// all, see isUniformHash. It is a cheap signal for the lazy re-use of a file, not forensic image matching.
 
 import type { PhotoHash } from "../types";
 
@@ -41,6 +42,41 @@ export function isPhotoHash(v: unknown): v is PhotoHash {
  */
 export const DHASH_MAX_DISTANCE = 10;
 export const AHASH_MAX_DISTANCE = 10;
+
+/** Bits set in a 16-hex-digit hash. */
+function popcount(hash: string): number {
+  let bits = 0;
+  for (const ch of hash) {
+    let x = Number.parseInt(ch, 16);
+    while (x) {
+      bits += x & 1;
+      x >>= 1;
+    }
+  }
+  return bits;
+}
+
+/**
+ * True when the hashes carry too little information to compare: the thumbnail is (nearly) flat, so
+ * every bit lands on the same side. A black, white or lens-covered photo hashes to all zeros whatever
+ * it shows, and two unrelated flat photos would then "match" at distance 0 (seen on 27 Oct 2026 with
+ * solid black, solid white and solid brown images, and with two blurred near-black noise images).
+ * Measured the same day: the six demo photos have 27 to 40 bits set in dHash and 28 to 35 in aHash,
+ * 120 synthetic smooth pictures 10 to 52 (dHash) and 22 to 45 (aHash), flat and near-flat images 0 to
+ * 4 or 62 to 64 in aHash. The cut-offs sit between the two. A real photo of a bright object on a
+ * black background can fall outside them: it is then not compared, which only costs a missed match.
+ * Computed from the hashes alone, so a hash stored on an older case is judged the same way.
+ */
+export const UNIFORM_AHASH_BITS = { min: 6, max: 58 } as const;
+export const UNIFORM_DHASH_BITS = { min: 4, max: 60 } as const;
+
+export function isUniformHash(h: PhotoHash): boolean {
+  const a = popcount(h.ahash);
+  const d = popcount(h.dhash);
+  return (
+    a < UNIFORM_AHASH_BITS.min || a > UNIFORM_AHASH_BITS.max || d < UNIFORM_DHASH_BITS.min || d > UNIFORM_DHASH_BITS.max
+  );
+}
 
 function bitsToHex(bits: boolean[]): string {
   let hex = "";

@@ -45,7 +45,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   signal. The hashes live on `CaseRecord.integrity`, so keep them when a case is rewritten. The demo
   photos are exempt for their own demo case (order and e-mail of `data/demo-cases.json`) and are
   never compared with other cases. Change the thresholds only with `scripts/measure-photo-hash.ts`
-  and update the figures in the comment and the README. What the model is shown
+  and update the figures in the comment and the README. A uniform photo (`isUniformHash`) is never
+  compared, and a photo keeps at most 5 matches on its record (`MAX_STORED_MATCHES`), the comparison
+  covers the 200 most recent cases (`MAX_COMPARED_CASES`): keep the record under 2 KB. What the model is shown
   (`integrityForModel`) must hold nothing about another customer.
 - Do not commit, push, deploy or create a GitHub repository unless Pablo asks.
 

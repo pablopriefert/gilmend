@@ -59,6 +59,20 @@ export async function syntheticPhoto(seed: number, exifDate?: string): Promise<B
   return out.jpeg({ quality: 92 }).toBuffer();
 }
 
+/** A photo of one flat colour: black, white or a lens cap, whatever it was meant to show. */
+export const flatPhoto = (r: number, g: number, b: number, width = 800, height = 600): Promise<Buffer> =>
+  sharp({ create: { width, height, channels: 3, background: { r, g, b } } }).jpeg().toBuffer();
+
+/** Blurred, near-black noise (values 0 to 11 of 255): a dark shot taken in a drawer. */
+export async function noisyDarkPhoto(seed: number): Promise<Buffer> {
+  const rand = seeded(seed + 1000);
+  const w = 200;
+  const h = 150;
+  const raw = Buffer.alloc(w * h * 3);
+  for (let i = 0; i < raw.length; i++) raw[i] = Math.floor(rand() * 12);
+  return sharp(raw, { raw: { width: w, height: h, channels: 3 } }).blur(3).resize(800, 600).jpeg().toBuffer();
+}
+
 /**
  * A raw EXIF block built by hand: IFD0 with one pointer to an Exif directory holding the given
  * ASCII date tags. `little` picks the byte order, `prefix` adds the JPEG "Exif\0\0" header.
