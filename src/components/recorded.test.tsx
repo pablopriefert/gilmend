@@ -58,7 +58,7 @@ describe("recorded runs in the UI", () => {
     render(<CaseView caseRecord={recorded()} rules={makeRules()} now={LATER} />);
     expect(screen.getByTestId("recorded-note")).toHaveTextContent(/real run of Muse Spark 1\.3 and SAM 3\.1 on the Meta Model API, recorded on 27 Oct 2026/);
     expect(screen.getByTestId("recorded-note")).toHaveTextContent(
-      "The customer photos are provisional AI-generated stand-ins (data/photos/README.md); Muse and SAM ran on exactly these images.",
+      "The customer photos were generated with Meta's Muse Image for this demo (data/photos/README.md); Muse Spark and SAM ran on exactly these images.",
     );
     expect(screen.getByTestId("recorded-note")).toHaveTextContent(/read-only: approving, editing or rejecting it stores a copy/);
     expect(screen.getByText("Recorded run · 27 Oct 2026")).toBeInTheDocument();

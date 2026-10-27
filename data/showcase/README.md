@@ -19,8 +19,8 @@ What is in here, and how the app treats it:
 - `cases/*.json`: the case exactly as the agent produced it, plus `recorded: { recordedOn }`
   and the file paths rewritten to `data/showcase/...`. Nothing was edited by hand and nothing
   was re-run to make them look better.
-- `photos/`: the photos Muse was shown. They are the **provisional AI-generated stand-ins** of
-  `data/photos/README.md`, not photographs taken by the team; the copy here is pinned so the
+- `photos/`: the photos Muse was shown. They were **generated with Meta's Muse Image**
+  (`muse-image-1.0`, see `data/photos/README.md`), not photographs taken by the team; the copy here is pinned so the
   recording keeps showing what Muse actually saw even after the team's own photos replace
   the stand-ins.
 - `evidence/`: the photos annotated by SAM 3.1. `claims/`: the claim PDFs.

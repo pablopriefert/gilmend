@@ -31,6 +31,11 @@ export function photoSrc(photo: string): string {
   // below and the browser asked for "/tmp/damage-desk/uploads/..." as a static asset (404).
   const inTmp = /\/damage-desk\/((?:uploads|evidence|claims)\/.+)$/.exec(normalized);
   if (inTmp) return `/api/files?p=${encodeURIComponent(inTmp[1])}`;
+  // A demo photo referenced in place (cases made by `npm run demo` or `npm run real` keep
+  // "data/photos/vase-broken.webp"): /api/demo-photo serves it by name, never by path, and
+  // answers 404 for any name outside the six demo photos.
+  const demo = /(?:^|\/)data\/photos\/([a-z-]+)\.(?:jpe?g|webp|png)$/.exec(normalized);
+  if (demo) return `/api/demo-photo?name=${encodeURIComponent(demo[1])}`;
   // Static assets shipped with the app (public/demo/...).
   if (normalized.startsWith("public/")) return `/${normalized.slice("public/".length)}`;
   if (normalized.startsWith("/")) return normalized;
