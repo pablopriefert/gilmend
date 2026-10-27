@@ -60,6 +60,7 @@ export function CaseView({
           <p role="note" data-testid="recorded-note" className="mt-3 rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-950">
             <strong>Recorded run.</strong> This is a real run of Muse Spark 1.3 and SAM 3.1 on the Meta Model API,
             recorded on {formatDate(`${c.recorded.recordedOn}T12:00:00Z`)} and saved with the code. Nothing here was re-run for this page, and the deadlines are shown as of the recording. The
+            customer photos are provisional AI-generated stand-ins (data/photos/README.md); Muse and SAM ran on exactly these images. The
             recording itself is read-only: approving, editing or rejecting it stores a copy.
           </p>
         )}

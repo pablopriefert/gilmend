@@ -101,15 +101,18 @@ describe("layered case store: the recorded runs under a writable store", () => {
     expect(await getShowcaseCase(RECORDED)).toMatchObject({ status: "needs_review" });
   });
 
-  it("later changes go to the copy, and two quick changes keep both", async () => {
+  it("later changes go to the copy, and two quick changes keep both their fields and their trace lines", async () => {
     const { store } = layered();
+    const before = ((await store.get(RECORDED)) as CaseRecord).trace.length;
+    // The first change copies the recording; the second must land on the copy, not on a second one.
     await Promise.all([
-      store.update(RECORDED, { status: "approved" }),
-      store.update(RECORDED, { trace: [{ step: "Merchant edited the customer reply.", at: "2026-11-01T09:00:00.000Z" }] }),
+      store.update(RECORDED, { status: "approved" }, { appendTrace: [{ step: "Merchant approved.", at: "2026-11-01T09:00:00.000Z" }] }),
+      store.update(RECORDED, {}, { appendTrace: [{ step: "Merchant edited the customer reply.", at: "2026-11-01T09:00:01.000Z" }] }),
     ]);
     const final = (await store.get(RECORDED)) as CaseRecord;
     expect(final.status).toBe("approved");
-    expect(final.trace.map((t) => t.step)).toEqual(["Merchant edited the customer reply."]);
+    expect(final.trace).toHaveLength(before + 2);
+    expect(final.trace.slice(before).map((t) => t.step).sort()).toEqual(["Merchant approved.", "Merchant edited the customer reply."]);
     await store.update(RECORDED, { status: "rejected" });
     expect((await store.get(RECORDED))?.status).toBe("rejected");
   });

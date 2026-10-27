@@ -93,7 +93,47 @@ describe("createObjectCaseStore (cases on a shared object store)", () => {
     expect(final?.trace).toHaveLength(1);
   });
 
+  it("appendTrace adds lines to the trace read under the lock, so concurrent updates keep every line", async () => {
+    const store = createObjectCaseStore({ objects: createFauxObjectStore() });
+    await store.save({ ...fauxCase({ id: "lines" }), trace: [{ step: "Muse decided.", at: "2026-10-30T10:00:00.000Z" }] });
+    await Promise.all([
+      store.update("lines", { status: "approved" }, { appendTrace: [{ step: "approved", at: "2026-10-30T10:01:00.000Z" }] }),
+      store.update("lines", {}, { appendTrace: [{ step: "edited", at: "2026-10-30T10:02:00.000Z" }] }),
+    ]);
+    const steps = (await store.get("lines"))?.trace.map((t) => t.step);
+    expect(steps?.[0]).toBe("Muse decided.");
+    expect(steps?.slice(1).sort()).toEqual(["approved", "edited"]);
+  });
+
   describe("across instances (no shared lock)", () => {
+    it("appended trace lines survive a conflict: the retry appends to what the other instance wrote", async () => {
+      const objects = createFauxObjectStore({ conditional: true });
+      const a = createObjectCaseStore({ objects });
+      await a.save(fauxCase({ id: "c" }));
+      const current = JSON.parse((await objects.get("cases/c.json"))!.bytes.toString("utf8"));
+      const fromB = Buffer.from(JSON.stringify({ ...current, trace: [{ step: "from B", at: "2026-10-30T10:00:00.000Z" }] }));
+      objects.beforeNextPut(() => {
+        void objects.put("cases/c.json", fromB, { contentType: "application/json" });
+      });
+      await a.update("c", { status: "approved" }, { appendTrace: [{ step: "from A", at: "2026-10-30T10:01:00.000Z" }] });
+      expect((await a.get("c"))?.trace.map((t) => t.step)).toEqual(["from B", "from A"]);
+    });
+
+    it("fails loudly when the backend claims conditional writes but returns no ETag", async () => {
+      const objects = createFauxObjectStore({ conditional: true });
+      const store = createObjectCaseStore({ objects });
+      await store.save(fauxCase({ id: "c" }));
+      // A wrong adapter shape (for example reading the wrong field of the Blob result).
+      const get = objects.get.bind(objects);
+      vi.spyOn(objects, "get").mockImplementation(async (key) => {
+        const found = await get(key);
+        return found ? { bytes: found.bytes, contentType: found.contentType } : null;
+      });
+      const put = vi.spyOn(objects, "put");
+      await expect(store.update("c", { status: "approved" })).rejects.toThrow(/returned no ETag/);
+      expect(put).not.toHaveBeenCalled();
+    });
+
     it("a conditional write that loses the race re-reads and re-applies the patch", async () => {
       const objects = createFauxObjectStore({ conditional: true });
       const a = createObjectCaseStore({ objects });

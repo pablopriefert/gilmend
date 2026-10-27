@@ -8,7 +8,8 @@ import { formatDate } from "./format";
  */
 export function RecordedBadge({ recorded, compact = false }: { recorded: RecordedRun; compact?: boolean }) {
   const when = formatDate(`${recorded.recordedOn}T12:00:00Z`);
-  const full = `Recorded run: a real Muse Spark 1.3 run, recorded on ${when}`;
+  // The stand-in photos are said here too: a judge who only reads the badge must not take them for customer photos.
+  const full = `Recorded run: a real Muse Spark 1.3 run, recorded on ${when}, on provisional AI-generated stand-in photos`;
   return (
     <span
       data-recorded="true"

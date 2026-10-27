@@ -2,6 +2,7 @@ import type { CaseRecord } from "../types";
 import { newestFirst } from "./case-order";
 import { isSafeCaseId, type CaseStore } from "./file-store";
 import { createKeyedLock } from "./keyed-lock";
+import { mergeCaseUpdate } from "./merge-update";
 
 // The read-only showcase (src/lib/showcase) layered under a writable store.
 //
@@ -34,7 +35,8 @@ export interface LayeredStoreOptions {
 
 export function createLayeredCaseStore({ base, showcase, now = () => new Date() }: LayeredStoreOptions): CaseStore {
   // Serialises the "is it already copied?" check with the copy, per case: two quick clicks on
-  // a recorded case must not both copy it and lose one of the two trace lines.
+  // a recorded case must not both copy it and lose one of the two changes (the trace lines are
+  // kept by `appendTrace`, which the store applies to the record it reads under this lock).
   const withLock = createKeyedLock();
 
   return {
@@ -52,20 +54,14 @@ export function createLayeredCaseStore({ base, showcase, now = () => new Date() 
       return base.save(record);
     },
 
-    async update(id, patch) {
+    async update(id, patch, options) {
       if (!isSafeCaseId(id)) throw new Error(`Unknown case "${id}"`);
       return withLock(id, async () => {
         const stored = await base.get(id);
-        if (stored) return base.update(id, patch);
+        if (stored) return base.update(id, patch, options);
         const recorded = await showcase.get(id);
         if (!recorded) throw new Error(`Unknown case "${id}"`);
-        const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
-        return base.save({
-          ...recorded,
-          ...defined,
-          id: recorded.id,
-          updatedAt: now().toISOString(),
-        });
+        return base.save(mergeCaseUpdate(recorded, patch, options, now().toISOString()));
       });
     },
   };

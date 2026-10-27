@@ -3,6 +3,7 @@ import { PreconditionFailedError, type ObjectStore } from "../storage/object-sto
 import { newestFirst } from "./case-order";
 import { isSafeCaseId, type CaseStore } from "./file-store";
 import { createKeyedLock } from "./keyed-lock";
+import { mergeCaseUpdate } from "./merge-update";
 
 // A CaseStore on top of a shared ObjectStore (src/lib/storage/object-store.ts): one JSON
 // object per case under "cases/". Same contract as the file store, with these guarantees
@@ -15,7 +16,10 @@ import { createKeyedLock } from "./keyed-lock";
 //    the file store). Across instances the lock does not exist, so when the backend supports
 //    conditional writes the put carries the ETag that was read and a conflict re-reads and
 //    re-applies the patch (up to MAX_ATTEMPTS). Without conditional writes it is
-//    last-writer-wins, which is what the README states for the demo.
+//    last-writer-wins, which is what the README states for the demo. A backend that claims
+//    conditional writes but returns no ETag makes update() throw rather than degrade quietly.
+//  - Trace lines: a caller that must not lose a concurrent writer's line passes
+//    `appendTrace`; it is appended to the trace read inside the lock and re-read on a retry.
 //  - list() is one list call plus one get per case (no index object to keep consistent).
 //    Fine for a demo's dozens of cases, not for thousands.
 
@@ -95,19 +99,21 @@ export function createObjectCaseStore({ objects, now = () => new Date() }: Objec
       });
     },
 
-    async update(id, patch) {
+    async update(id, patch, options) {
       if (!isSafeCaseId(id)) throw new Error(`Unknown case "${id}"`);
       return withLock(id, async () => {
-        const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
         for (let attempt = 1; ; attempt++) {
           const current = await read(id);
           if (!current) throw new Error(`Unknown case "${id}"`);
-          const merged: CaseRecord = {
-            ...current.record,
-            ...defined,
-            id: current.record.id,
-            updatedAt: now().toISOString(),
-          };
+          // A backend that says it takes conditional writes but hands back no ETag would
+          // silently turn every update into last-writer-wins while the docs promise a retry.
+          // Fail loudly on the first update instead (a wrong adapter shape shows up here).
+          if (objects.supportsConditionalWrites && current.etag === undefined) {
+            throw new Error(
+              `Object store "${objects.name}" supports conditional writes but returned no ETag for cases/${id}.json: check its adapter (docs/storage.md)`,
+            );
+          }
+          const merged = mergeCaseUpdate(current.record, patch, options, now().toISOString());
           try {
             await write(merged, objects.supportsConditionalWrites ? current.etag : undefined);
             return merged;

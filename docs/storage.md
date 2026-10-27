@@ -121,7 +121,8 @@ Once it is installed:
 | A write | temp file in the same folder, then `rename`: readers see the old or the new case | one `put`: the object is replaced atomically (a property each backend must have; true of S3-style stores) |
 | Two writers, same case | last writer wins | last writer wins on `save`; on `update` see below |
 | `update` inside one instance | per-case in-process lock | the same lock |
-| `update` across instances | not applicable (one disk) | **no shared lock.** With conditional writes the `put` carries the ETag that was read; a conflict re-reads and re-applies the patch (5 attempts, then an error). Without them it is last-writer-wins |
+| `update` across instances | not applicable (one disk) | **no shared lock.** With conditional writes the `put` carries the ETag that was read; a conflict re-reads and re-applies the patch (5 attempts, then an error). A backend that declares conditional writes but returns no ETag makes `update` throw (a wrong adapter shape fails on its first use). Without conditional writes it is last-writer-wins |
+| Trace lines of a human action | `update(id, patch, { appendTrace })` appends them to the trace read under the lock, so two concurrent PATCHes keep both lines | the same, re-read on a retry |
 | Listing | `readdir`, skips unreadable files | one `list` plus one `get` per case, skips unreadable objects. Fine for dozens of cases |
 | Files (photos, PDFs) | written once under a name that cannot clash (upload id, content hash, case id) | the same, copied out after writing. A failed copy-out is reported (the upload answers 500, the evidence note says the call failed), not ignored |
 

@@ -2,7 +2,7 @@ import { getShowcaseCase, listShowcaseCases } from "../showcase/showcase";
 import { sharedObjects } from "../storage";
 import type { ObjectStore } from "../storage/object-store";
 import type { CaseRecord } from "../types";
-import { createCaseStore, defaultCasesDir, type CaseStore } from "./file-store";
+import { createCaseStore, defaultCasesDir, type CasePatch, type CaseStore, type UpdateOptions } from "./file-store";
 import { createLayeredCaseStore } from "./layered-store";
 import { createObjectCaseStore } from "./object-case-store";
 
@@ -73,7 +73,8 @@ export async function saveCase(c: CaseRecord): Promise<CaseRecord> {
  */
 export async function updateCase(
   id: string,
-  patch: Partial<Omit<CaseRecord, "id">>,
+  patch: CasePatch,
+  options?: UpdateOptions,
 ): Promise<CaseRecord> {
-  return defaultStore().update(id, patch);
+  return defaultStore().update(id, patch, options);
 }
