@@ -76,3 +76,32 @@ export async function restoreRuntimeFile(file: string, root: string = runtimeDir
   }
   return true;
 }
+
+/**
+ * Remove runtime files that no case refers to (the photos of a follow-up that failed or was refused
+ * after they were stored): the local copy, and the shared store's when there is one. Best effort and
+ * silent: it runs on a failure path that already answers the visitor, and a file that is left behind
+ * is only what it was before this existed. Returns how many shared objects it could not remove.
+ */
+export async function discardRuntimeFiles(files: string[], root: string = runtimeDir()): Promise<number> {
+  let failed = 0;
+  let objects: ReturnType<typeof sharedObjects> = null;
+  try {
+    objects = sharedObjects();
+  } catch {
+    // an invalid DAMAGE_DESK_STORAGE would already have failed the request: only the local files remain
+  }
+  for (const file of files) {
+    const key = runtimeObjectKey(file, root);
+    if (objects && key) {
+      try {
+        await objects.delete(key);
+      } catch (err) {
+        failed += 1;
+        console.error("[gilmend] could not remove an unused file from the shared store:", err instanceof Error ? err.message : err);
+      }
+    }
+    await fs.rm(/*turbopackIgnore: true*/ path.resolve(file), { force: true }).catch(() => {});
+  }
+  return failed;
+}

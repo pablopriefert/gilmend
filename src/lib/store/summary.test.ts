@@ -101,6 +101,7 @@ describe("summarizeCases", () => {
     expect(summarizeCases(cases, NOW)).toEqual({
       recoverableThisMonthEur: 1240,
       demoModeCases: 2,
+      simulatedReplyCases: 0,
       claimsDueThisWeek: 2,
       dueCaseIds: ["b", "a"],
     });
@@ -120,6 +121,43 @@ describe("summarizeCases", () => {
   });
 });
 
+describe("summarizeCases and the simulated reply of the demo button", () => {
+  const withReply = (c: ReturnType<typeof fauxCase>, simulated: boolean) => ({
+    ...c,
+    followUps: [{ id: "fu", receivedAt: inDays(0), message: "Here is a sharper photo.", photos: ["p.webp"], ...(simulated ? { simulated: true } : {}) }],
+  });
+
+  it("keeps a claim that exists only because of a simulated reply out of the live money, and says so apart", () => {
+    // The lamp of the demo: round 2 (simulated reply) gave a reship with a claim of up to 102.30.
+    const rehearsal = withReply(fauxCase({ id: "lamp", engine: "muse-spark-1.3", claim: { maxCompensationEur: 102.3, claimDeadline: inDays(3) } }), true);
+    const real = withReply(fauxCase({ id: "real", claim: { maxCompensationEur: 40, claimDeadline: inDays(2) } }), false);
+    const plain = fauxCase({ id: "plain", claim: { maxCompensationEur: 10, claimDeadline: inDays(5) } });
+    const summary = summarizeCases([rehearsal, real, plain], NOW);
+    expect(summary.recoverableThisMonthEur).toBe(50);
+    expect(summary.claimsDueThisWeek).toBe(2);
+    expect(summary.dueCaseIds).toEqual(["real", "plain"]);
+    expect(summary.simulatedReplyCases).toBe(1);
+    expect(isRecoverable(rehearsal, NOW)).toBe(false);
+    expect(isRecoverable(real, NOW)).toBe(true);
+    expect(recoverableThisMonthEur([rehearsal], NOW)).toBe(0);
+    expect(claimsDueThisWeek([rehearsal], NOW)).toEqual([]);
+  });
+
+  it("does not count a simulated case that holds no open claim (nothing was left out)", () => {
+    const rejected = withReply(fauxCase({ id: "x", status: "rejected", claim: { maxCompensationEur: 90, claimDeadline: inDays(3) } }), true);
+    const noClaim = withReply(fauxCase({ id: "y", carrierClaim: false }), true);
+    expect(summarizeCases([rejected, noClaim], NOW).simulatedReplyCases).toBe(0);
+  });
+
+  it("still leaves out a simulated case even if a real reply came after it", () => {
+    const both = {
+      ...withReply(fauxCase({ id: "both", claim: { maxCompensationEur: 60, claimDeadline: inDays(3) } }), true),
+    };
+    both.followUps.push({ id: "fu2", receivedAt: inDays(1), message: "A real one.", photos: [] });
+    expect(summarizeCases([both], NOW)).toMatchObject({ recoverableThisMonthEur: 0, simulatedReplyCases: 1 });
+  });
+});
+
 describe("summarizeCases and recorded showcase runs", () => {
   it("leaves them out of every number: they are snapshots, not live money", () => {
     const live = fauxCase({ id: "live", claim: { maxCompensationEur: 40, claimDeadline: inDays(2) } });
@@ -135,6 +173,7 @@ describe("summarizeCases and recorded showcase runs", () => {
     expect(summarizeCases([recorded], NOW)).toEqual({
       recoverableThisMonthEur: 0,
       demoModeCases: 0,
+      simulatedReplyCases: 0,
       claimsDueThisWeek: 0,
       dueCaseIds: [],
     });

@@ -1,5 +1,6 @@
-import { Archive, Clock, EyeOff, FlaskConical, Hourglass, Repeat2 } from "lucide-react";
-import { caseRound, followUpAvailability, followUpsOf, getRounds } from "@/lib/rounds";
+import { Archive, Clock, EyeOff, FlaskConical, GitFork, Hourglass, Repeat2 } from "lucide-react";
+import Link from "next/link";
+import { caseRound, followUpAvailability, followUpsOf, getRounds, hasSimulatedReply } from "@/lib/rounds";
 import type { CaseRecord, Engine, EngineDetail } from "@/lib/types";
 import { CaseReviewProvider, ReplyCard, ReviewActions } from "./case-review-panel";
 import {
@@ -51,6 +52,7 @@ export function CaseView({
   const rounds = getRounds(c);
   const round = caseRound(c);
   const followUp = followUpAvailability(c);
+  const simulatedReply = hasSimulatedReply(c);
   const photosNotRead = c.trace.find((s) => PHOTOS_NOT_READ.test(s.step));
   const title = c.order?.name ?? c.report.customerEmail;
   return (
@@ -96,7 +98,7 @@ export function CaseView({
             </div>
           </div>
 
-          {(c.status === "new" || photosNotRead || c.recorded || c.engine === "demo-mock") && (
+          {(c.status === "new" || photosNotRead || c.recorded || c.followedFrom || simulatedReply || c.engine === "demo-mock") && (
             <div className="flex flex-col gap-3">
               {c.status === "new" && (
                 <Note tone="warn" icon={Hourglass} className="animate-rise" style={riseStyle(0)}>
@@ -116,6 +118,22 @@ export function CaseView({
                   recorded on {formatDate(`${c.recorded.recordedOn}T12:00:00Z`)} and saved with the code. Nothing here was re-run for this page, and the deadlines are shown as of the recording. The
                   customer photos were generated with Meta&apos;s Muse Image for this demo (data/photos/README.md); Muse Spark and SAM ran on exactly these images. The
                   recording itself is read-only: approving, editing or rejecting it stores a copy.
+                </Note>
+              )}
+              {c.followedFrom && (
+                <Note tone="info" icon={GitFork} data-testid="followed-from-note" className="animate-rise" style={riseStyle(3)}>
+                  <strong>This case continues a recorded run.</strong> Round 1 below is a copy of that recording; the
+                  recording itself was not changed.{" "}
+                  <Link href={`/cases/${c.followedFrom}`} className="font-semibold underline underline-offset-4">
+                    Open the recording
+                  </Link>
+                </Note>
+              )}
+              {simulatedReply && (
+                <Note tone="warn" icon={FlaskConical} data-testid="simulated-reply-note" className="animate-rise" style={riseStyle(3)}>
+                  <strong>Simulated reply.</strong> A reply on this case comes from the demo button: the message was
+                  written by us and the photo was generated with Meta&apos;s Muse Image. No customer wrote it. The case
+                  is not counted in the totals of the cases page, and its claim PDF says so.
                 </Note>
               )}
               {c.engine === "demo-mock" && (

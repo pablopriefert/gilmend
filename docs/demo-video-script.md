@@ -190,11 +190,14 @@ there is room, or becomes its own 20 seconds if something else is cut. It only c
 2. On the **"The customer replied"** card press **Demo: simulate the customer's reply** (a sharp photo and a
    short message fill the form; the card says the photo is generated with Muse Image), then **Run the agent
    again (round 2)**. Caption "sped up" over the wait: a real round took 37 s on 27 Oct 2026.
-3. The page now shows **Rounds of this case**: Round 1 (Muse Spark 1.3, Recorded) then Round 2, and "What
+3. The browser opens a **new case** (it says "This case continues a recorded run" and links back to the
+   recording: the recording itself is never changed, so the take can be repeated from the same starting
+   point). The page now shows **Rounds of this case**: Round 1 (Muse Spark 1.3, Recorded) then Round 2, and "What
    changed since round 1": decision, damage read, photo quality, carrier claim. Read the figures from the
    screen of the take. Voice: "The customer replied. The agent ran again on the same case, with everything it
    knew, and the claim appeared. The deadline still counts from the delivery date, not from the reply."
-4. Say it is simulated (the page says "Simulated reply") and, if the take ran in demo mode, that the badge says
+4. Say it is simulated (the page says "Simulated reply", and the cases page leaves its claim out of the totals
+   and says so) and, if the take ran in demo mode, that the badge says
    DEMO MODE and that round 2 is a mock. Never film demo mode as a real Muse round, and never present the
    simulated reply as a customer's.
 

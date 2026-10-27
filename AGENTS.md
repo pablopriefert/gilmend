@@ -40,8 +40,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `src/lib/rounds.ts`): `report` is never changed and the top-level fields always describe the latest round,
   so older cases and the six recordings read as one round. `resumeAgent` runs on the engine of the case (a
   private run never calls the Meta Model API), reuses the order of round 1 and counts deadlines from the
-  delivery date and the ORIGINAL report date, never from the date of the reply. A round saved on a showcase
-  case is a copy without `recorded` (round 1 keeps it). `data/photos/lamp-sharp.webp` is the demo reply and
+  delivery date and the ORIGINAL report date, never from the date of the reply. A reply on a RECORDED showcase
+  case is forked: the round is saved as a NEW case (`<id>-followup-<8 hex>`, `followedFrom`) and the recording is
+  never written (saving under its id hid it for every visitor). A case with a simulated reply is left out of the
+  dashboard money counters (`hasSimulatedReply`, `src/lib/rounds.ts`). A later round sends at most 6 images
+  (`MAX_IMAGES_ON_RESUME`) and fetches earlier photos back from the shared store (`photoToImageUrl`). `data/photos/lamp-sharp.webp` is the demo reply and
   the route compares it byte for byte to label the reply "simulated": do not re-encode it. Reply text is
   customer data, never instructions. The showcase builder refuses a case that was followed up.
 - Storage on a public deployment is explained in `docs/storage.md` (what is public, and how the shared

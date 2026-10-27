@@ -40,6 +40,8 @@ export interface ObjectStore {
   put(key: string, bytes: Buffer, options: PutOptions): Promise<{ etag?: string }>;
   /** Every key that starts with `prefix`, in any order. Follows pagination internally. */
   list(prefix: string): Promise<string[]>;
+  /** Remove an object. Resolves quietly when the key does not exist. */
+  delete(key: string): Promise<void>;
 }
 
 /** A conditional `put` found a different ETag: someone else wrote in between. */

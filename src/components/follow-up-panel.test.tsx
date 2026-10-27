@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_FOLLOW_UPS, snapshotRound } from "@/lib/rounds";
 import type { CaseRecord, Decision, FollowUp } from "@/lib/types";
 import { CaseView } from "./case-view";
+import { clearRoundsFocusRequest } from "./case/rounds-focus";
 import { DEMO_FOLLOW_UP, isBlurryLampCase } from "./demo-scenarios";
 import { NOW, makeCase, makeRules } from "./fixtures";
 
 const refresh = vi.fn();
+const push = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh, push: vi.fn() }),
+  useRouter: () => ({ refresh, push }),
   usePathname: () => "/cases/case-1",
 }));
 
@@ -50,6 +52,8 @@ const run = () => fireEvent.click(screen.getByRole("button", { name: /Run the ag
 
 beforeEach(() => {
   refresh.mockReset();
+  push.mockReset();
+  clearRoundsFocusRequest();
   let n = 0;
   vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => `blob:photo-${n++}`, revokeObjectURL: () => {} }));
 });
@@ -156,10 +160,25 @@ describe("the 'The customer replied' panel: sending a reply", () => {
     expect(body.has("orderNumber")).toBe(false);
     expect(body.getAll("photos").map((f) => (f as File).name)).toEqual(["a.jpg", "b.jpg"]);
 
-    settle(jsonResponse(201, { round: 2, decision: "reship", engine: "demo-mock", fellBack: false }));
+    settle(jsonResponse(201, { caseId: "case-1", forkedFrom: null, round: 2, decision: "reship", engine: "demo-mock", fellBack: false }));
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    expect(push).not.toHaveBeenCalled();
     expect(await screen.findByText("Round 2 is ready")).toBeInTheDocument();
     expect(screen.getByText(/Decision: Reship/)).toBeInTheDocument();
+  });
+
+  it("opens the new case when the reply was saved as a fork of a recorded run, instead of refreshing this one", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(201, { caseId: "case-1-followup-0a1b2c3d", forkedFrom: "case-1", round: 2, decision: "reship", engine: "muse-spark-1.3", fellBack: false }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    view(blurry({ recorded: { recordedOn: "2026-10-27" } }));
+    fireEvent.change(screen.getByLabelText("What the customer wrote"), { target: { value: "Here is a sharper photo." } });
+    run();
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/cases/case-1-followup-0a1b2c3d"));
+    expect(refresh).not.toHaveBeenCalled();
+    expect(await screen.findByText("Round 2 is ready")).toBeInTheDocument();
+    expect(screen.getByText(/ran again on a copy of this recorded run\. Decision: Reship\. The recording stays as it was\./)).toBeInTheDocument();
   });
 
   it("sends the access code of the page with the reply, and shares the field with the review card", async () => {
@@ -368,6 +387,40 @@ describe("a case that was followed up", () => {
     view(second({ followUps: [{ ...followUp, simulated: true }] }));
     expect(screen.getAllByText("Simulated reply")).toHaveLength(2);
     expect(screen.getAllByText(/Not written by a customer/).length).toBeGreaterThan(0);
+  });
+
+  it("moves the focus to the title of the rounds card once the reply is processed (the panel that had it is gone)", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(201, { caseId: "case-1", forkedFrom: null, round: 2, decision: "reship", engine: "demo-mock", fellBack: false }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { rerender } = view(first);
+    fireEvent.change(screen.getByLabelText("What the customer wrote"), { target: { value: "Here is a sharper photo." } });
+    run();
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+    // router.refresh() brings the server-side case: round 2 is settled, the panel is gone, the rounds card appears.
+    rerender(<CaseView caseRecord={second()} rules={makeRules()} now={NOW} />);
+    const title = screen.getByRole("heading", { name: "Rounds of this case" });
+    expect(title).toHaveAttribute("tabindex", "-1");
+    await waitFor(() => expect(title).toHaveFocus());
+  });
+
+  it("does not take the focus when nobody just sent a reply (opening a followed-up case, or a later refresh)", () => {
+    view(second());
+    expect(document.body).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Rounds of this case" })).not.toHaveFocus();
+  });
+
+  it("says a case continues a recorded run, with a way back to it, and that a simulated reply is not counted", () => {
+    view(second({ id: "case-1-followup-0a1b2c3d", followedFrom: "case-1", followUps: [{ ...followUp, simulated: true }] }));
+    const from = screen.getByTestId("followed-from-note");
+    expect(from).toHaveTextContent(/continues a recorded run/);
+    expect(within(from).getByRole("link", { name: "Open the recording" })).toHaveAttribute("href", "/cases/case-1");
+    expect(screen.getByTestId("simulated-reply-note")).toHaveTextContent(/No customer wrote it\. The case is not counted in the totals/);
+  });
+
+  it("shows neither note on an ordinary case with a real reply", () => {
+    view(second());
+    expect(screen.queryByTestId("followed-from-note")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("simulated-reply-note")).not.toBeInTheDocument();
   });
 
   it("cuts the trace into rounds, newest first, each with its own timeline", () => {

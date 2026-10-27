@@ -1,10 +1,13 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEMO_FOLLOW_UP } from "@/components/demo-scenarios";
 import { makeCase } from "@/components/fixtures";
 import { createMockProvider } from "../providers/mock";
+import { overrideSharedObjects } from "../storage";
+import { createFauxObjectStore } from "../storage/faux-object-store";
+import { persistRuntimeFile } from "../storage/runtime-files";
 import { caseRound, followUpAvailability } from "../rounds";
 import { computeClaim as realComputeClaim } from "../rules/carriers";
 import type { CaseRecord, FollowUp } from "../types";
@@ -477,5 +480,181 @@ describe("resumeAgent in DEMO MODE (the scripted mock)", () => {
     const b = await resumeAgent(first, reply, { engine: "demo-mock", provider: createMockProvider() });
     expect(a.decision).toEqual(b.decision);
     expect(a.claim).toEqual(b.claim);
+  });
+});
+
+describe("resumeAgent: the photos of earlier rounds must really reach the model", () => {
+  // A report filed by hand on one serverless instance stores its photos under that instance's /tmp. The
+  // customer's reply comes hours later on ANOTHER instance: the path is the same but the disk is empty.
+  // Review of 28 Oct 2026: the read failed with ENOENT, a trace line said so, and the model was still told
+  // to compare the new photos with "the photos above" while there were none above.
+  const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7, 7]);
+  const NEW_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9, 9, 9]);
+  let runtime: string;
+  let objects: ReturnType<typeof createFauxObjectStore>;
+  const upload = (name: string) => path.join(runtime, "uploads", "fu", name);
+
+  beforeEach(async () => {
+    runtime = await mkdtemp(path.join(os.tmpdir(), "dd-resume-photos-"));
+    vi.stubEnv("DAMAGE_DESK_RUNTIME_DIR", runtime);
+    objects = createFauxObjectStore();
+    overrideSharedObjects(objects);
+    await mkdir(path.dirname(upload("x")), { recursive: true });
+  });
+  afterEach(async () => {
+    overrideSharedObjects(undefined);
+    vi.unstubAllEnvs();
+    await rm(runtime, { recursive: true, force: true });
+  });
+
+  /** Round 1 on "instance A": two photos stored and persisted, then the local disk is wiped ("instance B"). */
+  async function roundOneThenFreshInstance(opts: { keepInStore: string[] }): Promise<CaseRecord> {
+    await writeFile(upload("photo-1.png"), PNG_BYTES);
+    await writeFile(upload("photo-2.png"), PNG_BYTES);
+    await writeFile(upload("photo-3.png"), NEW_BYTES);
+    for (const name of opts.keepInStore) await persistRuntimeFile(upload(name));
+    const first = await runAgent(
+      makeReport({ photos: [upload("photo-1.png"), upload("photo-2.png")], message: "My vase is damaged, I think." }),
+      {
+        engine: "muse-spark-1.3",
+        provider: scriptedProvider([
+          { calls: [["get_order", { orderNumber: "#1001" }]] },
+          { calls: [["assess_photos", ASSESSMENT_BLURRY]] },
+          { calls: [["finish_case", ASK]] },
+        ]),
+        deps: fakeDeps(),
+        now: NOW,
+      },
+    );
+    // The reply's own photo was just written by this instance: it stays. Everything else is gone.
+    await rm(upload("photo-1.png"));
+    await rm(upload("photo-2.png"));
+    return first;
+  }
+
+  const imageUrls = (provider: ReturnType<typeof scriptedProvider>) =>
+    (provider.requests[0].messages[1].content as { type: string; image_url?: { url: string } }[])
+      .filter((p) => p.type === "image_url")
+      .map((p) => p.image_url!.url);
+
+  it("fetches a photo of round 1 from the shared store when the instance that took it is gone", async () => {
+    const first = await roundOneThenFreshInstance({ keepInStore: ["photo-1.png", "photo-2.png"] });
+    const provider = scriptedProvider(round2Turns());
+    const second = await resumeAgent(first, followUp({ photos: [upload("photo-3.png")] }), {
+      engine: "muse-spark-1.3",
+      provider,
+      deps: fakeDeps(),
+      now: later(2 * DAY),
+    });
+    // Both photos of round 1 and the new one reached the model, from the store's bytes.
+    const urls = imageUrls(provider);
+    expect(urls).toHaveLength(3);
+    expect(urls[0]).toBe(`data:image/png;base64,${PNG_BYTES.toString("base64")}`);
+    expect(urls[2]).toBe(`data:image/png;base64,${NEW_BYTES.toString("base64")}`);
+    expect(second.trace.some((s) => /could not be read/.test(s.step))).toBe(false);
+    expect(second.decision).toMatchObject({ decision: "reship", needsHuman: false });
+  });
+
+  it("when a photo of round 1 cannot be loaded at all, tells the model and sends the case to a person", async () => {
+    // Only photo 1 made it to the store: photo 2 is lost.
+    const first = await roundOneThenFreshInstance({ keepInStore: ["photo-1.png"] });
+    const provider = scriptedProvider(round2Turns());
+    const second = await resumeAgent(first, followUp({ photos: [upload("photo-3.png")] }), {
+      engine: "muse-spark-1.3",
+      provider,
+      deps: fakeDeps(),
+      now: later(2 * DAY),
+    });
+    expect(imageUrls(provider)).toHaveLength(2);
+    const parts = provider.requests[0].messages[1].content as { type: string; text?: string }[];
+    expect(parts.at(-1)?.text).toMatch(/1 photo\(s\) of this case \(index 1 in photo_index\) could NOT be loaded/);
+    expect(parts.at(-1)?.text).toMatch(/needsHuman=true/);
+    // The model decided "reship, no human" as usual; the guardrail makes it a hand-over, in the trace.
+    expect(second.decision?.needsHuman).toBe(true);
+    expect(second.decision?.reasons.join(" ")).toMatch(/Guardrail: 1 photo\(s\) of this case could not be loaded/);
+    expect(second.trace.filter((s) => s.round === 2).map((s) => s.step).join("\n")).toMatch(/could not be loaded \(index 1\)/);
+  });
+
+  it("when none of the photos can be read, withholds them: nothing is judged, no claim, a person decides", async () => {
+    // Nothing in the store, and the reply's own photo is unreadable too (a corrupt upload).
+    const first = await roundOneThenFreshInstance({ keepInStore: [] });
+    const provider = scriptedProvider(round2Turns());
+    const second = await resumeAgent(first, followUp({ photos: [upload("never-written.png")] }), {
+      engine: "muse-spark-1.3",
+      provider,
+      deps: fakeDeps(),
+      now: later(2 * DAY),
+    });
+    expect(imageUrls(provider)).toHaveLength(0);
+    const parts = provider.requests[0].messages[1].content as { type: string; text?: string }[];
+    expect(parts.map((p) => p.text).join("\n")).toMatch(/photos were NOT shown to you \(none of the 3 photo\(s\) of this case could be read from storage/);
+    expect(second.decision).toMatchObject({ carrierClaim: false, needsHuman: true });
+    expect(second.decision?.reasons.join(" ")).toMatch(/photos were not read by the model/);
+    expect(second.document).toBeNull();
+  });
+});
+
+describe("resumeAgent: the request does not grow with every round", () => {
+  // Review of 28 Oct 2026: every round re-sent every photo of every earlier round. Round 4 of a case
+  // with 3 photos per round carried 12 images of up to 10 MB each in one request nobody had tried on the
+  // Meta API, and a refusal quietly turned the case into one whose photos were "not read".
+  const photo = (n: number) => `data:image/png;base64,P${n}`;
+  const reply = (id: string, n: number[]): FollowUp => ({
+    id,
+    receivedAt: later(DAY).toISOString(),
+    message: `Reply ${id}`,
+    photos: n.map(photo),
+  });
+
+  it("sends the report's photos and the new reply's, and describes the replies in between in words", async () => {
+    const first = makeCase({
+      engine: "muse-spark-1.3",
+      report: makeReport({ photos: [photo(1), photo(2), photo(3)] }),
+      decision: { decision: "ask_more_photos", carrierClaim: false, confidence: 0.9, reasons: ["Still blurry."], needsHuman: true, customerReply: "More please." },
+      assessment: { ...ASSESSMENT_BLURRY, packagingAdequate: null } as never,
+      claim: null,
+      document: null,
+      evidence: [],
+      followUps: [reply("a", [4, 5, 6]), reply("b", [7, 8, 9])],
+      previousRounds: [],
+    });
+    const provider = scriptedProvider(round2Turns());
+    const second = await resumeAgent(first, reply("c", [10, 11, 12]), {
+      engine: "muse-spark-1.3",
+      provider,
+      deps: fakeDeps(),
+      now: later(5 * DAY),
+    });
+    const parts = provider.requests[0].messages[1].content as { type: string; text?: string; image_url?: { url: string } }[];
+    const urls = parts.filter((p) => p.type === "image_url").map((p) => p.image_url!.url);
+    // 12 photos in the case, 6 sent: the report's 3 and the 3 new ones.
+    expect(urls).toEqual([1, 2, 3, 10, 11, 12].map(photo));
+    const block = parts.find((p) => p.text?.includes("FOLLOW-UP ROUND 4"))?.text ?? "";
+    expect(block).toContain("Photos 3 to 5 (index in photo_index), sent in round 2: part of this case, NOT attached");
+    expect(block).toContain("Photos 6 to 8 (index in photo_index), sent in round 3: part of this case, NOT attached");
+    expect(block).toContain("New photos attached to this follow-up (index in photo_index): 9, 10, 11");
+    expect(second.trace.map((s) => s.step).join("\n")).toMatch(/Follow-up received \(3 new photo\(s\), 6 photo\(s\) attached in total, 6 earlier photo\(s\) described in words but not attached/);
+    // Not a failure: nothing was "unread", so no hand-over is forced by it.
+    expect(second.trace.some((s) => /could not be (read|loaded)/.test(s.step))).toBe(false);
+  });
+
+  it("sends everything when the case is small enough", async () => {
+    const first = makeCase({
+      engine: "muse-spark-1.3",
+      report: makeReport({ photos: [photo(1)] }),
+      decision: { decision: "ask_more_photos", carrierClaim: false, confidence: 0.9, reasons: ["Blurry."], needsHuman: false, customerReply: "More please." },
+      assessment: { ...ASSESSMENT_BLURRY, packagingAdequate: null } as never,
+      claim: null,
+      document: null,
+      evidence: [],
+      followUps: [reply("a", [2, 3])],
+      previousRounds: [],
+    });
+    const provider = scriptedProvider(round2Turns());
+    await resumeAgent(first, reply("b", [4, 5]), { engine: "muse-spark-1.3", provider, deps: fakeDeps(), now: later(3 * DAY) });
+    const urls = (provider.requests[0].messages[1].content as { type: string; image_url?: { url: string } }[])
+      .filter((p) => p.type === "image_url")
+      .map((p) => p.image_url!.url);
+    expect(urls).toEqual([1, 2, 3, 4, 5].map(photo));
   });
 });

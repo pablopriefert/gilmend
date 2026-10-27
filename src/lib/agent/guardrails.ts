@@ -23,6 +23,11 @@ export interface GuardrailContext {
   reportReceivedAt: string;
   /** The model was never shown the photos (no image input, or its server refused them). */
   photosNotRead?: boolean;
+  /**
+   * How many photos of the case could not be loaded and so were not shown, while others were (every
+   * one missing is `photosNotRead`). The model cannot have compared the new photos with them.
+   */
+  photosMissing?: number;
   /** Round of the case being decided: 1 for the report, 2 and more for a follow-up (resumeAgent). */
   round?: number;
 }
@@ -76,6 +81,15 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
       reasons.push("Guardrail: no carrier claim drafted, the model did not read the photos.");
     }
     force("the photos were not read by the model, so the damage is not assessed");
+  }
+
+  // Some of the photos could not be loaded (a file of round 1 missing from this instance, say): the
+  // model judged on part of the evidence and cannot have run the check "is it the same item?" on all
+  // of it. A person looks at the case.
+  if (!ctx.photosNotRead && (ctx.photosMissing ?? 0) > 0) {
+    force(
+      `${ctx.photosMissing} photo(s) of this case could not be loaded, so the model did not see all of the evidence and could not compare the new photos with them`,
+    );
   }
 
   // The model read the packaging as inadequate, and the claim is still on (computeClaim keeps it

@@ -32,7 +32,7 @@ function Label({ icon: Icon, children }: { icon: typeof Coins; children: React.R
  * amount means, which runs are recorded or demo) are visible text, never inside that hidden part.
  */
 export function CasesHeader({ cases, now }: { cases: CaseRecord[]; now: Date }) {
-  const { recoverableThisMonthEur: recoverableEur, claimsDueThisWeek, demoModeCases } = summarizeCases(cases, now);
+  const { recoverableThisMonthEur: recoverableEur, claimsDueThisWeek, demoModeCases, simulatedReplyCases } = summarizeCases(cases, now);
   const recorded = summarizeRecordedRuns(cases);
   const recordedCases = recorded.count;
   const showRecorded = recordedCases > 0 && recorded.asOf !== null;
@@ -115,6 +115,15 @@ export function CasesHeader({ cases, now }: { cases: CaseRecord[]; now: Date }) 
                 have not rejected. Not a promise of payment.
               </span>
             </p>
+            {simulatedReplyCases > 0 && (
+              <p className="flex items-start gap-2">
+                <FlaskConical aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                <span data-testid="simulated-reply-note">
+                  {simulatedReplyCases} {simulatedReplyCases === 1 ? "case answers" : "cases answer"} a simulated customer
+                  reply (the demo button) and {simulatedReplyCases === 1 ? "is" : "are"} listed below but not counted.
+                </span>
+              </p>
+            )}
             {recordedCases > 0 && (
               <p className="flex items-start gap-2">
                 <Clapperboard aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />

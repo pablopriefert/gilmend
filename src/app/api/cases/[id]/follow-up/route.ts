@@ -5,7 +5,7 @@ import { resumeAgent } from "@/lib/agent/run-agent";
 import { resolveEngine } from "@/lib/config";
 import { resolveDemoPhoto } from "@/lib/store/demo-photos";
 import { FOLLOW_UP_UNAVAILABLE_MESSAGE, MAX_FOLLOW_UP_PHOTOS, caseRound, followUpAvailability } from "@/lib/rounds";
-import { persistRuntimeFile } from "@/lib/storage/runtime-files";
+import { discardRuntimeFiles, persistRuntimeFile } from "@/lib/storage/runtime-files";
 import { getCase, saveCase } from "@/lib/store/cases";
 import type { CaseRecord, Engine, FollowUp } from "@/lib/types";
 import {
@@ -86,9 +86,18 @@ async function isSimulatedReply(buffers: { bytes: Buffer }[]): Promise<boolean> 
  * Same rules as POST /api/reports: the access code (401, 429 after too many wrong codes), the
  * rate limit, the daily ceiling of real runs (beyond it the round runs in labelled DEMO MODE) and
  * the shared storage for the photos. The engine is the one the case was run with: a private run
- * stays private (it never calls the Meta Model API), a mock stays a labelled mock. A recorded
- * showcase case is never modified: saving the new round stores a copy (copy-on-write), and the
- * committed recording stays round 1 of it. Nothing is ever sent to anyone.
+ * stays private (it never calls the Meta Model API), a mock stays a labelled mock.
+ *
+ * A RECORDED showcase case is forked, never continued: the new round is saved as a NEW case
+ * (`<id>-followup-<8 characters>`, `followedFrom` = the recording) that starts from a copy of the
+ * recording, and the answer's `caseId` is that new id (`forkedFrom` names the recording). Saving under
+ * the recording's own id used to store a copy that hides the recording for every visitor, for good: it
+ * lost its "Recorded run" badge, stopped asking for a reply and could not be played again (review of
+ * 28 Oct 2026). Nothing is ever sent to anyone.
+ *
+ * What is stored for a reply that then fails (the agent throws, the case changed meanwhile, the case
+ * cannot be saved) is removed again: customer photos that no case refers to must not stay in the
+ * private store.
  */
 export async function POST(request: Request, { params }: RouteContext): Promise<Response> {
   const { id } = await params;
@@ -177,6 +186,36 @@ export async function POST(request: Request, { params }: RouteContext): Promise<
   }
   running.add(id);
   try {
+    const followUpId = randomUUID();
+    const simulated = await isSimulatedReply(buffers);
+    // The photos are stored BEFORE a real run is reserved: a storage failure then costs no credit of the
+    // daily ceiling, and what was stored is removed again if the reply is not saved (discardUploads).
+    const uploadDir = path.join(runtimeDir(), "uploads", followUpId);
+    const targets = buffers.map(({ kind }, i) => path.join(uploadDir, `photo-${i + 1}.${IMAGE_EXTENSION[kind]}`));
+    const discardUploads = async () => {
+      await discardRuntimeFiles(targets);
+      await fs.rm(/*turbopackIgnore: true*/ uploadDir, { recursive: true, force: true }).catch(() => {});
+    };
+    try {
+      if (buffers.length > 0) await fs.mkdir(uploadDir, { recursive: true });
+      // allSettled, not all: when one photo fails the others may still be in flight, and cleaning up
+      // before they land would leave them behind.
+      const settled = await Promise.allSettled(
+        buffers.map(async ({ bytes }, i) => {
+          await fs.writeFile(targets[i], bytes);
+          // With a shared store the photo must outlive this instance. Without one this does nothing.
+          await persistRuntimeFile(targets[i]);
+        }),
+      );
+      const failure = settled.find((r): r is PromiseRejectedResult => r.status === "rejected");
+      if (failure) throw failure.reason;
+    } catch (err) {
+      console.error("[gilmend] could not store the follow-up photos:", err instanceof Error ? err.message : err);
+      await discardUploads();
+      return errorResponse(500, "storage_failed", "Could not store the photos on the server.");
+    }
+    const photoPaths = targets.map((t) => toStoredPath(t));
+
     // The engine of the case, never another: a private run stays private (open weights never reach
     // the Meta Model API, which is also why SAM and voice stay off), and a case made in DEMO MODE
     // stays in it. Without the credentials it resolves to the labelled mock, as a report does.
@@ -188,25 +227,8 @@ export async function POST(request: Request, { params }: RouteContext): Promise<
       fellBackReason = "daily_limit";
     }
 
-    const followUpId = randomUUID();
-    const simulated = await isSimulatedReply(buffers);
-    let photoPaths: string[];
-    try {
-      const uploadDir = path.join(runtimeDir(), "uploads", followUpId);
-      if (buffers.length > 0) await fs.mkdir(uploadDir, { recursive: true });
-      photoPaths = await Promise.all(
-        buffers.map(async ({ bytes, kind }, i) => {
-          const target = path.join(uploadDir, `photo-${i + 1}.${IMAGE_EXTENSION[kind]}`);
-          await fs.writeFile(target, bytes);
-          // With a shared store the photo must outlive this instance. Without one this does nothing.
-          await persistRuntimeFile(target);
-          return toStoredPath(target);
-        }),
-      );
-    } catch (err) {
-      console.error("[gilmend] could not store the follow-up photos:", err instanceof Error ? err.message : err);
-      return errorResponse(500, "storage_failed", "Could not store the photos on the server.");
-    }
+    // A recorded run is forked (see above); every other case continues under its own id.
+    const forkAs = current.recorded ? `${id.slice(0, 60)}-followup-${randomUUID().slice(0, 8)}` : undefined;
 
     const followUp: FollowUp = {
       id: followUpId,
@@ -219,11 +241,12 @@ export async function POST(request: Request, { params }: RouteContext): Promise<
 
     let result: CaseRecord;
     try {
-      result = await resumeAgent(current, followUp, { engine });
+      result = await resumeAgent(current, followUp, { engine, ...(forkAs ? { forkAs } : {}) });
     } catch (err) {
       // resumeAgent is meant never to throw. If it does the case is left exactly as it was (round 1
       // intact) and the merchant can try again.
       console.error("[gilmend] follow-up run failed:", err instanceof Error ? err.message : err);
+      await discardUploads();
       return errorResponse(502, "agent_failed", "The agent could not process this reply. The case was not changed.", {
         caseId: id,
       });
@@ -232,27 +255,33 @@ export async function POST(request: Request, { params }: RouteContext): Promise<
     let saved: CaseRecord;
     try {
       // The run took a while: if the case was changed meanwhile (the merchant approved it in another
-      // tab, another instance added a reply), writing the result would silently undo that.
-      const latest = await getCase(id);
-      if (!latest || latest.updatedAt !== current.updatedAt || caseRound(latest) !== caseRound(current)) {
-        return errorResponse(
-          409,
-          "case_changed",
-          "The case was changed while the agent was working. Nothing was overwritten: reload the page and add the reply again.",
-        );
+      // tab, another instance added a reply), writing the result would silently undo that. A fork
+      // overwrites nothing (its id is new), so it has nothing to protect.
+      if (!forkAs) {
+        const latest = await getCase(id);
+        if (!latest || latest.updatedAt !== current.updatedAt || caseRound(latest) !== caseRound(current)) {
+          await discardUploads();
+          return errorResponse(
+            409,
+            "case_changed",
+            "The case was changed while the agent was working. Nothing was overwritten: reload the page and add the reply again.",
+          );
+        }
       }
       // A full save, not a patch: the result replaces the current round (the earlier one is in
-      // previousRounds) and drops `recorded`. On a recorded showcase case this stores a copy and
-      // the committed recording is untouched (layered store).
+      // previousRounds) and drops `recorded`.
       saved = await saveCase(result);
     } catch (err) {
       console.error("[gilmend] could not save the follow-up:", err instanceof Error ? err.message : err);
+      await discardUploads();
       return errorResponse(500, "storage_failed", "The reply was processed but the case could not be saved.");
     }
 
     return Response.json(
       {
         caseId: saved.id,
+        // The recording this case was forked from, when it was: the page then opens the new case.
+        forkedFrom: forkAs ? id : null,
         round: caseRound(saved),
         status: saved.status,
         engine: saved.engine,

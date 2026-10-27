@@ -335,4 +335,28 @@ describe("buildClaimDocument", () => {
     expect(result.emailSubject).toContain("6A12345678901");
     expect(result.emailBody).toContain("€9.20");
   });
+
+  it("dates the photos a customer added, and says when a reply was the simulated one of the demo button", async () => {
+    // Review of 28 Oct 2026: the carrier file listed the photos of a simulated reply (generated with Muse
+    // Image) as "Photos added on <date>", as if a customer had sent them.
+    const read = async (over: Record<string, unknown>) =>
+      extractPdfText(await readFile(path.resolve((await build(over)).pdfPath))).replace(/\s+/g, " ");
+    const real = await read({
+      id: "case-reply-real",
+      followUps: [{ id: "fu", receivedAt: "2026-10-28T09:00:00.000Z", message: "Sharper.", photos: [photoPath] }],
+    });
+    expect(real).toContain("Photos added on 28 October 2026");
+    expect(real).not.toMatch(/simulated/i);
+
+    const simulated = await read({
+      id: "case-reply-simulated",
+      followUps: [
+        { id: "fu1", receivedAt: "2026-10-28T09:00:00.000Z", message: "Real.", photos: [photoPath] },
+        { id: "fu2", receivedAt: "2026-10-29T09:00:00.000Z", message: "Demo.", photos: [secondPath], simulated: true },
+      ],
+    });
+    expect(simulated).toContain("28 October 2026, 29 October 2026 (simulated demo reply, AI-generated photo)");
+    // Only the simulated reply carries the label.
+    expect(simulated.match(/simulated demo reply/g)).toHaveLength(1);
+  });
 });

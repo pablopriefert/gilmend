@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { AccessCodeField, accessHeaders } from "./access-code";
 import FileDropzone, { type FileDropzoneItem } from "./arc/file-dropzone/file-dropzone";
 import { useReviewAccess } from "./case-review-panel";
+import { requestRoundsFocus } from "./case/rounds-focus";
 import { useCaseToast } from "./case/toast-host";
 import { BUTTON_PRIMARY, BUTTON_QUIET, Panel, Pill } from "./case/ui";
 import { DEMO_FOLLOW_UP } from "./demo-scenarios";
@@ -26,6 +27,10 @@ import {
 
 /** What the server answers to a follow-up (src/app/api/cases/[id]/follow-up/route.ts). */
 interface FollowUpResponse {
+  /** The case to open: the same one, or a new case when a recorded run was forked. */
+  caseId?: string;
+  /** The recording the case was forked from (a reply on a recorded run never changes the recording). */
+  forkedFrom?: string | null;
   round?: number;
   decision?: keyof typeof DECISION_LABEL | null;
   fellBack?: boolean;
@@ -175,14 +180,26 @@ export function FollowUpPanel({
       }
       access.setCodeRefused(false);
       const outcome = data?.decision ? DECISION_LABEL[data.decision] : "no decision";
+      const forked = typeof data?.caseId === "string" && data.caseId !== "" && data.caseId !== caseId;
       notify({
         title: `Round ${data?.round ?? nextRound} is ready`,
-        description: data?.fellBack
-          ? `The agent ran in DEMO MODE (the engine of this case is not configured here). Decision: ${outcome}.`
-          : `The agent ran again on the same case. Decision: ${outcome}.`,
+        description: `${
+          data?.fellBack
+            ? "The agent ran in DEMO MODE (the engine of this case is not configured here)."
+            : forked
+              ? "The agent ran again on a copy of this recorded run."
+              : "The agent ran again on the same case."
+        } Decision: ${outcome}.${forked && data?.fellBack ? " The recorded run itself was not changed." : forked ? " The recording stays as it was." : ""}`,
       });
-      // Re-render the server side: the new round, decision, claim, trace. The panel remounts for the new round.
-      router.refresh();
+      // The card that held the focus is about to go: the "Rounds of this case" card takes it when it shows.
+      requestRoundsFocus();
+      if (forked) {
+        // A recorded run is never changed: the new round lives in a new case, which we open.
+        router.push(`/cases/${encodeURIComponent(data!.caseId!)}`);
+      } else {
+        // Re-render the server side: the new round, decision, claim, trace. The panel remounts for the new round.
+        router.refresh();
+      }
     } catch {
       setServerError("Could not reach the server. Check your connection and try again. Nothing was changed.");
     } finally {

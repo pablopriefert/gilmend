@@ -5,6 +5,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeCase } from "@/components/fixtures";
 import { runAgent } from "@/lib/agent/run-agent";
+import { overrideSharedObjects } from "@/lib/storage";
+import { createFauxObjectStore, type FauxObjectStore } from "@/lib/storage/faux-object-store";
 import { getCase, saveCase, updateCase } from "@/lib/store/cases";
 import type { CaseRecord, Engine, FollowUp } from "@/lib/types";
 import { resetRateLimits } from "../../../_lib/rate-limit";
@@ -439,5 +441,125 @@ describe("POST /api/cases/[id]/follow-up: the simulated reply of the demo button
     bytes[bytes.length - 1] ^= 0xff;
     const res = await post({ photos: [file(bytes, "lamp-sharp.webp", "image/webp")] });
     expect((await res.json()).simulated).toBe(false);
+  });
+});
+
+describe("POST /api/cases/[id]/follow-up: what a reply that is not saved leaves behind", () => {
+  // Review of 28 Oct 2026: the photos were stored and copied to the private shared store before the
+  // agent ran, and stayed there when the run failed, the case had changed, or the save failed: customer
+  // photos that no case refers to, never purged.
+  let objects: FauxObjectStore;
+  beforeEach(() => {
+    objects = createFauxObjectStore();
+    overrideSharedObjects(objects);
+  });
+  afterEach(() => overrideSharedObjects(undefined));
+
+  const storedUploads = () => objects.keys().filter((k) => k.startsWith("files/uploads/"));
+  const localUploads = async () => (await readdir(path.join(runtimeRoot, "uploads")).catch(() => [] as string[])).filter((d) => d !== "");
+
+  it("stores the photos locally and in the shared store when the reply is saved (the control)", async () => {
+    await seedLamp();
+    expect((await post({ photos: [file(PNG), file(JPEG, "b.jpg", "image/jpeg")] })).status).toBe(201);
+    expect(storedUploads()).toHaveLength(2);
+    expect(await localUploads()).toHaveLength(1);
+  });
+
+  it("removes them after a 409 case_changed", async () => {
+    await seedLamp();
+    const actual = await vi.importActual<typeof import("@/lib/agent/run-agent")>("@/lib/agent/run-agent");
+    control.hook = async (...a) => {
+      const result = await actual.resumeAgent(...(a as Parameters<typeof actual.resumeAgent>));
+      await updateCase(ID, { status: "approved" });
+      return result;
+    };
+    const res = await post({ photos: [file(PNG), file(JPEG, "b.jpg", "image/jpeg")] });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("case_changed");
+    expect(storedUploads()).toEqual([]);
+    expect(await localUploads()).toEqual([]);
+  });
+
+  it("removes them after a 502 agent_failed", async () => {
+    await seedLamp();
+    control.hook = async () => {
+      throw new Error("boom");
+    };
+    expect((await post()).status).toBe(502);
+    expect(storedUploads()).toEqual([]);
+    expect(await localUploads()).toEqual([]);
+  });
+
+  it("removes them after a 500 when the case cannot be saved", async () => {
+    await seedLamp();
+    const put = objects.put.bind(objects);
+    objects.put = async (key, bytes, options) => {
+      if (key.startsWith("cases/")) throw new Error("store down");
+      return put(key, bytes, options);
+    };
+    const res = await post();
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toBe("storage_failed");
+    expect(storedUploads()).toEqual([]);
+    expect(await localUploads()).toEqual([]);
+  });
+
+  it("removes what was written when one of the photos cannot be stored, and costs no real run", async () => {
+    await seedLamp({ engine: "muse-spark-1.3" });
+    vi.stubEnv("MODEL_API_KEY", "key-factice-for-test");
+    vi.stubEnv("DAMAGE_DESK_REAL_RUNS_PER_DAY", "1");
+    const calls: ResumeArgs[] = [];
+    control.hook = async (...a) => {
+      calls.push(a as unknown as ResumeArgs);
+      const [c, followUp] = a as unknown as ResumeArgs;
+      return { ...c, engine: (a as unknown as ResumeArgs)[2].engine, followUps: [followUp], previousRounds: [], updatedAt: new Date().toISOString() } satisfies CaseRecord;
+    };
+    objects.failNextPut(new Error("blob down"));
+    const failed = await post({ photos: [file(PNG), file(JPEG, "b.jpg", "image/jpeg")] });
+    expect(failed.status).toBe(500);
+    expect((await failed.json()).error).toBe("storage_failed");
+    expect(storedUploads()).toEqual([]);
+    expect(await localUploads()).toEqual([]);
+    expect(calls).toHaveLength(0);
+    // The single real run of the day is still there: the next try runs on Muse, not on the labelled mock.
+    const retry = await post();
+    expect(retry.status).toBe(201);
+    expect(calls[0][2].engine).toBe("muse-spark-1.3");
+    expect(await retry.json()).toMatchObject({ engine: "muse-spark-1.3", fellBack: false });
+  });
+});
+
+describe("POST /api/cases/[id]/follow-up: a recorded run is forked, never continued", () => {
+  it("saves the reply under a new id and leaves the case it replied to as it was", async () => {
+    const recording = await seedLamp({ recorded: { recordedOn: "2026-10-27" } });
+    const res = await post({ fields: { round: "1" } });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.forkedFrom).toBe(ID);
+    expect(body.caseId).toMatch(new RegExp(`^${ID}-followup-[0-9a-f]{8}$`));
+    expect(body.round).toBe(2);
+
+    const kept = (await getCase(ID))!;
+    expect(kept).toEqual(recording);
+    const fork = (await getCase(body.caseId))!;
+    expect(fork.followedFrom).toBe(ID);
+    expect(fork.recorded).toBeUndefined();
+    expect(fork.previousRounds?.[0].recorded).toEqual({ recordedOn: "2026-10-27" });
+    expect(fork.report).toEqual(recording.report);
+  });
+
+  it("does not fork a case that is not a recording: its id stays", async () => {
+    await seedLamp();
+    const body = await (await post()).json();
+    expect(body).toMatchObject({ caseId: ID, forkedFrom: null });
+    expect((await getCase(ID))?.followedFrom).toBeUndefined();
+  });
+
+  it("keeps the fork id inside the limit of a case id even for a long recording id", async () => {
+    const longId = `case_${"x".repeat(70)}`;
+    await seedLamp({ id: longId, recorded: { recordedOn: "2026-10-27" } });
+    const body = await (await post({ id: longId })).json();
+    expect(body.caseId).toMatch(/^[A-Za-z0-9_-]{1,80}$/);
+    expect(body.caseId).not.toBe(longId);
   });
 });

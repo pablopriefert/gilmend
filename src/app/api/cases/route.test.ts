@@ -21,6 +21,7 @@ describe("GET /api/cases", () => {
     expect(body.summary).toEqual({
       recoverableThisMonthEur: expect.any(Number),
       demoModeCases: expect.any(Number),
+      simulatedReplyCases: expect.any(Number),
       claimsDueThisWeek: expect.any(Number),
       dueCaseIds: expect.any(Array),
     });

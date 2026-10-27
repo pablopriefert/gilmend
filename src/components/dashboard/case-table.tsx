@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Repeat2, Truck } from "lucide-react";
+import { ChevronRight, FlaskConical, Repeat2, Truck } from "lucide-react";
 import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import type { CaseStatus, Engine, EngineDetail, RecordedRun } from "@/lib/types";
@@ -26,6 +26,8 @@ export interface CaseRowData {
   recorded?: RecordedRun;
   /** Round of the case: 2 or more once the customer replied (the case was followed up). */
   round?: number;
+  /** A reply on the case is the simulated one of the demo button: not something a customer wrote, not counted as money. */
+  simulatedReply?: boolean;
   /** Formatted "up to" amount, or null when the case has no carrier claim. */
   amount: string | null;
   deadline: { text: string; tone: DeadlineTone };
@@ -85,6 +87,16 @@ function CaseRow({ row, index }: { row: CaseRowData; index: number }) {
             {row.round !== undefined && row.round > 1 && (
               <Badge tone="info" size="sm" icon={<Repeat2 className="h-3.5 w-3.5" strokeWidth={2} />}>
                 {`Round ${row.round}`}
+              </Badge>
+            )}
+            {row.simulatedReply && (
+              <Badge
+                tone="warning"
+                size="sm"
+                icon={<FlaskConical className="h-3.5 w-3.5" strokeWidth={2} />}
+                title="A reply on this case is the simulated one of the demo button (a message we wrote, a photo generated with Muse Image). It is not counted in the totals."
+              >
+                Simulated reply
               </Badge>
             )}
           </div>

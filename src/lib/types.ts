@@ -329,4 +329,10 @@ export interface CaseRecord {
   followUps?: FollowUp[];
   /** The rounds that the latest one replaced, oldest first (see PreviousRound). Same length as followUps. */
   previousRounds?: PreviousRound[];
+  /**
+   * Set when this case is the continuation of a RECORDED showcase run (28 Oct 2026): the customer's
+   * reply on a recording is saved as a new case that starts from a copy of it, and this is the id of
+   * the recording. The recording itself is never changed, so the demo can be played again.
+   */
+  followedFrom?: string;
 }

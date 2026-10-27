@@ -339,7 +339,14 @@ export async function buildClaimDocument(
   // carrier sees the damage was reported on the date above and documented later.
   const replies = followUpsOf(caseRecord).filter((f) => f.photos.length > 0);
   if (replies.length > 0) {
-    w.row("Photos added on", replies.map((f) => formatDate(f.receivedAt)).join(", "));
+    // A reply that came from the demo button is not a customer's: the carrier file must not pass the
+    // photo (generated with Muse Image) off as real evidence.
+    w.row(
+      "Photos added on",
+      replies
+        .map((f) => `${formatDate(f.receivedAt)}${f.simulated ? " (simulated demo reply, AI-generated photo)" : ""}`)
+        .join(", "),
+    );
   }
   if (assessment) {
     // Free text of the model: amounts and dates are removed, they come from computeClaim only.

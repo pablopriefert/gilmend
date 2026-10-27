@@ -1,3 +1,4 @@
+import { hasSimulatedReply } from "../rounds";
 import type { CaseRecord, CaseStatus } from "../types";
 
 // Numbers of the header counter: "EUR 1,240 recoverable this month . 3 claims due this
@@ -23,13 +24,13 @@ function monthKey(date: Date): string {
 }
 
 /**
- * True when the case holds money we can still claim at `now`:
+ * True when the case holds a claim that is still open at `now`, whatever its reply was:
  * - status approved or needs_review;
  * - the claim computation is eligible;
  * - the agent did not decide against a carrier claim (null decision does not exclude);
  * - the claim deadline, when there is one, has not passed.
  */
-export function isRecoverable(c: CaseRecord, now: Date): boolean {
+function holdsOpenClaim(c: CaseRecord, now: Date): boolean {
   if (!RECOVERABLE_STATUSES.includes(c.status)) return false;
   if (!c.claim?.eligible) return false;
   if (c.decision?.carrierClaim === false) return false;
@@ -37,6 +38,17 @@ export function isRecoverable(c: CaseRecord, now: Date): boolean {
     return false;
   }
   return true;
+}
+
+/**
+ * True when the case holds money we can still claim at `now`: an open claim (holdsOpenClaim) on a case
+ * whose customer replies, if any, are real. A claim that exists only because of the simulated reply of
+ * the demo button is a rehearsal and never counts as money to recover (review of 28 Oct 2026: a
+ * simulated reply on the recorded lamp added "up to 102.30" to the live counter, with nothing on
+ * the row to say so). They are counted apart (summarizeCases.simulatedReplyCases).
+ */
+export function isRecoverable(c: CaseRecord, now: Date): boolean {
+  return holdsOpenClaim(c, now) && !hasSimulatedReply(c);
 }
 
 /** Sum of maxCompensationEur of recoverable cases created this (Paris) calendar month. */
@@ -70,6 +82,11 @@ export interface CasesSummary {
   recoverableThisMonthEur: number;
   /** How many of the cases counted in recoverableThisMonthEur come from DEMO MODE (scripted decisions, not Muse). */
   demoModeCases: number;
+  /**
+   * Cases left out of both counters because a reply on them is the simulated one of the demo button,
+   * and that hold an open claim: listed, labelled "Simulated reply", never counted as money.
+   */
+  simulatedReplyCases: number;
   claimsDueThisWeek: number;
   /** Ids of the due claims, most urgent first. */
   dueCaseIds: string[];
@@ -89,6 +106,9 @@ export function summarizeCases(all: CaseRecord[], now: Date = new Date()): Cases
         isRecoverable(c, now) &&
         (c.claim?.maxCompensationEur ?? 0) > 0 &&
         monthKey(new Date(c.createdAt)) === thisMonth,
+    ).length,
+    simulatedReplyCases: cases.filter(
+      (c) => hasSimulatedReply(c) && holdsOpenClaim(c, now) && (c.claim?.maxCompensationEur ?? 0) > 0,
     ).length,
     claimsDueThisWeek: due.length,
     dueCaseIds: due.map((c) => c.id),

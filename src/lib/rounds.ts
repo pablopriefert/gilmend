@@ -32,6 +32,16 @@ export function followUpsOf(c: Pick<CaseRecord, "followUps">): FollowUp[] {
   return c.followUps ?? [];
 }
 
+/**
+ * True when one of the customer's replies is the rehearsal of the "simulate the customer's reply" demo
+ * button (a message we wrote and a photo generated with Muse Image), not something a customer sent.
+ * Whatever a later round says, money found on such a case is not money a customer's damage produced:
+ * the dashboard counters leave it out and say so, and the claim PDF labels the photos it added.
+ */
+export function hasSimulatedReply(c: Pick<CaseRecord, "followUps">): boolean {
+  return followUpsOf(c).some((f) => f.simulated === true);
+}
+
 /** The round the case is in now: 1 for the original report, 2 after the first reply... */
 export function caseRound(c: Pick<CaseRecord, "followUps">): number {
   return 1 + followUpsOf(c).length;

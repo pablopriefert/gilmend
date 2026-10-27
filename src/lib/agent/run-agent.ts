@@ -25,7 +25,7 @@ import type {
   Order,
   TraceStep,
 } from "../types";
-import { formatFollowUpMessage } from "./follow-up-prompt";
+import { formatFollowUpMessage, type NotAttachedPhotos } from "./follow-up-prompt";
 import { applyGuardrails } from "./guardrails";
 import { photoToImageUrl } from "./photos";
 import { redactForTrace } from "./redact";
@@ -68,6 +68,15 @@ const MIN_EVIDENCE_FALLBACK_MS = 20_000;
 const EVIDENCE_FALLBACK_SAM_CALLS = 3;
 const MIN_SAM_CALL_TIMEOUT_MS = 5_000;
 
+/**
+ * Most images one request of a resumed run carries (review of 28 Oct 2026). Every round used to send
+ * every photo of every earlier round: with MAX_FOLLOW_UPS = 3 the fourth request held up to 12 images of
+ * up to 10 MB each, which nobody had checked the Meta API accepts, and a refusal silently turned the case
+ * into one whose photos were "not read". The report's photos and the photos of the reply being processed
+ * always go first; the photos of the replies in between are described in words ("not attached").
+ */
+export const MAX_IMAGES_ON_RESUME = 6;
+
 /** The collaborators of the loop. Injectable so tests never touch disk, network or other lots. */
 export interface AgentDeps {
   getOrder: typeof getOrder;
@@ -79,6 +88,12 @@ export interface AgentDeps {
 
 export interface RunAgentOptions {
   engine: Engine;
+  /**
+   * resumeAgent only: produce the next round under this NEW case id instead of the id of `previous`,
+   * and mark the result `followedFrom` the id of `previous`. Used for a recorded showcase run, whose
+   * stored copy would otherwise hide the recording for every visitor (review of 28 Oct 2026).
+   */
+  forkAs?: string;
   /** Test hook: use this provider instead of getProvider(). */
   provider?: Provider;
   deps?: Partial<AgentDeps>;
@@ -113,6 +128,8 @@ interface Resume {
   round: number;
   /** Photos that were in the case before this reply: the new ones start at this index. */
   firstNewPhoto: number;
+  /** Set when the round is saved as a NEW case that starts from `previous` (a recorded run is never changed). */
+  followedFrom: string | null;
 }
 
 /**
@@ -152,12 +169,38 @@ export async function resumeAgent(
   opts: RunAgentOptions,
 ): Promise<CaseRecord> {
   const firstNewPhoto = allPhotos(previous).length;
-  return runCase(workingReport(previous, followUp), { ...opts, caseId: previous.id }, {
+  return runCase(workingReport(previous, followUp), { ...opts, caseId: opts.forkAs ?? previous.id }, {
     previous,
     followUp,
     round: caseRound(previous) + 1,
     firstNewPhoto,
+    followedFrom: opts.forkAs ? previous.id : null,
   });
+}
+
+/**
+ * Which photos of the working report go to the model, and which ones are only described. A round 1
+ * run sends them all (a report holds at most 3). A resumed run sends at most MAX_IMAGES_ON_RESUME: the
+ * new photos first, then the earlier ones in the order they came (the report's photos, then each
+ * reply's), so what is left out is always the most recent of the in-between replies.
+ */
+function planImages(report: DamageReport, resume: Resume | null): { send: number[]; notAttached: NotAttachedPhotos[] } {
+  const all = report.photos.map((_, i) => i);
+  if (!resume || all.length <= MAX_IMAGES_ON_RESUME) return { send: all, notAttached: [] };
+  const fresh = all.filter((i) => i >= resume.firstNewPhoto);
+  const earlier = all.filter((i) => i < resume.firstNewPhoto);
+  const room = Math.max(0, MAX_IMAGES_ON_RESUME - fresh.length);
+  const dropped = earlier.slice(room);
+  const notAttached: NotAttachedPhotos[] = [];
+  // Each group is one round's photos: round 1 is the report, round k + 2 is reply k.
+  let start = 0;
+  const sizes = [resume.previous.report.photos.length, ...followUpsOf(resume.previous).map((f) => f.photos.length)];
+  sizes.forEach((size, k) => {
+    const inGroup = dropped.filter((i) => i >= start && i < start + size);
+    if (inGroup.length > 0) notAttached.push({ round: k + 1, first: inGroup[0], last: inGroup[inGroup.length - 1] });
+    start += size;
+  });
+  return { send: [...earlier.slice(0, room), ...fresh], notAttached };
 }
 
 async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resume | null): Promise<CaseRecord> {
@@ -192,6 +235,11 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
       `Round ${round} starts: the customer replied (${sent.join(", ") || "nothing readable"}). The agent resumes this same case with what it concluded in round ${round - 1}.`,
       { input: { followUpId: resume.followUp.id, round } },
     );
+    if (resume.followedFrom) {
+      log(
+        `This case continues the recorded run ${resume.followedFrom}, which is left untouched: round ${round - 1} of this case is a copy of it.`,
+      );
+    }
   }
 
   // Engine selection. Without credentials the engine silently becomes the mock; that is
@@ -256,6 +304,7 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
       ? {
           followUps: [...followUpsOf(resume.previous), resume.followUp],
           previousRounds: [...(resume.previous.previousRounds ?? []), snapshotRound(resume.previous)],
+          ...(resume.followedFrom ? { followedFrom: resume.followedFrom } : {}),
         }
       : {}),
   });
@@ -420,6 +469,7 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
           toolOutputs,
           reportReceivedAt: report.receivedAt,
           photosNotRead,
+          photosMissing: photosNotRead || engine === "demo-mock" ? 0 : unread.length,
           round,
         });
         decision = result.decision;
@@ -529,8 +579,14 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
   // In a follow-up the user turn holds the original report with its photos, then the follow-up
   // block with the new ones. `originalCount` splits the photos of `report` between the two.
   const originalCount = resume ? resume.firstNewPhoto : report.photos.length;
+  const plan = planImages(report, resume);
   const attached: number[] = [];
+  // Photos the model was meant to see and that could not be read (see the missing-photos note below).
+  const unread: { index: number; why: string }[] = [];
   const imageParts = new Map<number, ChatCompletionContentPart>();
+  // The note that tells the model some photos of the case are missing from what it sees. Empty when
+  // everything was attached, and when the photos are withheld altogether (that note says it all).
+  let missingNote = "";
   // The text of the turn, for the photos attached so far (none at all when they are withheld).
   const compose = (): ChatCompletionContentPart[] => {
     const early = attached.filter((i) => i < originalCount);
@@ -541,10 +597,11 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
     ];
     if (resume) {
       parts.push(
-        { type: "text", text: formatFollowUpMessage(resume.previous, resume.followUp, round, late) },
+        { type: "text", text: formatFollowUpMessage(resume.previous, resume.followUp, round, late, plan.notAttached) },
         ...late.map((i) => imageParts.get(i)!),
       );
     }
+    if (missingNote && !photosNotRead) parts.push({ type: "text", text: missingNote });
     return parts;
   };
   // One array, edited in place: `messages` below holds it, and the retry without photos must reach it.
@@ -570,20 +627,40 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
   if (provider && provider.supportsImages === false && report.photos.length > 0) {
     withholdPhotos(`${provider.model} is configured without image input`);
   } else {
-    for (let i = 0; i < report.photos.length; i++) {
+    for (const i of plan.send) {
       try {
         const url = await photoToImageUrl(report.photos[i]);
         imageParts.set(i, { type: "image_url", image_url: { url } });
         attached.push(i);
       } catch (e) {
+        unread.push({ index: i, why: errMessage(e) });
         log(`Photo ${i} could not be read and was not sent to the model: ${errMessage(e)}`);
       }
     }
-    content.push(...compose());
+    // The scripted mock never looks at an image and says so everywhere ("no image was analysed"): a missing
+    // file changes nothing about what it can say, and the six demo cases carry legacy ".jpg" paths that
+    // only the demo-photo lookup resolves. The rules below are for the engines that DO read the photos.
+    const readsPhotos = engine !== "demo-mock";
+    if (readsPhotos && report.photos.length > 0 && attached.length === 0) {
+      // Nothing to look at (every file is missing from this instance and from the shared store, or
+      // unreadable): the model must not be left to judge damage it was never shown, with a block that
+      // says "compare with the photos above" and no photo above (review of 28 Oct 2026).
+      withholdPhotos(`none of the ${report.photos.length} photo(s) of this case could be read from storage (${unread[0]?.why ?? "no reason given"})`);
+    } else {
+      if (readsPhotos && unread.length > 0) {
+        const list = unread.map((u) => u.index).join(", ");
+        missingNote = `System note: ${unread.length} photo(s) of this case (index ${list} in photo_index) could NOT be loaded and are not attached. You cannot rule out that they show something the other photos do not, and you cannot compare the new photos with them. Do not say you compared them: call finish_case with needsHuman=true and say in the reasons which photos you could not see.`;
+        log(
+          `${unread.length} photo(s) of this case could not be loaded (index ${list}). The model was told, and the case goes to a human.`,
+        );
+      }
+      content.push(...compose());
+    }
   }
+  const leftOut = report.photos.length - plan.send.length;
   log(
     resume
-      ? `Follow-up received (${attached.filter((i) => i >= originalCount).length} new photo(s), ${attached.length} photo(s) attached in total)`
+      ? `Follow-up received (${attached.filter((i) => i >= originalCount).length} new photo(s), ${attached.length} photo(s) attached in total${leftOut > 0 ? `, ${leftOut} earlier photo(s) described in words but not attached, to keep the request small` : ""})`
       : `Report received (${attached.length} photo(s) attached)`,
     { input: { orderNumber: report.orderNumber, language: report.language } },
   );

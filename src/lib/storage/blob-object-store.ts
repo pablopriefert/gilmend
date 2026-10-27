@@ -1,4 +1,4 @@
-import { BlobPreconditionFailedError, get, list, put } from "@vercel/blob";
+import { BlobNotFoundError, BlobPreconditionFailedError, del, get, list, put } from "@vercel/blob";
 import { assertSafeObjectKey, PreconditionFailedError, type ObjectStore } from "./object-store";
 
 // Vercel Blob backend (DAMAGE_DESK_STORAGE=blob). The store MUST be created private: case files
@@ -13,9 +13,10 @@ export interface BlobSdk {
   get: typeof get;
   put: typeof put;
   list: typeof list;
+  del: typeof del;
 }
 
-export function createBlobObjectStore(sdk: BlobSdk = { get, put, list }): ObjectStore {
+export function createBlobObjectStore(sdk: BlobSdk = { get, put, list, del }): ObjectStore {
   return {
     name: "blob",
     supportsConditionalWrites: true,
@@ -56,6 +57,14 @@ export function createBlobObjectStore(sdk: BlobSdk = { get, put, list }): Object
         cursor = page.hasMore ? page.cursor : undefined;
       } while (cursor);
       return keys;
+    },
+    async delete(key) {
+      try {
+        await sdk.del(assertSafeObjectKey(key));
+      } catch (error) {
+        if (error instanceof BlobNotFoundError) return;
+        throw error;
+      }
     },
   };
 }

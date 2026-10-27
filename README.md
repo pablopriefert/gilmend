@@ -75,7 +75,7 @@ What has been run live, and what has not (details in [Limitations](#limitations)
 | Public deployment on Vercel with a private Blob store: a real report filed on the deployed URL on 27 Oct 2026 (Muse Spark 1.3 + SAM 3.1, 54 s), its case, annotated photo and PDF read back on several requests | |
 | OpenRouter test engine: one real photo call | |
 
-972 tests, `tsc` and `eslint` pass. `next build` last passed before the follow-up loop (28 Oct 2026): the loop was written in a worktree where `next dev` and `next build` cannot run, so its page was only looked at through a local harness (the real route handlers and components, without Next), not through Next itself.
+1008 tests, `tsc` and `eslint` pass. `next build` last passed before the follow-up loop (28 Oct 2026): the loop was written in a worktree where `next dev` and `next build` cannot run, so its page was only looked at through a local harness (the real route handlers and components, without Next), not through Next itself.
 
 ## The problem
 
@@ -207,10 +207,31 @@ codes), the per-client rate limit, the daily ceiling of real runs (beyond it the
 DEMO MODE), the same photo checks (real signature, 8 MB, 3 photos) and the shared storage for the
 photos. It also refuses (409) a case that asked for nothing, a rejected case, a case at the limit, a stale
 page (`round` no longer current: a double click does not run the agent twice), a second reply while one
-is running, and a case that was changed while the agent worked (nothing is overwritten). On a **recorded
-showcase case** the new round is stored as a copy: the committed files never change, the copy is no longer
-marked "Recorded run" (round 1 keeps that label, in the rounds card), and it counts in the live counter
-like any live case. The access code is checked before the body is read.
+is running, and a case that was changed while the agent worked (nothing is overwritten). The access code is
+checked before the body is read. Photos that were stored for a reply that is then not saved (the agent threw,
+the case changed, the save failed) are removed again from the disk and from the shared store, and a storage
+failure costs no credit of the daily ceiling.
+
+**A recorded showcase case is forked, never continued.** The new round is saved as a new case
+(`<recording id>-followup-<8 characters>`, `followedFrom` = the recording) that starts from a copy of the
+recording; the answer carries that `caseId` and the page opens it. The recording itself stays exactly as it
+was for every visitor (badge "Recorded run", still asking for a reply), so the demo sequence can be played
+again and again; the committed files never change either. (An earlier version saved the round under the
+recording's own id, and the first visitor to play the sequence hid the recording for everyone, for good.) The
+fork is no longer marked "Recorded run" at the top (round 1 keeps that label, in the rounds card), links back
+to the recording, and counts in the live counter like any live case, **except** when a reply on it is the
+simulated one of the demo button: such a case stays in the list with a "Simulated reply" badge, but its claim is
+not added to "recoverable this month" or "claims due this week", the cases page says how many are left out,
+and the claim PDF it produces says that the photos added come from a simulated demo reply.
+
+**What the model is shown in a later round.** Every photo of the case is looked up where it really is: a
+photo that another serverless instance stored is fetched back from the shared store first. If a photo cannot be
+loaded the model is told and the guardrails hand the case to a person; if none can be loaded the photos are
+withheld altogether (no assessment, no claim). A request carries at most 6 images (the report's photos and the
+new reply's); the photos of the replies in between are described in words as "not attached". What the agent
+wrote last time is quoted inside `<previous_conclusions>` tags and neutralised like any other text, so a reason
+that repeats a customer's forged tag or "FOLLOW-UP ROUND" line stays data. None of this applies to the
+scripted mock, which looks at no image and says so.
 
 **The demo button.** On the blurry-lamp case (order #1003, the recorded run or one filed with the demo
 card) a **"Demo: simulate the customer's reply"** button loads a sharp photo of the lamp and a short message

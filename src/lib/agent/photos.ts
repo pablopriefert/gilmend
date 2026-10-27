@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { runtimeDir } from "../runtime-dir";
+import { restoreRuntimeFile } from "../storage/runtime-files";
 
 // Photos reach the model as image_url parts. A report stores either a data URL, an
 // http(s) URL or a local file path; local files are inlined as data URLs so the same
@@ -48,6 +49,14 @@ export async function photoToImageUrl(
   const resolved = path.resolve(/*turbopackIgnore: true*/ cwd, photo);
   if (!allowedRoots(cwd, runtime).some((root) => resolved === root || resolved.startsWith(root + path.sep))) {
     throw new Error("photo path is outside data/, public/ and the runtime folder");
+  }
+  // A photo uploaded on another serverless instance is not in this one's /tmp: fetch it back from the
+  // shared store first, as image-io and the file route do. Without this a follow-up that arrives hours
+  // later on another instance read nothing (ENOENT) and the model never saw the photos of round 1
+  // (review of 28 Oct 2026). Only runtime files have a copy in the store; data/ and public/ are in the build.
+  const runtimeRoot = path.resolve(runtime);
+  if (resolved === runtimeRoot || resolved.startsWith(runtimeRoot + path.sep)) {
+    await restoreRuntimeFile(resolved, runtimeRoot);
   }
   const bytes = await readFile(/*turbopackIgnore: true*/ resolved);
   if (bytes.byteLength > MAX_PHOTO_BYTES) throw new Error("photo is larger than 10 MB");

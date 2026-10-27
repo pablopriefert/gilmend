@@ -5,6 +5,7 @@ import { EngineBadge } from "../engine-badge";
 import { formatDateTime } from "../format";
 import { RecordedBadge } from "../recorded-badge";
 import { describeRoundChanges, claimAmountLabel, decisionLabel } from "../round-changes";
+import { RoundsFocus } from "./rounds-focus";
 import { Eyebrow, Panel, Pill } from "./ui";
 
 /**
@@ -24,8 +25,10 @@ export function RoundsSection({ rounds, index = 1 }: { rounds: RoundView[]; inde
       title="Rounds of this case"
       icon={Repeat2}
       index={index}
+      titleFocusable
       action={<Pill icon={MessageSquareReply}>{rounds.length - 1} customer {rounds.length === 2 ? "reply" : "replies"}</Pill>}
     >
+      <RoundsFocus titleId="rounds-title" roundCount={rounds.length} />
       <p className="text-sm leading-relaxed text-muted">
         The customer replied and the agent ran again on this same case, with everything it already knew. The page
         describes the latest round; the earlier ones are kept here.
