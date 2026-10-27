@@ -51,6 +51,9 @@ Everything: this is a new repository, and the commit history starts on 27 Oct 20
   Modal), and a clearly labelled OpenRouter test engine.
 - **Six recorded real runs** (Muse Spark 1.3 + SAM 3.1) committed as a read-only showcase, and a
   shared-storage backend (Vercel Blob) for a public deployment.
+- **Impact views**: an Insights band on the Cases page (money per carrier, the deadlines of the
+  next 14 days, the decisions) and an `/impact` calculator that runs the app's own claim rules on
+  the merchant's figures ([Impact](#impact)).
 - **Six demo photos generated with Muse Image**, declared as AI-generated.
 
 ### How it was built
@@ -148,6 +151,51 @@ the packing before filing, and the carrier file says nothing about it: neither t
 model's notes about the packing). Customer text is treated as untrusted data; a
 prompt-injection attempt counts as a fraud signal.
 
+## Impact
+
+Two views turn the cases into money and time. Neither invents a number: each one is computed from
+stored cases, from the carrier rules, from the recorded runs, or from an input the merchant can see
+and change.
+
+**Insights** (Cases page, under the header band), computed by `src/lib/impact/insights.ts`:
+
+- *Money still claimable, by carrier*: the maximum compensation of every claim still open (any
+  month: the counter above counts this month only), per carrier, with the carrier's window (3 days
+  after delivery for Mondial Relay and Chronopost, the ones that expire unnoticed; 365 days after
+  shipment for Colissimo, counted from the order date, the safe side).
+- *Deadlines in the next 14 days*: one strip per carrier, plus a list with the same events as text,
+  soonest first. Day 0 is "Now" for live cases and "Recording" when only recorded runs are drawn;
+  a recorded run is never painted urgent, since its distance counts from its recording day. It
+  shows the claim deadline and, when it closes at another moment, the reserve window (Colissimo's 72 h window only warns and is marked "prudential").
+- *What the agent decided*: reship, refund, ask for photos, no action, and how many cases were
+  handed to a human.
+- Recorded runs are left out of these numbers, like in the header counter, unless the **Include
+  recorded runs** switch is on (it starts on only when there is no live case, so a fresh deployment
+  is not three empty charts). When counted they are read **as of their recording day**: their
+  deadlines run from 27 Oct 2026, not from today. The band above keeps its live-only counters.
+
+**`/impact`** (header link "Impact"), computed by `src/lib/impact/roi.ts`: enter orders per month,
+damage rate, the value of a damaged item, its weight and the carrier mix. It returns damaged
+parcels a year, the value of the damaged goods, the carrier compensation within reach, what a claim
+filed late by hand loses against one filed with Gilmend, and the time per case.
+
+| What | Where it comes from |
+|---|---|
+| Carrier amounts and deadlines | The app's own `computeClaim` and `data/carriers.json`, run on a synthetic order built from your inputs. The result is a ceiling, like every amount in the app, not a promise of payment. |
+| Agent time per case | **Measured** on the six recorded runs (first to last step of each trace): 27 s on average, from 16 s to 35 s; five of the six drew a SAM 3.1 outline (the blurry-photo run stops at "ask for better photos" and calls no SAM), and the page counts them. Six scripted scenarios with generated photos, one run each: a measure, not a benchmark. |
+| Damage rate, share of damaged parcels that qualify, share of Mondial Relay parcels refused at delivery (it pays nothing for an accepted one; we know of no rate, the default is 20%), when the customer writes in, when a claim is filed by hand and with Gilmend, minutes per case by hand, your review time | **Assumptions**, labelled as such next to each field, with a default that is an example and not a statistic. |
+| Orders, item value, weight, carrier mix | Your figures (the defaults are examples). |
+
+What the public record says is on the page and not used as an input: a DS Smith and Opinium survey
+published on 7 Jan 2026 (2,000 French consumers, collected in October 2025) found that 22% of them
+received a damaged product in the previous 12 months and puts the average cost at 76.50 EUR per
+damaged article. It counts consumers who had a problem, not damaged parcels per 100 shipped, and
+it was commissioned by a packaging supplier, so the calculator derives no damage rate from it
+([Ecommerce Magazine](https://www.ecommercemag.fr/logistique-1222/barometre-etude-2182/les-colis-endommages-coutent-23-milliards-deuros-par-an-aux-e-commercants-francais-55038),
+[LSA](https://www.lsa-conso.fr/e-commerce-les-colis-endommages-coutent-2-3-milliards-d-euros-aux-marchands-francais-selon-une-etude,463876/);
+read on 27 Oct 2026). We found no sourced per-parcel damage rate to cite, so the default 2% is an
+example.
+
 ## Which Meta models, and why
 
 Four Meta models used live, each with its own job, plus an open-weights route (Muse Spark Open or Muse Glimmer) that is written and tested but not run live yet:
@@ -223,6 +271,10 @@ Vercel Blob store on a public deployment), claim PDFs are built with `pdf-lib`.
   `ObjectStore` seam with a local-file backend (default) and a Vercel Blob backend
   ([`docs/storage.md`](docs/storage.md)).
 - `src/lib/showcase/` and `data/showcase/`: the six recorded real runs, read-only.
+- `src/lib/impact/`: the Insights numbers (`insights.ts`), the ROI maths and its input list
+  (`roi.ts`), the agent time read from the recorded runs (`measured-time.ts`) and the cited public
+  sources (`sources.ts`). Pure functions, tested in `*.test.ts`; `src/components/insights/` and
+  `src/components/impact/` draw them, `src/app/impact/` is the page.
 - `src/app/`, `src/components/`: the UI (Cases list, new report with voice recorder, case review)
   and the API routes.
 - `deploy/`: Muse Spark Open on Baseten and Muse Glimmer on Modal ([`deploy/README.md`](deploy/README.md)).
@@ -482,6 +534,11 @@ Storage, the Blob store).
   lockers, public holidays, the carrier-measured weight.
 - Colissimo pays on the purchase value of the content; the order only carries the sale price, so the
   computed maximum may be higher than the real indemnity.
+- **The Impact numbers are an estimate.** The calculator is only as good as the merchant's inputs: the
+  damage rate, the share of parcels that qualify, the share of Mondial Relay parcels refused at delivery and the delays are assumptions, not measures, and
+  its amounts are ceilings under the public standard terms. The agent time is six runs. The
+  Insights page was checked in a browser preview of its components (desktop and 375 px wide); the
+  built Next.js page was not opened.
 - **Nothing is filed.** The app files no claim and sends no e-mail; a human does.
 - **Not legal advice.** The rules are our reading of public terms and statutes.
 - **Public deployment** (https://gilmend.vercel.app, `next` 16.4.1, `undici` 6.29.1,

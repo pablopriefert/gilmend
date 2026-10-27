@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeCase, makeRules } from "@/components/fixtures";
@@ -8,7 +8,11 @@ const listCases = vi.fn();
 const getCase = vi.fn();
 const getCarrierRules = vi.fn();
 vi.mock("@/lib/store/cases", () => ({ listCases: () => listCases(), getCase: (id: string) => getCase(id) }));
-vi.mock("@/lib/rules/carriers", () => ({ getCarrierRules: (c: string) => getCarrierRules(c) }));
+// Only getCarrierRules is replaced: the Insights band reads the real rules (windows, reserve windows).
+vi.mock("@/lib/rules/carriers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/rules/carriers")>()),
+  getCarrierRules: (c: string) => getCarrierRules(c),
+}));
 // next/font/google only exists inside the Next build; the layout test below needs stand-ins.
 vi.mock("next/font/google", () => {
   const font = () => ({ variable: "", className: "", style: {} });
@@ -38,7 +42,9 @@ describe("Cases page", () => {
     listCases.mockResolvedValue([makeCase()]);
     render(await CasesPage());
     expect(screen.getByRole("heading", { name: "Cases" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /#1001/ })).toHaveAttribute("href", "/cases/case-1");
+    // The Insights band links the same case in its deadline list: the cases list is the one asked about.
+    const list = within(screen.getByRole("list", { name: "Cases" }));
+    expect(list.getByRole("link", { name: /#1001/ })).toHaveAttribute("href", "/cases/case-1");
   });
 
   it("hides the details of an unexpected failure", async () => {
