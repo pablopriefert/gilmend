@@ -2,7 +2,7 @@
   "id": "real_demo-4-opened-missing",
   "report": {
     "id": "demo-4-opened-missing",
-    "receivedAt": "2026-10-27T12:02:50.763Z",
+    "receivedAt": "2026-10-27T12:35:49.863Z",
     "customerEmail": "lucas.petit@example.net",
     "orderNumber": "#1004",
     "message": "Bonjour, le colis était déjà ouvert quand je suis allé le chercher au point relais : il manque les soucoupes, il n'y a que les tasses. J'ai refusé le colis sur place et pris des photos au relais. Pouvez-vous régler cela ?",
@@ -38,38 +38,37 @@
       "city": "Bordeaux",
       "country": "FR"
     },
-    "createdAt": "2026-10-22T10:02:52.843Z",
-    "deliveredAt": "2026-10-26T10:02:52.843Z",
+    "createdAt": "2026-10-22T10:35:52.582Z",
+    "deliveredAt": "2026-10-26T10:35:52.582Z",
     "total": 88.9
   },
   "assessment": {
     "item": "Matching saucers, set of 4",
-    "damageType": "opened_parcel",
-    "severity": "total",
+    "damageType": "missing_item",
+    "severity": "major",
     "carrierLikelyAtFault": true,
     "packagingAdequate": true,
     "evidenceNotes": [
-      "carton ouvert avec scotch déchiré",
-      "4 tasses emballées présentes à gauche",
-      "calages moulés de droite vides (soucoupes manquantes)",
-      "étiquette 99100404 visible correspondant au suivi",
-      "photo prise au comptoir point relais"
+      "Carton ouvert avec scotch déchiré",
+      "4 tasses emballées présentes dans le calage de gauche",
+      "Cale de droite avec 4 alvéoles vides correspondant aux soucoupes manquantes",
+      "Photo prise au comptoir du point relais, étiquette 99100404 visible"
     ],
     "photoQuality": "ok"
   },
   "claim": {
     "eligible": true,
     "reasons": [
-      "Damage to the goods is documented: opened parcel, severity total.",
+      "Damage to the goods is documented: missing item, severity major.",
       "The carrier is the likely cause of the damage.",
-      "The customer reported the damage 26.0 h after delivery, inside the 72 h reserve window (closes 2026-10-29T10:02Z).",
+      "The customer reported the damage 26.0 h after delivery, inside the 72 h reserve window (closes 2026-10-29T10:35Z).",
       "The customer refused the parcel at delivery, as the carrier requires.",
       "Maximum compensation: min(item value 36.00 EUR, 25.00 EUR per parcel, cap 25.00 EUR) = 25.00 EUR under Mondial Relay (Offre Start) terms.",
-      "The claim must be filed by 2026-10-29T10:02Z (1 day left)."
+      "The claim must be filed by 2026-10-29T10:35Z (1 day left)."
     ],
     "maxCompensationEur": 25,
-    "claimDeadline": "2026-10-29T10:02:52.843Z",
-    "reserveDeadline": "2026-10-29T10:02:52.843Z",
+    "claimDeadline": "2026-10-29T10:35:52.582Z",
+    "reserveDeadline": "2026-10-29T10:35:52.582Z",
     "daysLeft": 1,
     "basis": {
       "termsLabel": "Mondial Relay (Offre Start)",
@@ -83,29 +82,28 @@
   "decision": {
     "decision": "reship",
     "carrierClaim": true,
-    "confidence": 0.92,
+    "confidence": 0.9,
     "reasons": [
-      "Commande #1004 trouvée pour Mondial Relay suivi 99100404 avec article Matching saucers, set of 4 d'une valeur de 36.00 EUR",
-      "Photo montre colis ouvert avec scotch déchiré, 4 tasses présentes et calages vides pour soucoupes manquantes – opened_parcel severity total",
-      "Client déclare avoir refusé le colis au point relais comme exigé par Mondial Relay",
-      "Signalement 26.0 h après livraison du 2026-10-26T10:02:52.843Z, dans le délai de 72 h jusqu'au 2026-10-29T10:02:52.843Z",
-      "compute_claim eligible=true avec indemnisation maximale de 25.00 EUR – réclamation transporteur possible, réexpédition des soucoupes"
+      "Commande #1004 retrouvée : tasses + soucoupes, transporteur mondial_relay, livraison 2026-10-26",
+      "Photo ok : carton ouvert scotch déchiré, 4 tasses présentes, 4 alvéoles vides pour les soucoupes manquantes",
+      "Refus du colis au point relais déclaré, conforme à l'exigence Mondial Relay",
+      "Eligible compute_claim : 26.0h après livraison dans délai 72h, indemnisation max 25.00 EUR, dossier à déposer avant 2026-10-29T10:35:52.582Z"
     ],
     "needsHuman": false,
-    "customerReply": "Bonjour, merci pour votre message et vos photos prises au point relais. Nous allons vous réexpédier les soucoupes manquantes et déclarer le problème auprès du transporteur. Nous revenons vers vous très vite pour la suite."
+    "customerReply": "Bonjour, merci pour votre signalement et vos photos. Nous allons vous réexpédier les soucoupes manquantes et déclarer l'incident auprès du transporteur. Nous revenons vers vous très vite pour la suite."
   },
   "evidence": [
     {
       "photo": "data/showcase/photos/parcel-open-missing.webp",
-      "annotatedPhoto": "data/showcase/evidence/3633d60a89d08a63-annotated.jpg",
+      "annotatedPhoto": "data/showcase/evidence/810b603f47f8c79f-annotated.jpg",
       "method": "sam-3.1",
-      "note": "SAM 3.1 outlined 5 regions from 2 concepts: \"open cardboard box\" 1, \"torn cardboard\" 4 (confidence 0.97, 0.76, 0.74, 0.72, 0.69). The outline marks where the damage appears to be; it is not a damage verdict."
+      "note": "SAM 3.1 outlined 1 region matching \"open cardboard box\" (confidence 0.97). The outline shows what SAM matched for these concepts, not the damage itself; it is not a damage verdict."
     }
   ],
   "document": {
     "pdfPath": "data/showcase/claims/real_demo-4-opened-missing.pdf",
     "emailSubject": "Partial loss claim (parcel delivered open) - parcel 99100404 - order #1004",
-    "emailBody": "Dear Sir or Madam,\n\nI am writing on behalf of Maison Demo (demo merchant), sender of the parcel below, to report a parcel delivered open with an item missing (partial loss).\n\n- Carrier: Mondial Relay (Mondial Relay Point Relais)\n- Tracking number: 99100404\n- Order: #1004\n- Weight: 2.6 kg\n- Value of the contents: €84.00\n- Delivered on: 26 October 2026\n- Damage reported on: 27 October 2026\n\nDamage found: Matching saucers, set of 4 (parcel opened or torn, product beyond repair). The attached photos show the state of the parcel and of the product.\n\nCompensation claimed: €25.00, under the terms of your contract (details in the attached claim file).\nThis claim is filed in time: the claim deadline is 29 October 2026, 11:02 (Paris time).\nReserve deadline: 29 October 2026, 11:02 (Paris time).\n\nPlease find attached the claim file (PDF) and the photos. The purchase invoice of the contents follows or is attached separately.\nPlease confirm receipt of this claim and keep me informed of its progress.\n\nKind regards,\nMaison Demo (demo merchant)\n12 rue de la Démo, 75011 Paris, France\nclaims@maison-demo.example"
+    "emailBody": "Dear Sir or Madam,\n\nI am writing on behalf of Maison Demo (demo merchant), sender of the parcel below, to report a parcel delivered open with an item missing (partial loss).\n\n- Carrier: Mondial Relay (Mondial Relay Point Relais)\n- Tracking number: 99100404\n- Order: #1004\n- Weight: 2.6 kg\n- Value of the contents: €84.00\n- Delivered on: 26 October 2026\n- Damage reported on: 27 October 2026\n\nDamage found: Matching saucers, set of 4 (item missing, major damage). The attached photos show the state of the parcel and of the product.\n\nCompensation claimed: €25.00, under the terms of your contract (details in the attached claim file).\nThis claim is filed in time: the claim deadline is 29 October 2026, 11:35 (Paris time).\nReserve deadline: 29 October 2026, 11:35 (Paris time).\n\nPlease find attached the claim file (PDF) and the photos. The purchase invoice of the contents follows or is attached separately.\nPlease confirm receipt of this claim and keep me informed of its progress.\n\nKind regards,\nMaison Demo (demo merchant)\n12 rue de la Démo, 75011 Paris, France\nclaims@maison-demo.example"
   },
   "status": "needs_review",
   "engine": "muse-spark-1.3",
@@ -118,7 +116,7 @@
   "trace": [
     {
       "step": "Engine: muse-spark-1.3 (Muse Spark 1.3 (Meta Model API))",
-      "at": "2026-10-27T16:02:50.764Z"
+      "at": "2026-10-27T16:35:49.864Z"
     },
     {
       "step": "Report received (1 photo(s) attached)",
@@ -126,12 +124,12 @@
         "orderNumber": "#1004",
         "language": "fr"
       },
-      "at": "2026-10-27T16:02:50.767Z"
+      "at": "2026-10-27T16:35:49.868Z"
     },
     {
       "step": "Model note (step 1)",
-      "output": "Je traite votre colis ouvert avec articles manquants — je vérifie la commande.",
-      "at": "2026-10-27T16:02:52.842Z"
+      "output": "J’examine votre colis ouvert avec pièces manquantes et je vérifie la commande.",
+      "at": "2026-10-27T16:35:52.582Z"
     },
     {
       "step": "Tool: get_order",
@@ -166,41 +164,40 @@
             "city": "Bordeaux",
             "country": "FR"
           },
-          "createdAt": "2026-10-22T10:02:52.843Z",
-          "deliveredAt": "2026-10-26T10:02:52.843Z",
+          "createdAt": "2026-10-22T10:35:52.582Z",
+          "deliveredAt": "2026-10-26T10:35:52.582Z",
           "total": 88.9
         }
       },
-      "at": "2026-10-27T16:02:52.843Z"
+      "at": "2026-10-27T16:35:52.582Z"
     },
     {
       "step": "Model note (step 2)",
-      "output": "La commande est retrouvée — j’examine maintenant vos photos.",
-      "at": "2026-10-27T16:02:59.592Z"
+      "output": "La commande est retrouvée ; j’enregistre maintenant mon analyse détaillée des photos.",
+      "at": "2026-10-27T16:35:58.969Z"
     },
     {
       "step": "Tool: assess_photos",
       "tool": "assess_photos",
-      "input": "{\"carrierLikelyAtFault\":true,\"damageType\":\"opened_parcel\",\"evidenceNotes\":[\"carton ouvert avec scotch déchiré\",\"4 tasses emballées présentes à gauche\",\"calages moulés de droite vides (soucoupes manquantes)\",\"étiquette 99100404 visible correspondant au suivi\",\"photo prise au comptoir point relais\"],\"item\":\"Matching saucers, set of 4\",\"packagingAdequate\":true,\"photoQuality\":\"ok\",\"severity\":\"total\"}",
+      "input": "{\"carrierLikelyAtFault\":true,\"damageType\":\"missing_item\",\"evidenceNotes\":[\"Carton ouvert avec scotch déchiré\",\"4 tasses emballées présentes dans le calage de gauche\",\"Cale de droite avec 4 alvéoles vides correspondant aux soucoupes manquantes\",\"Photo prise au comptoir du point relais, étiquette 99100404 visible\"],\"item\":\"Matching saucers, set of 4\",\"packagingAdequate\":true,\"photoQuality\":\"ok\",\"severity\":\"major\"}",
       "output": {
         "recorded": true,
         "assessment": {
           "item": "Matching saucers, set of 4",
-          "damageType": "opened_parcel",
-          "severity": "total",
+          "damageType": "missing_item",
+          "severity": "major",
           "carrierLikelyAtFault": true,
           "packagingAdequate": true,
           "evidenceNotes": [
-            "carton ouvert avec scotch déchiré",
-            "4 tasses emballées présentes à gauche",
-            "calages moulés de droite vides (soucoupes manquantes)",
-            "étiquette 99100404 visible correspondant au suivi",
-            "photo prise au comptoir point relais"
+            "Carton ouvert avec scotch déchiré",
+            "4 tasses emballées présentes dans le calage de gauche",
+            "Cale de droite avec 4 alvéoles vides correspondant aux soucoupes manquantes",
+            "Photo prise au comptoir du point relais, étiquette 99100404 visible"
           ],
           "photoQuality": "ok"
         }
       },
-      "at": "2026-10-27T16:02:59.592Z"
+      "at": "2026-10-27T16:35:58.969Z"
     },
     {
       "step": "Tool: mark_damage",
@@ -210,14 +207,14 @@
         "photoIndex": 0,
         "annotated": true,
         "method": "sam-3.1",
-        "note": "SAM 3.1 outlined 5 regions from 2 concepts: \"open cardboard box\" 1, \"torn cardboard\" 4 (confidence 0.97, 0.76, 0.74, 0.72, 0.69). The outline marks where the damage appears to be; it is not a damage verdict."
+        "note": "SAM 3.1 outlined 1 region matching \"open cardboard box\" (confidence 0.97). The outline shows what SAM matched for these concepts, not the damage itself; it is not a damage verdict."
       },
-      "at": "2026-10-27T16:03:10.663Z"
+      "at": "2026-10-27T16:36:09.318Z"
     },
     {
       "step": "Model note (step 4)",
-      "output": "Les indices confirment l’ouverture et le manque — je consulte les règles d’indemnisation.",
-      "at": "2026-10-27T16:03:14.167Z"
+      "output": "Les indices de colis ouvert sont documentés ; je vérifie les règles de renvoi avec le transporteur.",
+      "at": "2026-10-27T16:36:12.978Z"
     },
     {
       "step": "Tool: get_carrier_rules",
@@ -299,7 +296,12 @@
           "A parcel declared delivered but never received is a different procedure (1 month, sworn statement and ID copy) and is out of scope: send it to a human."
         ]
       },
-      "at": "2026-10-27T16:03:14.168Z"
+      "at": "2026-10-27T16:36:12.978Z"
+    },
+    {
+      "step": "Model note (step 5)",
+      "output": "Le refus du colis a été noté ; je calcule maintenant votre éligibilité à une indemnisation.",
+      "at": "2026-10-27T16:36:15.661Z"
     },
     {
       "step": "Tool: compute_claim",
@@ -308,16 +310,16 @@
       "output": {
         "eligible": true,
         "reasons": [
-          "Damage to the goods is documented: opened parcel, severity total.",
+          "Damage to the goods is documented: missing item, severity major.",
           "The carrier is the likely cause of the damage.",
-          "The customer reported the damage 26.0 h after delivery, inside the 72 h reserve window (closes 2026-10-29T10:02Z).",
+          "The customer reported the damage 26.0 h after delivery, inside the 72 h reserve window (closes 2026-10-29T10:35Z).",
           "The customer refused the parcel at delivery, as the carrier requires.",
           "Maximum compensation: min(item value 36.00 EUR, 25.00 EUR per parcel, cap 25.00 EUR) = 25.00 EUR under Mondial Relay (Offre Start) terms.",
-          "The claim must be filed by 2026-10-29T10:02Z (1 day left)."
+          "The claim must be filed by 2026-10-29T10:35Z (1 day left)."
         ],
         "maxCompensationEur": 25,
-        "claimDeadline": "2026-10-29T10:02:52.843Z",
-        "reserveDeadline": "2026-10-29T10:02:52.843Z",
+        "claimDeadline": "2026-10-29T10:35:52.582Z",
+        "reserveDeadline": "2026-10-29T10:35:52.582Z",
         "daysLeft": 1,
         "basis": {
           "termsLabel": "Mondial Relay (Offre Start)",
@@ -328,32 +330,31 @@
           "capEur": 25
         }
       },
-      "at": "2026-10-27T16:03:15.521Z"
+      "at": "2026-10-27T16:36:15.662Z"
     },
     {
       "step": "Tool: finish_case",
       "tool": "draft_reply",
-      "input": "{\"carrierClaim\":true,\"confidence\":0.92,\"customerReply\":\"Bonjour, merci pour votre message et vos photos prises au point relais. Nous allons vous réexpédier les soucoupes manquantes et déclarer le problème auprès du transporteur. Nous revenons vers vous très vite pour la suite.\",\"decision\":\"reship\",\"fraudSuspected\":false,\"needsHuman\":false,\"reasons\":[\"Commande #1004 trouvée pour Mondial Relay suivi 99100404 avec article Matching saucers, set of 4 d'une valeur de 36.00 EUR\",\"Photo montre colis ouvert avec scotch déchiré, 4 tasses présentes et calages vides pour soucoupes manquantes – opened_parcel severity total\",\"Client déclare avoir refusé le colis au point relais comme exigé par Mondial Relay\",\"Signalement 26.0 h après livraison du 2026-10-26T10:02:52.843Z, dans le délai de 72 h jusqu'au 2026-10-29T10:02:52.843Z\",\"compute_claim eligible=true avec indemnisation maximale de 25.00 EUR – réclamation transporteur possible, réexpédition des soucoupes\"]}",
+      "input": "{\"carrierClaim\":true,\"confidence\":0.9,\"customerReply\":\"Bonjour, merci pour votre signalement et vos photos. Nous allons vous réexpédier les soucoupes manquantes et déclarer l'incident auprès du transporteur. Nous revenons vers vous très vite pour la suite.\",\"decision\":\"reship\",\"fraudSuspected\":false,\"needsHuman\":false,\"reasons\":[\"Commande #1004 retrouvée : tasses + soucoupes, transporteur mondial_relay, livraison 2026-10-26\",\"Photo ok : carton ouvert scotch déchiré, 4 tasses présentes, 4 alvéoles vides pour les soucoupes manquantes\",\"Refus du colis au point relais déclaré, conforme à l'exigence Mondial Relay\",\"Eligible compute_claim : 26.0h après livraison dans délai 72h, indemnisation max 25.00 EUR, dossier à déposer avant 2026-10-29T10:35:52.582Z\"]}",
       "output": {
         "accepted": true,
         "decision": {
           "decision": "reship",
           "carrierClaim": true,
-          "confidence": 0.92,
+          "confidence": 0.9,
           "reasons": [
-            "Commande #1004 trouvée pour Mondial Relay suivi 99100404 avec article Matching saucers, set of 4 d'une valeur de 36.00 EUR",
-            "Photo montre colis ouvert avec scotch déchiré, 4 tasses présentes et calages vides pour soucoupes manquantes – opened_parcel severity total",
-            "Client déclare avoir refusé le colis au point relais comme exigé par Mondial Relay",
-            "Signalement 26.0 h après livraison du 2026-10-26T10:02:52.843Z, dans le délai de 72 h jusqu'au 2026-10-29T10:02:52.843Z",
-            "compute_claim eligible=true avec indemnisation maximale de 25.00 EUR – réclamation transporteur possible, réexpédition des soucoupes"
+            "Commande #1004 retrouvée : tasses + soucoupes, transporteur mondial_relay, livraison 2026-10-26",
+            "Photo ok : carton ouvert scotch déchiré, 4 tasses présentes, 4 alvéoles vides pour les soucoupes manquantes",
+            "Refus du colis au point relais déclaré, conforme à l'exigence Mondial Relay",
+            "Eligible compute_claim : 26.0h après livraison dans délai 72h, indemnisation max 25.00 EUR, dossier à déposer avant 2026-10-29T10:35:52.582Z"
           ],
           "needsHuman": false,
-          "customerReply": "Bonjour, merci pour votre message et vos photos prises au point relais. Nous allons vous réexpédier les soucoupes manquantes et déclarer le problème auprès du transporteur. Nous revenons vers vous très vite pour la suite."
+          "customerReply": "Bonjour, merci pour votre signalement et vos photos. Nous allons vous réexpédier les soucoupes manquantes et déclarer l'incident auprès du transporteur. Nous revenons vers vous très vite pour la suite."
         },
         "guardrailAdjustments": [],
         "next": "Call draft_claim_document, then stop."
       },
-      "at": "2026-10-27T16:03:19.821Z"
+      "at": "2026-10-27T16:36:20.797Z"
     },
     {
       "step": "Tool: draft_claim_document",
@@ -364,15 +365,15 @@
         "pdfPath": "data/showcase/claims/real_demo-4-opened-missing.pdf",
         "emailSubject": "Partial loss claim (parcel delivered open) - parcel 99100404 - order #1004"
       },
-      "at": "2026-10-27T16:03:21.892Z"
+      "at": "2026-10-27T16:36:22.517Z"
     },
     {
       "step": "Case ready for review: reship",
-      "at": "2026-10-27T16:03:21.892Z"
+      "at": "2026-10-27T16:36:22.517Z"
     }
   ],
-  "createdAt": "2026-10-27T16:02:50.764Z",
-  "updatedAt": "2026-10-27T16:03:21.892Z",
+  "createdAt": "2026-10-27T16:35:49.864Z",
+  "updatedAt": "2026-10-27T16:36:22.517Z",
   "recorded": {
     "recordedOn": "2026-10-27"
   }

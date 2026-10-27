@@ -2,7 +2,7 @@
   "id": "real_demo-6-late-report",
   "report": {
     "id": "demo-6-late-report",
-    "receivedAt": "2026-10-27T14:04:33.393Z",
+    "receivedAt": "2026-10-27T14:36:58.481Z",
     "customerEmail": "thomas.garnier@example.org",
     "orderNumber": "#1006",
     "message": "I only unpacked the carafe today and found it cracked along the neck. It was delivered over a week ago, sorry for the delay. Order #1006.",
@@ -32,32 +32,32 @@
       "city": "Toulouse",
       "country": "FR"
     },
-    "createdAt": "2026-10-15T14:04:36.120Z",
-    "deliveredAt": "2026-10-18T16:04:36.120Z",
+    "createdAt": "2026-10-15T14:37:01.870Z",
+    "deliveredAt": "2026-10-18T16:37:01.870Z",
     "total": 44.9
   },
   "assessment": {
-    "item": "glass water carafe",
+    "item": "glass carafe",
     "damageType": "broken_product",
     "severity": "major",
     "carrierLikelyAtFault": true,
     "packagingAdequate": null,
     "evidenceNotes": [
-      "Long branching crack from rim down neck of clear glass carafe",
-      "No packaging visible in photo"
+      "Clear close-up of transparent glass carafe neck with long crack running from rim down body",
+      "Multiple branching cracks visible in middle of neck"
     ],
     "photoQuality": "ok"
   },
   "claim": {
     "eligible": false,
     "reasons": [
-      "The claim deadline of Chronopost (professional terms) passed on 2026-10-21T16:04Z (3 days after delivery), so a claim can no longer be filed.",
-      "The customer reported the damage 214.0 h after delivery, after the 72 h reserve window of Chronopost (professional terms) closed on 2026-10-21T16:04Z. The carrier rejects such claims.",
+      "The claim deadline of Chronopost (professional terms) passed on 2026-10-21T16:37Z (3 days after delivery), so a claim can no longer be filed.",
+      "The customer reported the damage 214.0 h after delivery, after the 72 h reserve window of Chronopost (professional terms) closed on 2026-10-21T16:37Z. The carrier rejects such claims.",
       "Warning: the photos do not show whether the packaging was adequate; the carrier may refuse compensation if it was not."
     ],
     "maxCompensationEur": 0,
     "claimDeadline": null,
-    "reserveDeadline": "2026-10-21T16:04:36.120Z",
+    "reserveDeadline": "2026-10-21T16:37:01.870Z",
     "daysLeft": null
   },
   "decision": {
@@ -65,19 +65,20 @@
     "carrierClaim": false,
     "confidence": 0.85,
     "reasons": [
-      "Photo shows glass carafe with major crack along neck, photo quality ok",
-      "Order #1006 found for customer, Chronopost delivery",
-      "compute_claim returned eligible false so no carrier claim is possible, reship would not be covered"
+      "Order #1006 exists for the reporting customer and contains the glass carafe",
+      "Photo shows a glass carafe with a long crack along the neck, major breakage",
+      "Carrier claim is not eligible because the report came after the reserve and claim window closed",
+      "No reshipment with carrier cover is possible, so a refund is appropriate"
     ],
     "needsHuman": false,
-    "customerReply": "Hello, thank you for your message and the photo. I'm sorry your carafe arrived cracked. We will arrange a refund for this order. Thanks again for letting us know."
+    "customerReply": "Hello, Thank you for your message and for the photo. I'm sorry your carafe arrived cracked. We will issue a refund for this order. Best regards."
   },
   "evidence": [
     {
       "photo": "data/showcase/photos/carafe-cracked.webp",
       "annotatedPhoto": "data/showcase/evidence/ff54b37e8b0478ff-annotated.jpg",
       "method": "sam-3.1",
-      "note": "SAM 3.1 outlined 1 region matching \"glass carafe\" (confidence 0.62). No region for \"glass water carafe\". The outline marks where the damage appears to be; it is not a damage verdict."
+      "note": "SAM 3.1 outlined 1 region matching \"glass carafe\" (confidence 0.62). The outline shows what SAM matched for these concepts, not the damage itself; it is not a damage verdict."
     }
   ],
   "document": null,
@@ -92,7 +93,7 @@
   "trace": [
     {
       "step": "Engine: muse-spark-1.3 (Muse Spark 1.3 (Meta Model API))",
-      "at": "2026-10-27T16:04:33.394Z"
+      "at": "2026-10-27T16:36:58.482Z"
     },
     {
       "step": "Report received (1 photo(s) attached)",
@@ -100,12 +101,12 @@
         "orderNumber": "#1006",
         "language": "en"
       },
-      "at": "2026-10-27T16:04:33.397Z"
+      "at": "2026-10-27T16:36:58.486Z"
     },
     {
       "step": "Model note (step 1)",
-      "output": "I see your cracked carafe — I'll investigate and sort your replacement.",
-      "at": "2026-10-27T16:04:36.119Z"
+      "output": "Investigating your cracked carafe report — I'll verify the order and inspect the photo.",
+      "at": "2026-10-27T16:37:01.869Z"
     },
     {
       "step": "Tool: get_order",
@@ -134,38 +135,38 @@
             "city": "Toulouse",
             "country": "FR"
           },
-          "createdAt": "2026-10-15T14:04:36.120Z",
-          "deliveredAt": "2026-10-18T16:04:36.120Z",
+          "createdAt": "2026-10-15T14:37:01.870Z",
+          "deliveredAt": "2026-10-18T16:37:01.870Z",
           "total": 44.9
         }
       },
-      "at": "2026-10-27T16:04:36.120Z"
+      "at": "2026-10-27T16:37:01.870Z"
     },
     {
       "step": "Tool: assess_photos",
       "tool": "assess_photos",
-      "input": "{\"carrierLikelyAtFault\":true,\"damageType\":\"broken_product\",\"evidenceNotes\":[\"Long branching crack from rim down neck of clear glass carafe\",\"No packaging visible in photo\"],\"item\":\"glass water carafe\",\"packagingAdequate\":null,\"photoQuality\":\"ok\",\"severity\":\"major\"}",
+      "input": "{\"carrierLikelyAtFault\":true,\"damageType\":\"broken_product\",\"evidenceNotes\":[\"Clear close-up of transparent glass carafe neck with long crack running from rim down body\",\"Multiple branching cracks visible in middle of neck\"],\"item\":\"glass carafe\",\"packagingAdequate\":null,\"photoQuality\":\"ok\",\"severity\":\"major\"}",
       "output": {
         "recorded": true,
         "assessment": {
-          "item": "glass water carafe",
+          "item": "glass carafe",
           "damageType": "broken_product",
           "severity": "major",
           "carrierLikelyAtFault": true,
           "packagingAdequate": null,
           "evidenceNotes": [
-            "Long branching crack from rim down neck of clear glass carafe",
-            "No packaging visible in photo"
+            "Clear close-up of transparent glass carafe neck with long crack running from rim down body",
+            "Multiple branching cracks visible in middle of neck"
           ],
           "photoQuality": "ok"
         }
       },
-      "at": "2026-10-27T16:04:38.713Z"
+      "at": "2026-10-27T16:37:04.598Z"
     },
     {
       "step": "Model note (step 3)",
-      "output": "Damage confirmed — now gathering the evidence and carrier terms.",
-      "at": "2026-10-27T16:04:40.161Z"
+      "output": "Order confirmed and damage documented — now outlining the evidence and checking carrier rules.",
+      "at": "2026-10-27T16:37:09.953Z"
     },
     {
       "step": "Tool: mark_damage",
@@ -175,9 +176,9 @@
         "photoIndex": 0,
         "annotated": true,
         "method": "sam-3.1",
-        "note": "SAM 3.1 outlined 1 region matching \"glass carafe\" (confidence 0.62). No region for \"glass water carafe\". The outline marks where the damage appears to be; it is not a damage verdict."
+        "note": "SAM 3.1 outlined 1 region matching \"glass carafe\" (confidence 0.62). The outline shows what SAM matched for these concepts, not the damage itself; it is not a damage verdict."
       },
-      "at": "2026-10-27T16:04:43.611Z"
+      "at": "2026-10-27T16:37:11.255Z"
     },
     {
       "step": "Tool: get_carrier_rules",
@@ -271,7 +272,7 @@
         ],
         "compensationCaveat": "Chronopost pays on supporting documents (purchase invoice dated no later than the shipping day, photos of the damage)."
       },
-      "at": "2026-10-27T16:04:45.079Z"
+      "at": "2026-10-27T16:37:11.255Z"
     },
     {
       "step": "Tool: compute_claim",
@@ -280,21 +281,21 @@
       "output": {
         "eligible": false,
         "reasons": [
-          "The claim deadline of Chronopost (professional terms) passed on 2026-10-21T16:04Z (3 days after delivery), so a claim can no longer be filed.",
-          "The customer reported the damage 214.0 h after delivery, after the 72 h reserve window of Chronopost (professional terms) closed on 2026-10-21T16:04Z. The carrier rejects such claims.",
+          "The claim deadline of Chronopost (professional terms) passed on 2026-10-21T16:37Z (3 days after delivery), so a claim can no longer be filed.",
+          "The customer reported the damage 214.0 h after delivery, after the 72 h reserve window of Chronopost (professional terms) closed on 2026-10-21T16:37Z. The carrier rejects such claims.",
           "Warning: the photos do not show whether the packaging was adequate; the carrier may refuse compensation if it was not."
         ],
         "maxCompensationEur": 0,
         "claimDeadline": null,
-        "reserveDeadline": "2026-10-21T16:04:36.120Z",
+        "reserveDeadline": "2026-10-21T16:37:01.870Z",
         "daysLeft": null
       },
-      "at": "2026-10-27T16:04:46.514Z"
+      "at": "2026-10-27T16:37:12.346Z"
     },
     {
       "step": "Tool: finish_case",
       "tool": "draft_reply",
-      "input": "{\"carrierClaim\":false,\"confidence\":0.85,\"customerReply\":\"Hello, thank you for your message and the photo. I'm sorry your carafe arrived cracked. We will arrange a refund for this order. Thanks again for letting us know.\",\"decision\":\"refund\",\"fraudSuspected\":false,\"needsHuman\":false,\"reasons\":[\"Photo shows glass carafe with major crack along neck, photo quality ok\",\"Order #1006 found for customer, Chronopost delivery\",\"compute_claim returned eligible false so no carrier claim is possible, reship would not be covered\"]}",
+      "input": "{\"carrierClaim\":false,\"confidence\":0.85,\"customerReply\":\"Hello, Thank you for your message and for the photo. I'm sorry your carafe arrived cracked. We will issue a refund for this order. Best regards.\",\"decision\":\"refund\",\"fraudSuspected\":false,\"needsHuman\":false,\"reasons\":[\"Order #1006 exists for the reporting customer and contains the glass carafe\",\"Photo shows a glass carafe with a long crack along the neck, major breakage\",\"Carrier claim is not eligible because the report came after the reserve and claim window closed\",\"No reshipment with carrier cover is possible, so a refund is appropriate\"]}",
       "output": {
         "accepted": true,
         "decision": {
@@ -302,25 +303,26 @@
           "carrierClaim": false,
           "confidence": 0.85,
           "reasons": [
-            "Photo shows glass carafe with major crack along neck, photo quality ok",
-            "Order #1006 found for customer, Chronopost delivery",
-            "compute_claim returned eligible false so no carrier claim is possible, reship would not be covered"
+            "Order #1006 exists for the reporting customer and contains the glass carafe",
+            "Photo shows a glass carafe with a long crack along the neck, major breakage",
+            "Carrier claim is not eligible because the report came after the reserve and claim window closed",
+            "No reshipment with carrier cover is possible, so a refund is appropriate"
           ],
           "needsHuman": false,
-          "customerReply": "Hello, thank you for your message and the photo. I'm sorry your carafe arrived cracked. We will arrange a refund for this order. Thanks again for letting us know."
+          "customerReply": "Hello, Thank you for your message and for the photo. I'm sorry your carafe arrived cracked. We will issue a refund for this order. Best regards."
         },
         "guardrailAdjustments": [],
         "next": "Done. Stop calling tools."
       },
-      "at": "2026-10-27T16:04:50.720Z"
+      "at": "2026-10-27T16:37:17.115Z"
     },
     {
       "step": "Case ready for review: refund",
-      "at": "2026-10-27T16:04:50.720Z"
+      "at": "2026-10-27T16:37:17.115Z"
     }
   ],
-  "createdAt": "2026-10-27T16:04:33.394Z",
-  "updatedAt": "2026-10-27T16:04:50.720Z",
+  "createdAt": "2026-10-27T16:36:58.482Z",
+  "updatedAt": "2026-10-27T16:37:17.115Z",
   "recorded": {
     "recordedOn": "2026-10-27"
   }
