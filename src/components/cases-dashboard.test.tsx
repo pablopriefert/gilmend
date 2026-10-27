@@ -56,4 +56,15 @@ describe("Cases dashboard", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Cases could not be loaded.");
     expect(screen.queryByText("No cases yet")).not.toBeInTheDocument();
   });
+
+  it("marks a case the customer replied to with its round, and no other", () => {
+    const followed = makeCase({
+      id: "case-2",
+      followUps: [{ id: "fu", receivedAt: "2026-10-28T09:00:00.000Z", message: "Sharper photo.", photos: [] }],
+    });
+    render(<CasesDashboard cases={[makeCase(), followed]} error={null} now={NOW} />);
+    const rows = within(screen.getByRole("list", { name: "Cases" })).getAllByRole("listitem");
+    expect(within(rows[0]).queryByText(/^Round \d/)).not.toBeInTheDocument();
+    expect(within(rows[1]).getByText("Round 2")).toBeInTheDocument();
+  });
 });

@@ -9,6 +9,7 @@ import {
   Clock,
   Download,
   ExternalLink,
+  FlaskConical,
   FileCheck2,
   FileText,
   FileX2,
@@ -19,6 +20,7 @@ import {
   Mic,
   Package,
   PackageX,
+  Repeat2,
   Route,
   ScanSearch,
   ShieldCheck,
@@ -41,11 +43,13 @@ import type {
   DecisionKind,
   Engine,
   Evidence,
+  FollowUp,
   Order,
   TraceStep,
   VoiceNote,
 } from "@/lib/types";
 import { evidenceForPhotos } from "@/lib/evidence/merge";
+import { groupTraceByRound } from "@/lib/rounds";
 import { cn } from "@/lib/utils";
 import { CopyButton } from "./case/copy-button";
 import { TraceTimeline } from "./case/trace-timeline";
@@ -128,9 +132,66 @@ function Photo({
   );
 }
 
+/** The photos of one round, each as sent and, when the agent made one, its SAM 3.1 outline. */
+function PhotoItems({
+  items,
+  firstNumber,
+  inClaim,
+}: {
+  items: Evidence[];
+  /** Number of the first photo of this list in the whole case (photos are numbered across rounds). */
+  firstNumber: number;
+  inClaim: boolean;
+}) {
+  return (
+    <ul className="mt-4 flex flex-col gap-8">
+      {items.map((e, i) => {
+        const n = firstNumber + i;
+        return (
+          <li key={`${e.photo}-${n}`}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Photo
+                src={e.photo}
+                alt={`Customer photo ${n}`}
+                label="As sent"
+                caption={`Photo ${n}, as sent by the customer`}
+              />
+              {e.annotatedPhoto ? (
+                <Photo
+                  src={e.annotatedPhoto}
+                  alt={`Photo ${n} outlined by SAM 3.1`}
+                  label="SAM 3.1 outline"
+                  caption={`Outlined by SAM 3.1: what it matched (the item, its pieces or the box)${inClaim ? ". This image goes in the claim" : ""}`}
+                />
+              ) : (
+                <div className="hidden min-h-32 place-items-center rounded-xl border border-dashed border-border-strong bg-surface-muted p-4 text-center text-xs text-muted sm:grid">
+                  <span className="flex flex-col items-center gap-1.5">
+                    <ScanSearch aria-hidden="true" className="h-5 w-5" strokeWidth={1.5} />
+                    No SAM outline for this photo
+                  </span>
+                </div>
+              )}
+            </div>
+            <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+              {e.method === "sam-3.1" ? (
+                <Pill tone="ok" icon={ScanSearch}>Annotated with SAM 3.1</Pill>
+              ) : (
+                <Pill tone="neutral" icon={ImageIcon}>Raw photo: not annotated</Pill>
+              )}
+              {e.note && <span className="text-muted">{e.note}</span>}
+            </p>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 /**
  * Customer's message and the photos. Each photo is shown as sent, and beside it the version SAM 3.1
  * outlined when the agent made one. SAM shows what it matched, not a verdict on the damage.
+ * A case that was followed up shows each reply (its words, then its photos) after the report,
+ * under its round, with the photos numbered across the whole case.
  */
 export function EvidenceSection({
   message,
@@ -138,17 +199,24 @@ export function EvidenceSection({
   evidence,
   voiceNote,
   inClaim = false,
+  followUps = [],
 }: {
   message: string;
+  /** The photos of the report (the original ones). */
   photos: string[];
   evidence: Evidence[];
   voiceNote?: VoiceNote;
   /** The case carries a carrier claim, so the outlined image really goes into its PDF. */
   inClaim?: boolean;
+  /** The customer's replies, oldest first (round 2 is the first one). */
+  followUps?: FollowUp[];
 }) {
   // Every photo the customer sent, each with its annotated version when the agent made one.
   const items: Evidence[] = evidenceForPhotos(photos, evidence);
-  const anyOutlined = items.some((e) => e.annotatedPhoto);
+  const replies = followUps.map((f) => ({ followUp: f, items: evidenceForPhotos(f.photos, evidence) }));
+  const all = [...items, ...replies.flatMap((r) => r.items)];
+  const anyOutlined = all.some((e) => e.annotatedPhoto);
+  const followed = followUps.length > 0;
   return (
     <Panel id="evidence-title" title="Customer report and evidence" icon={Camera} index={2}>
       {voiceNote && (
@@ -170,11 +238,12 @@ export function EvidenceSection({
           </span>
         </p>
       )}
+      {followed && <Eyebrow className="mb-2">Round 1: the report</Eyebrow>}
       <blockquote className="whitespace-pre-wrap border-l-2 border-border-strong py-1 pl-4 text-lg leading-relaxed text-ink-soft">
         {message}
       </blockquote>
 
-      {items.length === 0 ? (
+      {all.length === 0 ? (
         <p className="mt-5 flex items-center gap-2 rounded-xl border border-dashed border-border-strong bg-surface-muted px-4 py-3 text-sm text-muted">
           <ImageOff aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.75} />
           No photo was attached to this report.
@@ -184,7 +253,7 @@ export function EvidenceSection({
           <div className="mt-6 flex items-center gap-2">
             <Eyebrow>Photos</Eyebrow>
             <span aria-hidden="true" className="h-px flex-1 bg-border" />
-            <span className="text-xs text-muted">{items.length === 1 ? "1 photo" : `${items.length} photos`}</span>
+            <span className="text-xs text-muted">{all.length === 1 ? "1 photo" : `${all.length} photos`}</span>
           </div>
           {anyOutlined && (
             <p className="mt-2 text-sm leading-relaxed text-muted">
@@ -192,45 +261,54 @@ export function EvidenceSection({
               damage. The damage itself is read in the assessment below.
             </p>
           )}
-          <ul className="mt-4 flex flex-col gap-8">
-            {items.map((e, i) => (
-              <li key={`${e.photo}-${i}`}>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Photo
-                    src={e.photo}
-                    alt={`Customer photo ${i + 1}`}
-                    label="As sent"
-                    caption={`Photo ${i + 1}, as sent by the customer`}
-                  />
-                  {e.annotatedPhoto ? (
-                    <Photo
-                      src={e.annotatedPhoto}
-                      alt={`Photo ${i + 1} outlined by SAM 3.1`}
-                      label="SAM 3.1 outline"
-                      caption={`Outlined by SAM 3.1: what it matched (the item, its pieces or the box)${inClaim ? ". This image goes in the claim" : ""}`}
-                    />
-                  ) : (
-                    <div className="hidden min-h-32 place-items-center rounded-xl border border-dashed border-border-strong bg-surface-muted p-4 text-center text-xs text-muted sm:grid">
-                      <span className="flex flex-col items-center gap-1.5">
-                        <ScanSearch aria-hidden="true" className="h-5 w-5" strokeWidth={1.5} />
-                        No SAM outline for this photo
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                  {e.method === "sam-3.1" ? (
-                    <Pill tone="ok" icon={ScanSearch}>Annotated with SAM 3.1</Pill>
-                  ) : (
-                    <Pill tone="neutral" icon={ImageIcon}>Raw photo: not annotated</Pill>
-                  )}
-                  {e.note && <span className="text-muted">{e.note}</span>}
-                </p>
-              </li>
-            ))}
-          </ul>
+          {items.length > 0 ? (
+            <PhotoItems items={items} firstNumber={1} inClaim={inClaim} />
+          ) : (
+            followed && (
+              <p className="mt-4 flex items-center gap-2 rounded-xl border border-dashed border-border-strong bg-surface-muted px-4 py-3 text-sm text-muted">
+                <ImageOff aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                No photo was attached to the report itself.
+              </p>
+            )
+          )}
         </>
       )}
+
+      {replies.map(({ followUp, items: replyItems }, i) => {
+        const firstNumber = items.length + replies.slice(0, i).reduce((n, r) => n + r.items.length, 0) + 1;
+        return (
+          <div key={followUp.id} data-testid={`follow-up-${i + 2}`} className="mt-8 border-t border-border pt-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <Eyebrow>Round {i + 2}: the customer replied</Eyebrow>
+              <span className="tabular text-xs text-muted">{formatDateTime(followUp.receivedAt)}</span>
+              {followUp.simulated && (
+                <Pill tone="warn" icon={FlaskConical}>
+                  Simulated reply
+                </Pill>
+              )}
+            </div>
+            {followUp.simulated && (
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                Not written by a customer: this is the reply of the demo button, with a photo generated with Meta&apos;s
+                Muse Image (data/photos/README.md).
+              </p>
+            )}
+            {followUp.message ? (
+              <blockquote className="mt-3 whitespace-pre-wrap border-l-2 border-border-strong py-1 pl-4 text-lg leading-relaxed text-ink-soft">
+                {followUp.message}
+              </blockquote>
+            ) : (
+              <p className="mt-3 text-sm text-muted">No message, photos only.</p>
+            )}
+            {followUp.orderNumber && (
+              <p className="mt-3 text-sm text-ink-soft">
+                Corrected order number: <span className="font-mono text-[0.8125rem]">{followUp.orderNumber}</span>
+              </p>
+            )}
+            {replyItems.length > 0 && <PhotoItems items={replyItems} firstNumber={firstNumber} inClaim={inClaim} />}
+          </div>
+        );
+      })}
     </Panel>
   );
 }
@@ -753,12 +831,16 @@ export function TraceSection({
   trace,
   engine,
   fallbackAt,
+  engineOfRound,
 }: {
   trace: TraceStep[];
   engine: Engine;
   /** Used for a step whose own date cannot be read. */
   fallbackAt: string;
+  /** The engine that ran a given round, when the case was followed up (it can differ between rounds). */
+  engineOfRound?: (round: number) => Engine | undefined;
 }) {
+  const groups = groupTraceByRound(trace);
   return (
     <section
       aria-labelledby="trace-title"
@@ -798,7 +880,31 @@ export function TraceSection({
                   code, never by the model.
                 </span>
               </p>
-              <TraceTimeline trace={trace} engine={engine} fallbackAt={fallbackAt} />
+              {groups.length <= 1 ? (
+                <TraceTimeline trace={trace} engine={engine} fallbackAt={fallbackAt} />
+              ) : (
+                // Newest round first, like the steps inside a round: each round has its own clock and its
+                // own engine, so each gets its own timeline.
+                <div className="flex flex-col gap-8">
+                  {[...groups].reverse().map((g) => (
+                    <div key={g.round} data-testid={`trace-round-${g.round}`}>
+                      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
+                        <Repeat2 aria-hidden="true" className="h-4 w-4 text-muted" strokeWidth={1.75} />
+                        Round {g.round}
+                        <span className="text-xs font-normal text-muted">
+                          {g.round === 1 ? "the report" : "the customer's reply"} · {g.steps.length}{" "}
+                          {g.steps.length === 1 ? "step" : "steps"}
+                        </span>
+                      </h3>
+                      <TraceTimeline
+                        trace={g.steps}
+                        engine={engineOfRound?.(g.round) ?? engine}
+                        fallbackAt={g.steps[0]?.at ?? fallbackAt}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>

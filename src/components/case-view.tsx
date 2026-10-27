@@ -1,5 +1,6 @@
-import { Archive, Clock, EyeOff, FlaskConical, Hourglass } from "lucide-react";
-import type { CaseRecord } from "@/lib/types";
+import { Archive, Clock, EyeOff, FlaskConical, Hourglass, Repeat2 } from "lucide-react";
+import { caseRound, followUpAvailability, followUpsOf, getRounds } from "@/lib/rounds";
+import type { CaseRecord, Engine, EngineDetail } from "@/lib/types";
 import { CaseReviewProvider, ReplyCard, ReviewActions } from "./case-review-panel";
 import {
   AssessmentSection,
@@ -11,9 +12,12 @@ import {
   TraceSection,
   type RulesView,
 } from "./case-sections";
-import { BackLink, Note, riseStyle } from "./case/ui";
+import { RoundsSection } from "./case/rounds";
+import { BackLink, Note, Pill, riseStyle } from "./case/ui";
 import { StatusChip } from "./case/status-chip";
+import { isBlurryLampCase } from "./demo-scenarios";
 import { EngineBadge } from "./engine-badge";
+import { FollowUpPanel } from "./follow-up-panel";
 import { caseClock, formatDate, formatDateTime } from "./format";
 import { RecordedBadge } from "./recorded-badge";
 
@@ -30,14 +34,23 @@ export function CaseView({
   rules,
   now,
   accessCodeRequired = false,
+  followUpEngine,
 }: {
   caseRecord: CaseRecord;
   rules: RulesView | null;
   now: Date;
   /** The server asks for an access code before a case can be changed. */
   accessCodeRequired?: boolean;
+  /**
+   * What the server will really run a follow-up on (the engine of the case, or the labelled mock when
+   * its credentials are missing here). Defaults to the engine the case was run with.
+   */
+  followUpEngine?: { engine: Engine; detail?: EngineDetail };
 }) {
   const clock = caseClock(c, now);
+  const rounds = getRounds(c);
+  const round = caseRound(c);
+  const followUp = followUpAvailability(c);
   const photosNotRead = c.trace.find((s) => PHOTOS_NOT_READ.test(s.step));
   const title = c.order?.name ?? c.report.customerEmail;
   return (
@@ -71,6 +84,11 @@ export function CaseView({
               <StatusChip status={c.status} />
               <EngineBadge engine={c.engine} detail={c.engineDetail} />
               {c.recorded && <RecordedBadge recorded={c.recorded} />}
+              {round > 1 && (
+                <Pill icon={Repeat2} data-testid="round-chip">
+                  Round {round}: the customer replied
+                </Pill>
+              )}
               <span className="inline-flex items-center gap-1.5 px-1 text-sm text-muted">
                 <Clock aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />
                 Reported <span className="tabular">{formatDateTime(c.report.receivedAt)}</span>
@@ -102,9 +120,10 @@ export function CaseView({
               )}
               {c.engine === "demo-mock" && (
                 <Note tone="warn" icon={FlaskConical} className="animate-rise" style={riseStyle(3)}>
-                  <strong>Demo mode.</strong> This case was produced by a deterministic mock, not by Muse. The
-                  decision, reasons and reply below are canned; the amounts and deadlines still come from the real
-                  carrier rules.
+                  <strong>Demo mode.</strong>{" "}
+                  {round > 1 ? "The latest round of this case was" : "This case was"} produced by a deterministic mock, not
+                  by Muse. The decision, reasons and reply below are canned; the amounts and deadlines still come from
+                  the real carrier rules.
                 </Note>
               )}
             </div>
@@ -118,19 +137,40 @@ export function CaseView({
             <ReviewActions />
           </div>
           <div className="flex min-w-0 flex-col gap-6 lg:order-1">
+            {followUp.available && (
+              <FollowUpPanel
+                // A new round remounts the form: nothing typed for round 2 is carried into round 3.
+                key={round}
+                caseId={c.id}
+                round={round}
+                missing={followUp.missing}
+                asked={c.decision?.customerReply ?? ""}
+                orderMissing={c.order === null}
+                runsAs={followUpEngine ?? { engine: c.engine, detail: c.engineDetail }}
+                demoReply={isBlurryLampCase(c)}
+                index={1}
+              />
+            )}
+            <RoundsSection rounds={rounds} index={1} />
             <EvidenceSection
               message={c.report.message}
               photos={c.report.photos}
               evidence={c.evidence}
               voiceNote={c.report.voiceNote}
               inClaim={c.decision?.carrierClaim === true}
+              followUps={followUpsOf(c)}
             />
             <AssessmentSection assessment={c.assessment} />
             <OrderSection order={c.order} />
             <ClaimSection claim={c.claim} rules={rules} now={clock} />
             <DocumentSection caseId={c.id} document={c.document} />
             <ReplyCard index={7} />
-            <TraceSection trace={c.trace} engine={c.engine} fallbackAt={c.createdAt} />
+            <TraceSection
+              trace={c.trace}
+              engine={c.engine}
+              fallbackAt={c.createdAt}
+              engineOfRound={(n) => rounds.find((r) => r.number === n)?.outcome?.engine}
+            />
           </div>
         </div>
       </div>

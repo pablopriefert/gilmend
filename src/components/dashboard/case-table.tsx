@@ -1,11 +1,12 @@
 "use client";
 
-import { ChevronRight, Truck } from "lucide-react";
+import { ChevronRight, Repeat2, Truck } from "lucide-react";
 import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import type { CaseStatus, Engine, EngineDetail, RecordedRun } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import SegmentedControl from "../arc/segmented-control/segmented-control";
+import { Badge } from "../arc/badge/badge";
 import { EngineBadge } from "../engine-badge";
 import type { DeadlineTone } from "../format";
 import { RecordedBadge } from "../recorded-badge";
@@ -23,6 +24,8 @@ export interface CaseRowData {
   engine: Engine;
   engineDetail?: EngineDetail;
   recorded?: RecordedRun;
+  /** Round of the case: 2 or more once the customer replied (the case was followed up). */
+  round?: number;
   /** Formatted "up to" amount, or null when the case has no carrier claim. */
   amount: string | null;
   deadline: { text: string; tone: DeadlineTone };
@@ -79,6 +82,11 @@ function CaseRow({ row, index }: { row: CaseRowData; index: number }) {
           <div id={badgesId} className="mt-2.5 flex flex-wrap items-center gap-1.5">
             <EngineBadge engine={row.engine} detail={row.engineDetail} compact />
             {row.recorded && <RecordedBadge recorded={row.recorded} compact />}
+            {row.round !== undefined && row.round > 1 && (
+              <Badge tone="info" size="sm" icon={<Repeat2 className="h-3.5 w-3.5" strokeWidth={2} />}>
+                {`Round ${row.round}`}
+              </Badge>
+            )}
           </div>
         </div>
         <div id={statusId} className="col-start-2 row-start-1 justify-self-end lg:col-start-2 lg:justify-self-start">

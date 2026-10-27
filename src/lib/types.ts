@@ -234,6 +234,11 @@ export interface TraceStep {
   output?: unknown;
   /** ISO date-time. */
   at: string;
+  /**
+   * Round of the case this step belongs to, from round 2 on (a follow-up from the customer, see
+   * FollowUp). Absent means round 1: every trace saved before follow-ups existed has no round.
+   */
+  round?: number;
 }
 
 /**
@@ -245,6 +250,54 @@ export interface TraceStep {
 export interface RecordedRun {
   /** Day the run was recorded, ISO date (YYYY-MM-DD). */
   recordedOn: string;
+}
+
+/**
+ * What the customer sent back after the agent asked for more (more photos, a corrected order
+ * number). It starts the next round of the SAME case: the agent resumes with everything it knew
+ * (see resumeAgent). `CaseRecord.report` stays the original report, untouched.
+ */
+export interface FollowUp {
+  id: string;
+  /** ISO date-time the reply was filed. The carrier deadlines never count from it (see computeClaim). */
+  receivedAt: string;
+  /** The customer's words; may be empty when the reply is only photos. */
+  message: string;
+  /** Stored paths of the new photos (0 to 3), same format as DamageReport.photos. */
+  photos: string[];
+  /** Corrected order number, only when the first one matched no order. */
+  orderNumber?: string;
+  /**
+   * True when the server recognised the photo of the "simulate the customer's reply" demo button
+   * (byte for byte): the reply is a rehearsal, not something a customer wrote. Set by the server,
+   * never taken from the request.
+   */
+  simulated?: boolean;
+}
+
+/**
+ * A finished round that the next round replaced as the case's current state. The top-level fields
+ * of CaseRecord (assessment, claim, decision, evidence, document, engine) always describe the
+ * LATEST round, so everything that read a case before follow-ups existed keeps working; the
+ * rounds before it are kept here, in order: previousRounds[0] is round 1.
+ */
+export interface PreviousRound {
+  /** 1 for the original report, 2 for the first follow-up... */
+  number: number;
+  /** Case status when the next round started ("approved": the request for more photos was approved). */
+  status: CaseStatus;
+  order: Order | null;
+  assessment: DamageAssessment | null;
+  claim: ClaimComputation | null;
+  decision: Decision | null;
+  evidence: Evidence[];
+  document: ClaimDocument | null;
+  engine: Engine;
+  engineDetail?: EngineDetail;
+  /** Set when this round was a recorded showcase run (round 1 of a showcase case only). */
+  recorded?: RecordedRun;
+  /** ISO date-time the round ended (the case's updatedAt when the next round replaced it). */
+  finishedAt: string;
 }
 
 export interface CaseRecord {
@@ -263,6 +316,17 @@ export interface CaseRecord {
   trace: TraceStep[];
   createdAt: string;
   updatedAt: string;
-  /** Present on recorded showcase runs only. */
+  /**
+   * Present on recorded showcase runs only. Dropped when a follow-up starts round 2 (the case is
+   * then partly live): the recording is kept as `previousRounds[0].recorded`.
+   */
   recorded?: RecordedRun;
+  /**
+   * The customer's replies, oldest first. Absent on cases saved before follow-ups existed and on
+   * every case that was never followed up: that is round 1 only. Round number of the case now =
+   * 1 + followUps.length (see src/lib/rounds.ts).
+   */
+  followUps?: FollowUp[];
+  /** The rounds that the latest one replaced, oldest first (see PreviousRound). Same length as followUps. */
+  previousRounds?: PreviousRound[];
 }

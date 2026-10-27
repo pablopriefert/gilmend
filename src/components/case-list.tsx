@@ -1,3 +1,4 @@
+import { caseRound } from "@/lib/rounds";
 import type { CaseRecord } from "@/lib/types";
 import { CaseTable, type CaseRowData } from "./dashboard/case-table";
 import { CARRIER_LABEL, caseClock, deadlineInfo, formatDate, formatEur } from "./format";
@@ -22,6 +23,7 @@ function toRow(c: CaseRecord, now: Date): CaseRowData {
     engine: c.engine,
     engineDetail: c.engineDetail,
     recorded: c.recorded,
+    round: caseRound(c),
     amount: claimable && c.claim ? formatEur(c.claim.maxCompensationEur) : null,
     deadline,
     by: claimable && c.claim?.claimDeadline && deadline.tone !== "none" ? formatDate(c.claim.claimDeadline) : null,

@@ -23,6 +23,8 @@ export interface GuardrailContext {
   reportReceivedAt: string;
   /** The model was never shown the photos (no image input, or its server refused them). */
   photosNotRead?: boolean;
+  /** Round of the case being decided: 1 for the report, 2 and more for a follow-up (resumeAgent). */
+  round?: number;
 }
 
 export interface GuardrailResult {
@@ -102,6 +104,14 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
     }
   }
   if (raw.fraudSuspected) force("fraud or manipulation suspected");
+
+  // The customer already answered once and the case is still not settled: asking a third time is a
+  // loop, not a service. A person looks at what the customer sent (this only ever adds a human).
+  if (ctx.round !== undefined && ctx.round >= 2 && raw.decision === "ask_more_photos") {
+    force(
+      `the customer was already asked for more in round ${ctx.round - 1} and the reply (round ${ctx.round}) still does not settle the case: a person should take over instead of asking again`,
+    );
+  }
 
   const needsAssessment = raw.decision === "reship" || raw.decision === "refund";
   if (needsAssessment && ctx.order !== null && ctx.assessment === null) {

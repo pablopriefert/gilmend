@@ -51,7 +51,11 @@ Everything: this is a new repository, and the commit history starts on 27 Oct 20
   Modal), and a clearly labelled OpenRouter test engine.
 - **Six recorded real runs** (Muse Spark 1.3 + SAM 3.1) committed as a read-only showcase, and a
   shared-storage backend (Vercel Blob) for a public deployment.
-- **Six demo photos generated with Muse Image**, declared as AI-generated.
+- **A follow-up loop** (28 Oct 2026): a case that ends in "ask for sharper photos" is not a dead
+  end. The merchant adds the customer's reply to the same case and the agent resumes with the full
+  context of round 1 (see [The follow-up loop](#the-follow-up-loop)).
+- **Seven demo photos generated with Muse Image** (the six cases, plus the sharp lamp of the
+  follow-up demo), declared as AI-generated.
 
 ### How it was built
 
@@ -65,12 +69,13 @@ What has been run live, and what has not (details in [Limitations](#limitations)
 | Live on the real service | Written and tested, not run live yet |
 |---|---|
 | Muse Spark 1.3 and SAM 3.1: all six demo cases end to end, 27 Oct 2026 | Muse Spark Open on Baseten and Muse Glimmer on Modal ("Run privately") |
+| A follow-up round on the recorded blurry lamp: one real run of `npm run real:follow-up` (Muse Spark 1.3 + SAM 3.1), 27 Oct 2026, [numbers below](#a-real-follow-up-round-27-oct-2026) | The follow-up route and page on the deployed URL (Vercel, Blob): exercised only locally, over the real route handlers in demo mode |
 | Muse Voice Transcribe: real API calls (not yet with a browser microphone) | |
-| Muse Image: the six demo photos | |
+| Muse Image: the seven demo photos | |
 | Public deployment on Vercel with a private Blob store: a real report filed on the deployed URL on 27 Oct 2026 (Muse Spark 1.3 + SAM 3.1, 54 s), its case, annotated photo and PDF read back on several requests | |
 | OpenRouter test engine: one real photo call | |
 
-798 tests, `tsc` and `eslint` pass, and `next build` passes.
+972 tests, `tsc` and `eslint` pass. `next build` last passed before the follow-up loop (28 Oct 2026): the loop was written in a worktree where `next dev` and `next build` cannot run, so its page was only looked at through a local harness (the real route handlers and components, without Next), not through Next itself.
 
 ## The problem
 
@@ -112,6 +117,9 @@ Caveats that matter:
 4. **Drafts.** A claim PDF, an e-mail to the carrier's claims department, and a reply to the customer.
 5. **Review.** The merchant opens the case, reads the agent's reasoning trace, and approves, edits
    or rejects. The header counter shows the recoverable amount and the claims due this week.
+6. **Follow-up (if the agent asked for more).** The customer replies with sharper photos or the
+   right order number, the merchant adds the reply to the case, and the agent runs again on the same
+   case: round 2, with the full context of round 1 ([details](#the-follow-up-loop)).
 
 ```mermaid
 flowchart TD
@@ -133,6 +141,8 @@ flowchart TD
     J -->|"Approve"| K["Ready to send: the merchant files the claim"]
     J -->|"Edit"| I
     J -->|"Reject"| L["Closed, nothing sent"]
+    I -.->|"Decision: ask for more photos"| R["The customer replies: POST /api/cases/id/follow-up"]
+    R -->|"Round 2: same agent, full context of round 1"| D
 ```
 
 **Amounts and deadlines never come from the model.** They come from the dated, sourced carrier
@@ -147,6 +157,82 @@ is kept (the claim is not cancelled on that reading: it stays, with a merchant-o
 the packing before filing, and the carrier file says nothing about it: neither the reading nor the
 model's notes about the packing). Customer text is treated as untrusted data; a
 prompt-injection attempt counts as a fraud signal.
+
+## The follow-up loop
+
+Before 28 Oct 2026 a case that ended in `ask_more_photos` (a blurry photo) or in "a human is needed
+because the order was not found" was a dead end: the customer's answer had nowhere to go. Now it
+does, and the agent works over time on one case.
+
+**What the merchant sees.** On a case where the agent asked the customer for something, a
+**"The customer replied"** card sits at the top of the case page. The merchant adds the reply (the
+customer's words, 0 to 3 new photos in the Arc dropzone, and a corrected order number when the order
+was not found) and presses **Run the agent again (round 2)**. The page then shows the **rounds** of the
+case: Round 1 and Round 2 side by side with what changed (decision, damage read, photo quality, the
+carrier claim in money), each round's engine, the customer's reply with its photos, and a reasoning
+trace cut by round. Nothing is sent to the customer: round 2 is a new draft to review, like round 1.
+A case can take up to 3 replies; after that a person handles it.
+
+**What the agent does** (`resumeAgent`, `src/lib/agent/run-agent.ts`). The same loop, tools, engines
+and guardrails as a report, on the same case:
+
+- The model sees the original report and its photos, then a follow-up block: what it concluded in the
+  round before (decision, reading of the photos, order, reasons), the reply the customer was sent, the
+  new message (delimited and neutralised like any customer text, so it is data, never instructions) and
+  the new photos. The prompt tells it to compare the new photos with the earlier ones: another item or
+  another story is a fraud signal.
+- **Deadlines never move with the date of the reply.** The order found in round 1 is reused (same
+  delivery date), the reserve window is judged on the date of the ORIGINAL report, and the filing
+  deadline is the delivery date plus the carrier's term, checked against today's clock by
+  `computeClaim`. A Chronopost reply that arrives on day 4 gets no claim, however fresh the reply is
+  (tested with the real claim maths).
+- **A guardrail against a loop**: if round 2 still asks for more, a person must take over (`needsHuman`)
+  instead of asking a third time. Everything else the guardrails do in round 1 applies again.
+- The trace keeps round 1 line for line and continues with a "Round 2 starts" marker; each new step
+  carries `round`. The outcome that round 2 replaces is kept in `previousRounds`.
+- **Same engine as the case.** A private run stays private: it never calls the Meta Model API (SAM
+  included), and without its endpoint it becomes the labelled mock, never Muse. A DEMO MODE case stays in
+  DEMO MODE. Each round shows the engine that really ran it, so a case can be a recorded real Muse run
+  in round 1 and a labelled mock in round 2, and says so.
+
+**How a case stores rounds** (`src/lib/types.ts`, `src/lib/rounds.ts`). Two optional fields:
+`followUps[i]` is what the customer sent to start round `i + 2`, and `previousRounds[i]` is the outcome of
+round `i + 1`. `report` stays the original and the top-level fields always describe the latest round,
+so every older case, and the six committed recordings, read as a single round without being
+rewritten (a test loads them all).
+
+**The route** (`POST /api/cases/[id]/follow-up`, multipart: `message`, `photos`, optional `orderNumber`
+and `round`). The same rules as `POST /api/reports`: the access code (401, 429 after too many wrong
+codes), the per-client rate limit, the daily ceiling of real runs (beyond it the round runs in labelled
+DEMO MODE), the same photo checks (real signature, 8 MB, 3 photos) and the shared storage for the
+photos. It also refuses (409) a case that asked for nothing, a rejected case, a case at the limit, a stale
+page (`round` no longer current: a double click does not run the agent twice), a second reply while one
+is running, and a case that was changed while the agent worked (nothing is overwritten). On a **recorded
+showcase case** the new round is stored as a copy: the committed files never change, the copy is no longer
+marked "Recorded run" (round 1 keeps that label, in the rounds card), and it counts in the live counter
+like any live case. The access code is checked before the body is read.
+
+**The demo button.** On the blurry-lamp case (order #1003, the recorded run or one filed with the demo
+card) a **"Demo: simulate the customer's reply"** button loads a sharp photo of the lamp and a short message
+into the form. The photo, `data/photos/lamp-sharp.webp`, is generated with Muse Image like the other six (see
+[`data/photos/README.md`](data/photos/README.md)): the same kind of lamp, not the same pixels. The server
+recognises that photo byte for byte and the case labels the reply **"Simulated reply"** everywhere; the label
+is worked out from the bytes, never taken from the request.
+
+### A real follow-up round (27 Oct 2026)
+
+`npm run real:follow-up` resumes the committed recording of the blurry lamp (round 1: Muse Spark 1.3 asked for
+sharper photos, confidence 0.90) with the demo reply, on the real Muse Spark 1.3 and SAM 3.1. One run, not
+saved in the showcase (`data/showcase/` stays as recorded), run from a local script, not through the deployed
+app:
+
+| Round | Decision | Claim | Evidence | Time |
+|---|---|---|---|---|
+| 1 (recording) | ask for more photos, confidence 0.90, photo quality blurry | none | none | 16 s |
+| 2 (this run) | reship, carrier claim yes, confidence 0.92, not handed to a human; reading: broken product, severity major, photo quality good | 102.30 EUR maximum (33 EUR/kg x 3.1 kg, under the 129 EUR item value), claim PDF built | SAM 3.1 outlined the lamp base and the shade (two regions: what it matched, not the crack) | 37 s |
+
+It is one run: Muse is not stable on these photos (see above), so another run can read the same photo
+differently. The model was given the earlier photo, the new one and the earlier conclusions in a single request.
 
 ## Which Meta models, and why
 
@@ -207,8 +293,11 @@ default, sends the photos to OpenRouter and to the model's provider, and does no
 A single Next.js (TypeScript) app, no database: cases are JSON files (or objects in a private
 Vercel Blob store on a public deployment), claim PDFs are built with `pdf-lib`.
 
-- `src/lib/agent/`: the loop (`run-agent.ts`, at most 8 model turns), the tool schemas
-  (`tools.ts`, 7 tools), the system prompt, and the guardrails (`guardrails.ts`).
+- `src/lib/agent/`: the loop (`run-agent.ts`, at most 8 model turns; `runAgent` for a report,
+  `resumeAgent` for a follow-up), the tool schemas (`tools.ts`, 7 tools), the system prompt, the
+  follow-up block of the prompt (`follow-up-prompt.ts`) and the guardrails (`guardrails.ts`).
+- `src/lib/rounds.ts`: the rounds of a case (reading older cases as one round, when a reply is possible,
+  the working report of a follow-up). `src/app/api/cases/[id]/follow-up/`: the route.
 - `src/lib/providers/`: an OpenAI-compatible client for Muse Spark 1.3, for open weights (Baseten,
   Modal, custom endpoint) and for the OpenRouter test engine, plus the deterministic demo mock.
 - `src/lib/rules/` and `data/carriers.json`: carrier rules and the claim maths (maximum
@@ -283,7 +372,7 @@ Muse.
 |---|---|---|
 | 1 | Broken vase, Colissimo, order #1001 | Reship, claim the carrier. Maximum 52.90 EUR (23 EUR/kg x 2.3 kg, under the 58 EUR item value). |
 | 2 | Crushed carton, product intact, #1002 | No action, no claim: nothing to compensate. |
-| 3 | Blurry lamp photo, #1003 | Ask for sharper photos before deciding anything. |
+| 3 | Blurry lamp photo, #1003 | Ask for sharper photos before deciding anything. Then, with the demo button of the follow-up loop, round 2: reship and claim. |
 | 4 | Parcel opened at the relay, saucers missing, Mondial Relay, #1004, customer writes in French | Reship, claim within the 72 h window (25 EUR maximum), reply in French. |
 | 5 | Cracked headphones, 349 EUR, #1005 | Everything prepared (250 EUR maximum under the Chronopost default), but handed to a human because the value is above 300 EUR. |
 | 6 | Cracked carafe reported nine days after delivery, #1006 | Refund the customer; no carrier claim, the 3-day window has passed. |
@@ -435,6 +524,13 @@ Storage, the Blob store).
   lockers, public holidays, the carrier-measured weight.
 - Colissimo pays on the purchase value of the content; the order only carries the sale price, so the
   computed maximum may be higher than the real indemnity.
+- **Follow-up loop.** A reply is added by the merchant, as the customer's mail would be pasted: there is no
+  inbox, and the app answers nobody. A follow-up cannot be dictated (no voice in a reply). The loop has
+  been run live once on the real models, through a script (table above), not through the deployed route:
+  there, the route is tested over the real handlers in demo mode and with a fake model, not on Vercel
+  with the Blob store. Open weights have not run a follow-up either. The one-run-at-a-time guard and the
+  rate limits are per instance, like the others; across instances a case changed during a run is caught
+  by comparing `updatedAt` before saving (not exercised under real concurrency).
 - **Nothing is filed.** The app files no claim and sends no e-mail; a human does.
 - **Not legal advice.** The rules are our reading of public terms and statutes.
 - **Public deployment** (https://gilmend.vercel.app, `next` 16.4.1, `undici` 6.29.1,

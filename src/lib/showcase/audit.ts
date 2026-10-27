@@ -91,6 +91,11 @@ export function auditShowcaseCase(c: CaseRecord, context: AuditContext): string[
   const problems: string[] = [];
   if (c.engine !== "muse-spark-1.3") problems.push(`engine is "${c.engine}", a showcase case must be a real Muse Spark 1.3 run`);
   if (!c.recorded?.recordedOn) problems.push("no `recorded.recordedOn`");
+  // A recording is one run of the agent. A case the customer replied to (follow-up loop) has later
+  // rounds, with photos the publisher below would not copy and a round that is not the recording.
+  if ((c.followUps?.length ?? 0) > 0 || (c.previousRounds?.length ?? 0) > 0) {
+    problems.push("the case was followed up (round 2 or more): a showcase case is a single recorded run");
+  }
 
   // The strings of the case, not its JSON text: a "\n" escape must not glue an "n" onto the
   // e-mail address that follows it.

@@ -7,8 +7,9 @@ import { errorResponse } from "../_lib/responses";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// The photos of the six demo cases, for the demo buttons of the report form. Only these six
-// names are served (never a path taken from the request), read from data/photos/.
+// The photos of the six demo cases, for the demo buttons of the report form, and the sharp lamp
+// photo of the "simulate the customer's reply" button on the blurry-lamp case (follow-up loop).
+// Only these names are served (never a path taken from the request), read from data/photos/.
 const DEMO_PHOTO_NAMES = [
   "vase-broken",
   "carton-crushed",
@@ -16,6 +17,7 @@ const DEMO_PHOTO_NAMES = [
   "parcel-open-missing",
   "headphones-cracked",
   "carafe-cracked",
+  "lamp-sharp",
 ] as const;
 
 /**

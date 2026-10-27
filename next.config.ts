@@ -36,6 +36,10 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/demo-photo": ["./data/photos/**/*"],
     ...Object.fromEntries(SHOWCASE_ROUTES.map((route) => [route, ["./data/showcase/**/*"]])),
+    // The follow-up route resumes a case (a recorded one included: it reads the showcase) and
+    // recognises the photo of the "simulate the customer's reply" button byte for byte, to label
+    // that reply as simulated: so it also needs that one file.
+    "/api/cases/\\[id\\]/follow-up": ["./data/showcase/**/*", "./data/photos/lamp-sharp.webp"],
   },
   // Security headers (explained directive by directive in src/lib/security-headers.ts). The later
   // rule wins for a key both set: the claim PDF is framed by the case page, so it relaxes the two

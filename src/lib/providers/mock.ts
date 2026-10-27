@@ -4,6 +4,7 @@ import type {
   ChatCompletionMessageParam,
 } from "openai/resources/chat/completions";
 import { describeEngine } from "../config";
+import { parseFollowUpMessage, type FollowUpPromptFields } from "../agent/follow-up-prompt";
 import { parseReportMessage, type ReportPromptFields } from "../agent/report-prompt";
 import type { Provider, ChatParams } from "./index";
 
@@ -38,12 +39,21 @@ function textOf(m: ChatCompletionMessageParam): string {
   return "";
 }
 
-function readConversation(messages: ChatCompletionMessageParam[]): { report: ReportPromptFields | null; seen: Seen } {
+function readConversation(messages: ChatCompletionMessageParam[]): {
+  report: ReportPromptFields | null;
+  followUp: FollowUpPromptFields | null;
+  seen: Seen;
+} {
   let report: ReportPromptFields | null = null;
+  let followUp: FollowUpPromptFields | null = null;
   const nameById = new Map<string, string>();
   const seen: Seen = { results: new Map(), called: new Set(), toolCallCount: 0 };
   for (const m of messages) {
-    if (m.role === "user" && report === null) report = parseReportMessage(textOf(m));
+    if (m.role === "user" && report === null) {
+      report = parseReportMessage(textOf(m));
+      // A follow-up round (resumeAgent) adds its block to the same user turn.
+      if (report) followUp = parseFollowUpMessage(textOf(m));
+    }
     if (m.role === "assistant" && m.tool_calls) {
       for (const c of m.tool_calls) {
         if (c.type !== "function") continue;
@@ -63,7 +73,7 @@ function readConversation(messages: ChatCompletionMessageParam[]): { report: Rep
       }
     }
   }
-  return { report, seen };
+  return { report, followUp, seen };
 }
 
 // ---- scenarios, keyed on the customer's words ----------------------------------------
@@ -87,6 +97,20 @@ function classify(message: string, orderNumber: string): Scenario {
   const byWords = classifyWords(message);
   if (byWords === "injection") return byWords;
   return DEMO_ORDER_SCENARIOS[orderNumber.replace(/[#\s]/g, "")] ?? byWords;
+}
+
+/**
+ * The scenario of a follow-up round. Still a script, and it says so everywhere: the mock never
+ * looks at a photo. What the customer WRITES in the reply decides when it is specific; otherwise a
+ * reply with new photos is read as the sharper photo that was asked for (a blurry or unclear
+ * first report becomes a readable broken item), and a reply with no photo changes nothing.
+ */
+function classifyFollowUp(original: Scenario, followUp: FollowUpPromptFields): Scenario {
+  const byWords = classifyWords(followUp.message);
+  if (byWords === "injection") return byWords;
+  if (byWords !== "unknown") return byWords;
+  if ((original === "blurry" || original === "unknown") && followUp.photoIndexes.length > 0) return "broken";
+  return original;
 }
 
 function classifyWords(message: string): Scenario {
@@ -133,10 +157,23 @@ function refusalFromWords(message: string): boolean | null {
   return null;
 }
 
-function assessmentFor(s: Scenario, item: string): Json {
+function assessmentFor(s: Scenario, item: string, followUp = false): Json {
   switch (s) {
     case "broken":
-      return { item, damageType: "broken_product", severity: "major", carrierLikelyAtFault: true, packagingAdequate: true, evidenceNotes: [NOTE, "Customer reports the product arrived broken."], photoQuality: "ok" };
+      return {
+        item,
+        damageType: "broken_product",
+        severity: "major",
+        carrierLikelyAtFault: true,
+        packagingAdequate: true,
+        evidenceNotes: [
+          NOTE,
+          followUp
+            ? "Scripted: the new photo is treated as readable, as the customer's follow-up says the product arrived broken."
+            : "Customer reports the product arrived broken.",
+        ],
+        photoQuality: "ok",
+      };
     case "missing_or_opened":
       return { item, damageType: "opened_parcel", severity: "major", carrierLikelyAtFault: true, packagingAdequate: null, evidenceNotes: [NOTE, "Customer reports the parcel was delivered open or an article is missing."], photoQuality: "ok" };
     case "crushed_intact":
@@ -191,14 +228,17 @@ function reply(lang: string, kind: Reply, name: string): string {
 
 type PlannedCall = { name: string; args: Json };
 
-function plan(report: ReportPromptFields, seen: Seen): PlannedCall[] | null {
-  const scenario = classify(report.message, report.orderNumber);
+function plan(report: ReportPromptFields, followUp: FollowUpPromptFields | null, seen: Seen): PlannedCall[] | null {
+  // A corrected order number replaces the one in the first report.
+  const orderNumber = followUp?.orderNumber ?? report.orderNumber;
+  const original = classify(report.message, orderNumber);
+  const scenario = followUp ? classifyFollowUp(original, followUp) : original;
   const orderResult = seen.results.get("get_order");
   const orderFound = orderResult?.found === true;
   const name = firstName(orderResult);
 
   if (!seen.called.has("get_order")) {
-    return [{ name: "get_order", args: { orderNumber: report.orderNumber } }];
+    return [{ name: "get_order", args: { orderNumber } }];
   }
 
   if (!orderFound) {
@@ -223,9 +263,10 @@ function plan(report: ReportPromptFields, seen: Seen): PlannedCall[] | null {
     // The structured reading first (even for a blurry photo), then the outlines, then the rules.
     const order = orderResult?.order as { carrier?: string } | undefined;
     const calls: PlannedCall[] = [
-      { name: "assess_photos", args: assessmentFor(scenario, firstItemTitle(orderResult)) },
+      { name: "assess_photos", args: assessmentFor(scenario, firstItemTitle(orderResult), followUp !== null) },
     ];
-    for (const i of report.photoIndexes) {
+    // In a follow-up only the new photos are outlined: the earlier ones were judged before.
+    for (const i of followUp ? followUp.photoIndexes : report.photoIndexes) {
       calls.push({ name: "mark_damage", args: { photoIndex: i, concept: CONCEPT_BY_SCENARIO[scenario] } });
     }
     calls.push({ name: "get_carrier_rules", args: { carrier: order?.carrier ?? "colissimo" } });
@@ -237,7 +278,7 @@ function plan(report: ReportPromptFields, seen: Seen): PlannedCall[] | null {
     return [
       {
         name: "compute_claim",
-        args: { parcelRefusedAtDelivery: refusalFromWords(report.message) },
+        args: { parcelRefusedAtDelivery: refusalFromWords(`${report.message}\n${followUp?.message ?? ""}`) },
       },
     ];
   }
@@ -318,13 +359,13 @@ export function createMockProvider(): Provider {
         warned = true;
         console.warn(DEMO_WARNING);
       }
-      const { report, seen } = readConversation(params.messages);
+      const { report, followUp, seen } = readConversation(params.messages);
       if (!report) {
         // Not a report conversation: say so rather than guess.
         return completion(1, null, 0);
       }
       const turn = params.messages.filter((m) => m.role === "assistant").length + 1;
-      return completion(turn, plan(report, seen), seen.toolCallCount);
+      return completion(turn, plan(report, followUp, seen), seen.toolCallCount);
     },
   };
 }

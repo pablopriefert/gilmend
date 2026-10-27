@@ -2,8 +2,10 @@
 
 The six demo cases (`data/demo-cases.json`) each point to one photo in this folder, named
 `<name>.webp` (a `<name>.jpg` placed next to one replaces it). The six photos are generated with
-Muse Image (below). No customer photo is ever used (hackathon rule), and none of the photos may
-show a real person, a real address or a real tracking label.
+Muse Image (below), and so is a seventh, `lamp-sharp.webp`, which belongs to no case of its own: it is
+the sharp photo of the "Demo: simulate the customer's reply" button on the blurry-lamp case (below). No
+customer photo is ever used (hackathon rule), and none of the photos may show a real person, a real
+address or a real tracking label.
 
 ## How they were made (27 Oct 2026)
 
@@ -21,6 +23,32 @@ the demo script expects, but Muse is not stable on every photo (the vase was rea
 and twice without it, the blurry lamp once handed to a human and once not, the opened parcel as
 "missing item", then "opened parcel", then "missing item" again, and the headphones outlined once as
 two ear cushions and once as the whole pair; README, "Measured on the real models"). A real photo may read differently again, so a real shot is worth trying before filming.
+
+## The seventh photo: `lamp-sharp.webp` (28 Oct 2026)
+
+`lamp-sharp.webp` is the customer's answer in the follow-up loop (README, "The follow-up loop"): the
+blurry-lamp case (`lamp-blurry.webp`, order #1003) ends in "ask for sharper photos", and the demo button
+loads this photo as the reply. **Generated with Meta's Muse Image** (`muse-image-1.0`, one call, one image, kept
+as it came out, XMP `DigitalSourceType = trainedAlgorithmicMedia`: do not strip it), with
+[`scripts/generate-demo-photo.mjs`](../../scripts/generate-demo-photo.mjs) and this prompt:
+
+> Realistic sharp smartphone photo taken by a customer at home in bright daylight, in focus, on a wooden
+> floor. An opened brown kraft shipping box with crumpled paper padding. Inside the box a brass table lamp
+> with a milky white glass shade lies on its side: the glass shade is cracked from the rim up with a clear
+> jagged crack, and a broken chunk of glass is missing from the edge, small glass splinters in the padding.
+> The same lamp as in the blurry photo of the same parcel: brass base, white shade, open cardboard box. A
+> small hand-written paper label taped on the box corner reads 6A99001003003. Slightly imperfect framing,
+> natural phone photo, no people, no logos, no printed shipping label.
+
+Say what it is wherever it appears: **AI-generated with Muse Image, not a photo taken by the team, and not
+the same pixels as the blurry photo** (a separate generation of a lamp of the same kind: brass base, white
+shade, open kraft box; the shade is white, the order says "glass shade"). The case page labels the reply
+"Simulated reply" and the server recognises this file byte for byte to do so, so **do not re-encode, resize
+or replace it** without also changing what `src/app/api/cases/[id]/follow-up/route.ts` compares against (it
+reads this very file). It is served by `/api/demo-photo?name=lamp-sharp` and is not part of the six demo
+cases, so `npm run demo` does not use it. On the real Muse Spark 1.3 and SAM 3.1 it was read as a broken
+product (severity major, photo quality good) and SAM 3.1 outlined the lamp, in one run (README, "A real
+follow-up round").
 
 ## Optional: switching to a real photo later
 

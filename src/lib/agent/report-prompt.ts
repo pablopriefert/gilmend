@@ -14,7 +14,9 @@ const CLOSE_TAG = "</customer_message>";
  * data from instructions, so a customer must not be able to forge them.
  */
 export function neutraliseCustomerText(text: string): string {
-  return text.replace(/<\/?\s*customer_message\s*>/gi, "[tag removed]");
+  // The follow-up block (follow-up-prompt.ts) has its own tags: a customer must not be able to forge
+  // those either, in the first report or in a reply.
+  return text.replace(/<\/?\s*(?:customer_message|customer_followup|previous_reply)\s*>/gi, "[tag removed]");
 }
 
 export interface ReportPromptFields {

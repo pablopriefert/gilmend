@@ -3,6 +3,7 @@ import {
   MAX_PHOTO_BYTES,
   sniffImageKind,
   validateFields,
+  validateFollowUp,
   validatePhotos,
   validateReport,
 } from "./report-validation";
@@ -79,5 +80,38 @@ describe("sniffImageKind", () => {
     expect(sniffImageKind(Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'/>"))).toBeNull();
     expect(sniffImageKind(Buffer.from("hello world"))).toBeNull();
     expect(sniffImageKind(new Uint8Array())).toBeNull();
+  });
+});
+
+describe("validateFollowUp (the customer's reply to a case)", () => {
+  it("needs words or at least one photo, and asks for neither alone", () => {
+    expect(validateFollowUp({ message: "", orderNumber: "" }, [])).toEqual({
+      message: "Add what the customer wrote, or at least one photo.",
+    });
+    expect(validateFollowUp({ message: "  ", orderNumber: "" }, [])).toHaveProperty("message");
+    expect(validateFollowUp({ message: "Here is a sharper photo.", orderNumber: "" }, [])).toEqual({});
+    expect(validateFollowUp({ message: "", orderNumber: "" }, [photo()])).toEqual({});
+  });
+
+  it("caps the message at 2000 characters", () => {
+    expect(validateFollowUp({ message: "x".repeat(2000), orderNumber: "" }, [])).toEqual({});
+    expect(validateFollowUp({ message: "x".repeat(2001), orderNumber: "" }, [])).toEqual({
+      message: "The message is too long (max 2000 characters).",
+    });
+  });
+
+  it("takes up to 3 photos of a known type, not empty, at most 8 MB", () => {
+    const reply = { message: "Here.", orderNumber: "" };
+    expect(validateFollowUp(reply, [photo(), photo(), photo()])).toEqual({});
+    expect(validateFollowUp(reply, [photo(), photo(), photo(), photo()]).photos).toBe("You can add up to 3 photos.");
+    expect(validateFollowUp(reply, [photo({ name: "a.pdf", type: "application/pdf" })]).photos).toMatch(/not a JPEG, PNG or WebP/);
+    expect(validateFollowUp(reply, [photo({ size: 0 })]).photos).toMatch(/is empty/);
+    expect(validateFollowUp(reply, [photo({ size: 8 * 1024 * 1024 + 1 })]).photos).toMatch(/larger than 8 MB/);
+  });
+
+  it("checks the corrected order number only when there is one", () => {
+    expect(validateFollowUp({ message: "Here.", orderNumber: "#1001" }, [])).toEqual({});
+    expect(validateFollowUp({ message: "Here.", orderNumber: "#".repeat(41) }, []).orderNumber).toMatch(/too long/);
+    expect(validateFollowUp({ message: "Here.", orderNumber: "#10\u0000" }, []).orderNumber).toMatch(/invalid characters/);
   });
 });

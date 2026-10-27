@@ -179,3 +179,26 @@ Replace each `[bracket]` with the figure read from the screen of the take.
   voice shot was dictated.
 - That the app is deployed or that the judges' URL stores cases reliably, unless the Vercel
   deployment and its storage check are done.
+
+## Optional beat: the agent that works over time (follow-up loop, 28 Oct 2026)
+
+Not part of the 3-minute count above: it replaces the "blurry photo" cut of the 2:07 - 2:35 montage if
+there is room, or becomes its own 20 seconds if something else is cut. It only claims what the screen shows.
+
+1. Open the **blurry lamp** case (the recorded run, badge "Recorded run"): decision **Ask for more
+   photos**, no claim. Voice: "A blurry photo is not a dead end."
+2. On the **"The customer replied"** card press **Demo: simulate the customer's reply** (a sharp photo and a
+   short message fill the form; the card says the photo is generated with Muse Image), then **Run the agent
+   again (round 2)**. Caption "sped up" over the wait: a real round took 37 s on 27 Oct 2026.
+3. The page now shows **Rounds of this case**: Round 1 (Muse Spark 1.3, Recorded) then Round 2, and "What
+   changed since round 1": decision, damage read, photo quality, carrier claim. Read the figures from the
+   screen of the take. Voice: "The customer replied. The agent ran again on the same case, with everything it
+   knew, and the claim appeared. The deadline still counts from the delivery date, not from the reply."
+4. Say it is simulated (the page says "Simulated reply") and, if the take ran in demo mode, that the badge says
+   DEMO MODE and that round 2 is a mock. Never film demo mode as a real Muse round, and never present the
+   simulated reply as a customer's.
+
+Conditions: the take must be real mode (`npm run dev`, not `dev:demo`) and, to show the real Round 1 label,
+the case must be the recorded one (a case filed by hand has no "Recorded" badge). The round is not
+deterministic: if the take does not give "reship with a claim", say what the screen says.
+

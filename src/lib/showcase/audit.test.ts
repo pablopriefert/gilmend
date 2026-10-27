@@ -73,6 +73,12 @@ describe("the audit refuses what must not be published", () => {
     expect(audit(recorded({ recorded: undefined })).join()).toMatch(/recorded\.recordedOn/);
   });
 
+  it("refuses a case the customer replied to: a recording is one run, not a case with later rounds", () => {
+    const reply = { id: "fu", receivedAt: "2026-10-28T09:00:00.000Z", message: "Sharper photo.", photos: [] };
+    expect(audit(recorded({ followUps: [reply] })).join()).toMatch(/followed up \(round 2 or more\)/);
+    expect(audit(recorded({ previousRounds: [] }))).toEqual([]);
+  });
+
   it("refuses a real-looking e-mail address, but accepts the reserved example domains and the carrier contact", () => {
     const withMail = (email: string) => recorded({ report: { ...recorded().report, customerEmail: email } });
     expect(audit(withMail("jane.doe@gmail.com")).join()).toMatch(/gmail\.com/);
