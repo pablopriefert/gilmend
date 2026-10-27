@@ -16,6 +16,7 @@ import type {
   ClaimDocument,
   DamageAssessment,
   DamageReport,
+  DamageType,
   Decision,
   Engine,
   Evidence,
@@ -37,6 +38,9 @@ import {
   parseToolArguments,
   type ModelToolName,
 } from "./tools";
+
+/** Damage types whose evidence SAM can outline (the item, its pieces or the box). */
+const EVIDENCE_DAMAGE_TYPES: readonly DamageType[] = ["broken_product", "crushed_packaging", "opened_parcel"];
 
 /** Maximum number of model turns (a turn may contain several parallel tool calls). */
 export const MAX_AGENT_STEPS = 8;
@@ -138,6 +142,7 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
   let document = null as ClaimDocument | null;
   const caseId = opts.caseId ?? `case_${randomUUID()}`;
   const startedAt = Date.now();
+  const budgetMs = opts.timeBudgetMs ?? (engine === "demo-mock" ? Infinity : DEFAULT_TIME_BUDGET_MS);
   const evidence: Evidence[] = [];
   const toolErrors: string[] = [];
   const toolOutputs: unknown[] = [];
@@ -145,6 +150,10 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
   // True when the model was not shown the photos (its server cannot read images, or refused
   // them). Then nothing it says about damage comes from the photos, and the case goes to a human.
   let photosNotRead = false;
+  // Evidence fallback (see ensureEvidence): done at most once, and never on a photo the model
+  // already asked SAM about with the assessment in hand (same concepts, same answer, a wasted call).
+  let evidenceFallbackDone = false;
+  const markedWithAssessment = new Set<number>();
 
   const snapshot = (): CaseRecord => ({
     id: caseId,
@@ -227,6 +236,7 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
         // packaging is asked only when nothing about the item matched.
         const concept = parseConcept(args.concept);
         const { concepts, fallbackConcepts } = damageConceptsFor(concept, assessment);
+        if (assessment) markedWithAssessment.add(idx);
         let ev: Evidence;
         try {
           // `engine` decides whether SAM may run at all: not for a private run, not in demo mode.
@@ -338,7 +348,46 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
     }
   }
 
+  /**
+   * mark_damage is optional for the model, and on 27 Oct 2026 Muse skipped it on the crushed-carton
+   * case, so that case had no evidence at all. When the assessment shows something SAM can outline
+   * (a broken product, a crushed or an opened parcel) on photos that are readable, and nothing was
+   * outlined, the code asks SAM once, on the first photo, for the concepts the assessment implies,
+   * and says in the trace that the code did it, not the model. One photo and markDamage's own cap of
+   * 3 SAM calls bound the cost. Only on the Meta Model API: a private, demo or OpenRouter run never
+   * calls SAM (markDamage refuses them too, this is the first gate). Called before a claim document
+   * is built, so the outline goes into the PDF, and once more after the loop for cases without one.
+   */
+  async function ensureEvidence(): Promise<void> {
+    if (evidenceFallbackDone) return;
+    evidenceFallbackDone = true;
+    if (engine !== "muse-spark-1.3" || photosNotRead || !assessment) return;
+    if (assessment.photoQuality !== "ok" || !EVIDENCE_DAMAGE_TYPES.includes(assessment.damageType)) return;
+    if (report.photos.length === 0 || evidence.some((e) => e.method === "sam-3.1")) return;
+    if (markedWithAssessment.has(0) || Date.now() - startedAt >= budgetMs) return;
+
+    const { concepts, fallbackConcepts } = damageConceptsFor(null, assessment);
+    let ev: Evidence;
+    try {
+      ev = await deps.markDamage(report.photos[0], { engine, concepts, fallbackConcepts });
+    } catch (e) {
+      ev = { photo: report.photos[0], annotatedPhoto: null, method: "none", note: `mark_damage failed: ${errMessage(e)}` };
+    }
+    const at = evidence.findIndex((x) => x.photo === ev.photo);
+    if (at >= 0) evidence[at] = ev;
+    else evidence.push(ev);
+    log(
+      `Evidence fallback: the model did not outline any photo, so the code (not the model) called mark_damage once on photo 1, for the concepts of the recorded assessment (${assessment.damageType.replace(/_/g, " ")}).`,
+      {
+        tool: TRACE_TOOL_NAME.mark_damage,
+        input: { photoIndex: 0, concepts, fallbackConcepts, calledBy: "code" },
+        output: { annotated: ev.annotatedPhoto !== null, method: ev.method, note: ev.note },
+      },
+    );
+  }
+
   async function draftDocument(): Promise<unknown> {
+    await ensureEvidence();
     try {
       const doc = await deps.buildClaimDocument(snapshot());
       document = doc;
@@ -419,7 +468,6 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
 
   // ---- the loop ---------------------------------------------------------------------
 
-  const budgetMs = opts.timeBudgetMs ?? (engine === "demo-mock" ? Infinity : DEFAULT_TIME_BUDGET_MS);
   let nudged = false;
   for (let step = 1; provider && step <= maxSteps; step++) {
     const remainingMs = budgetMs - (Date.now() - startedAt);
@@ -512,6 +560,8 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
   }
 
   // ---- wrap up ----------------------------------------------------------------------
+
+  await ensureEvidence();
 
   // The model decided a claim is due but never drafted it (step limit, or it stopped):
   // draft it ourselves, the document is deterministic and the merchant expects it.

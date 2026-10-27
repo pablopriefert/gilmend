@@ -142,8 +142,8 @@ function usable(detections: SamDetection[]): SamDetection[] {
 }
 
 /**
- * Outline the damaged area of a photo with SAM 3.1 (Meta Model API) and save the annotated
- * image. Never throws and never fakes a result: without MODEL_API_KEY, or when the call,
+ * Outline, with SAM 3.1 (Meta Model API), what the concepts match on a photo (the item, its pieces
+ * or the box: SAM finds things, not damage) and save the annotated image. Never throws and never fakes a result: without MODEL_API_KEY, or when the call,
  * the photo or the drawing fails, it returns method 'none' with a note and the claim
  * ships with the raw photo.
  */
