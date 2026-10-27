@@ -33,7 +33,7 @@ export function stepAt(seconds: number): number {
   return current;
 }
 
-export function AgentWorking({ engine }: { engine: Engine }) {
+export function AgentWorking({ engine, variant = "report" }: { engine: Engine; variant?: "report" | "follow-up" }) {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     const started = Date.now();
@@ -59,11 +59,15 @@ export function AgentWorking({ engine }: { engine: Engine }) {
               {seconds} s
             </span>
           </div>
-          <h2 className="font-display text-3xl leading-tight tracking-tight text-foreground">The agent is on your report</h2>
+          <h2 className="font-display text-3xl leading-tight tracking-tight text-foreground">
+            {variant === "follow-up" ? "The agent is re-reading the case" : "The agent is on your report"}
+          </h2>
           <p className="text-sm leading-6 text-muted">
             {mock
               ? "DEMO MODE: canned answers, no model is called, so this is quick."
-              : "A real run on the model usually takes 40 to 60 seconds. Keep this page open: the case opens by itself."}
+              : variant === "follow-up"
+                ? "A real run on the model usually takes 40 to 60 seconds, with the earlier photos and the new ones. Keep this page open: the case updates by itself."
+                : "A real run on the model usually takes 40 to 60 seconds. Keep this page open: the case opens by itself."}
           </p>
         </div>
 

@@ -25,6 +25,13 @@ export interface GuardrailContext {
   photosNotRead?: boolean;
   /** Result of the photo integrity check (reused photo, capture date); null when it did not run. */
   integrity?: PhotoIntegrity | null;
+  /**
+   * How many photos of the case could not be loaded and so were not shown, while others were (every
+   * one missing is `photosNotRead`). The model cannot have compared the new photos with them.
+   */
+  photosMissing?: number;
+  /** Round of the case being decided: 1 for the report, 2 and more for a follow-up (resumeAgent). */
+  round?: number;
 }
 
 export interface GuardrailResult {
@@ -78,6 +85,15 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
     force("the photos were not read by the model, so the damage is not assessed");
   }
 
+  // Some of the photos could not be loaded (a file of round 1 missing from this instance, say): the
+  // model judged on part of the evidence and cannot have run the check "is it the same item?" on all
+  // of it. A person looks at the case.
+  if (!ctx.photosNotRead && (ctx.photosMissing ?? 0) > 0) {
+    force(
+      `${ctx.photosMissing} photo(s) of this case could not be loaded, so the model did not see all of the evidence and could not compare the new photos with them`,
+    );
+  }
+
   // The model read the packaging as inadequate, and the claim is still on (computeClaim keeps it
   // eligible, 27 Oct 2026: a model's reading of a box must not silently cancel 52.90 EUR). A person
   // checks the packing before anything is filed. Only when the claim is really kept: a decision
@@ -111,6 +127,14 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
   if (ctx.integrity && ctx.integrity.signals.length > 0) {
     force(
       `photo integrity: ${ctx.integrity.signals.map((s) => s.message).join(" ")} A person must check the photos before anything is filed or sent.`,
+    );
+  }
+
+  // The customer already answered once and the case is still not settled: asking a third time is a
+  // loop, not a service. A person looks at what the customer sent (this only ever adds a human).
+  if (ctx.round !== undefined && ctx.round >= 2 && raw.decision === "ask_more_photos") {
+    force(
+      `the customer was already asked for more in round ${ctx.round - 1} and the reply (round ${ctx.round}) still does not settle the case: a person should take over instead of asking again`,
     );
   }
 

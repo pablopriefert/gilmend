@@ -245,6 +245,21 @@ describe("stripFigures", () => {
   });
 });
 
+describe("applyGuardrails: some photos of the case could not be loaded", () => {
+  it("forces a human and keeps the claim for the person to judge, with the count in the reason", () => {
+    const r = applyGuardrails(raw(), ctx({ photosMissing: 2, round: 2 }));
+    expect(r.decision.needsHuman).toBe(true);
+    expect(r.decision.reasons.join(" ")).toMatch(/Guardrail: 2 photo\(s\) of this case could not be loaded, so the model did not see all of the evidence/);
+    expect(r.adjustments.join(" ")).toMatch(/needsHuman forced: 2 photo\(s\)/);
+  });
+
+  it("says nothing when none is missing, and does not repeat itself when no photo was read at all", () => {
+    expect(applyGuardrails(raw(), ctx({ photosMissing: 0 })).decision.needsHuman).toBe(false);
+    const none = applyGuardrails(raw(), ctx({ photosNotRead: true, photosMissing: 3 }));
+    expect(none.decision.reasons.join(" ")).not.toMatch(/could not be loaded/);
+  });
+});
+
 describe("applyGuardrails: photos the model never saw", () => {
   it("drops an otherwise valid carrier claim and forces a human", () => {
     const r = applyGuardrails(raw(), ctx({ photosNotRead: true }));

@@ -121,3 +121,36 @@ export const DEMO_SCENARIOS: readonly DemoScenario[] = [
     photos: [{ src: "/api/demo-photo?name=carafe-cracked", fallback: "/demo/illustration-cracked-bowl.png" }],
   },
 ];
+
+/**
+ * The "Demo: simulate the customer's reply" button of the blurry-lamp case (follow-up loop, 28 Oct
+ * 2026). The case ends in "ask for sharper photos"; the button fills the reply form with a sharp
+ * photo of a lamp like the one in the blurry photo and a short message, so the loop can be shown in
+ * one click. The photo is `data/photos/lamp-sharp.webp`, generated with Meta's Muse Image like the
+ * six others (data/photos/README.md); the lamp is the same kind of object, not the same pixels, and
+ * the case page labels the reply as simulated (the server recognises the photo byte for byte).
+ *
+ * The message avoids the words the scripted demo mode keys on for a blurry, opened or missing
+ * scenario (see src/lib/providers/mock.ts): it describes a broken lamp, as the customer would.
+ */
+export const DEMO_FOLLOW_UP = {
+  photoSrc: "/api/demo-photo?name=lamp-sharp",
+  fileName: "lamp-sharp.webp",
+  message:
+    "Sorry, my first photo was shaky. Here is a sharper one taken in daylight: the glass shade is cracked all the way down and a chip has come off the rim.",
+} as const;
+
+/** The e-mail of the fictitious customer of order #1003 (data/fixtures/orders.json), the blurry lamp. */
+const BLURRY_LAMP_EMAIL = "ines.moreau@example.org";
+
+/**
+ * True for the blurry-lamp demo case, whether it is the recorded run or a case filed with the demo
+ * card: the demo button only makes sense there, because the sharp photo is a photo of THAT lamp.
+ * Matched on what the customer filed (order #1003 and the demo customer's e-mail), never on a path.
+ */
+export function isBlurryLampCase(c: { report: { orderNumber: string; customerEmail: string } }): boolean {
+  return (
+    c.report.orderNumber.replace(/[#\s]/g, "") === "1003" &&
+    c.report.customerEmail.trim().toLowerCase() === BLURRY_LAMP_EMAIL
+  );
+}

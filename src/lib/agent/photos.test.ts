@@ -2,6 +2,9 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { overrideSharedObjects } from "../storage";
+import { createFauxObjectStore } from "../storage/faux-object-store";
+import { persistRuntimeFile } from "../storage/runtime-files";
 import { photoToImageUrl, sniffMime } from "./photos";
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46]);
@@ -46,6 +49,31 @@ describe("photoToImageUrl", () => {
   it("reads uploads from the runtime folder (the OS temp dir on Vercel)", async () => {
     const url = await photoToImageUrl(path.join(runtime, "uploads", "p.png"), cwd, runtime);
     expect(url.startsWith("data:image/png;base64,")).toBe(true);
+  });
+
+  it("fetches an upload another serverless instance took from the shared store, and never looks there for a path outside the runtime folder", async () => {
+    const objects = createFauxObjectStore();
+    overrideSharedObjects(objects);
+    try {
+      const photo = path.join(runtime, "uploads", "elsewhere", "photo-1.png");
+      await mkdir(path.dirname(photo), { recursive: true });
+      await writeFile(photo, PNG);
+      await persistRuntimeFile(photo, runtime);
+      // The next instance has an empty disk.
+      await rm(path.dirname(photo), { recursive: true, force: true });
+      const url = await photoToImageUrl(photo, cwd, runtime);
+      expect(Buffer.from(url.split(",")[1], "base64").equals(PNG)).toBe(true);
+      expect(objects.calls.some((c) => c.op === "get" && c.key === "files/uploads/elsewhere/photo-1.png")).toBe(true);
+
+      // A file of data/ is in the build: no round trip to the store for it.
+      objects.calls.length = 0;
+      await photoToImageUrl("data/photos/liar.jpg", cwd, runtime);
+      expect(objects.calls).toEqual([]);
+      // A photo that is nowhere still fails, loudly.
+      await expect(photoToImageUrl(path.join(runtime, "uploads", "gone.png"), cwd, runtime)).rejects.toThrow(/ENOENT/);
+    } finally {
+      overrideSharedObjects(undefined);
+    }
   });
 
   it("refuses a path outside data/, public/ and the runtime folder", async () => {

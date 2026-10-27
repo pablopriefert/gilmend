@@ -41,6 +41,7 @@ interface ReviewState {
   accessCode: string;
   setAccessCode: (value: string) => void;
   codeRefused: boolean;
+  setCodeRefused: (refused: boolean) => void;
   /** DOM id of the reply textarea, so Edit (in the sticky column) can focus it. */
   replyId: string;
   dirty: boolean;
@@ -56,6 +57,21 @@ function useReview(): ReviewState {
   const ctx = useContext(ReviewContext);
   if (!ctx) throw new Error("ReviewActions and ReplyCard must be inside a CaseReviewProvider");
   return ctx;
+}
+
+/**
+ * What a sibling of the review (the "Customer replied" form) shares with it: the access code, typed
+ * once for the whole page, and whether the server refused it. Must be inside a CaseReviewProvider.
+ */
+export function useReviewAccess(): Pick<ReviewState, "accessCodeRequired" | "accessCode" | "setAccessCode" | "codeRefused" | "setCodeRefused"> {
+  const r = useReview();
+  return {
+    accessCodeRequired: r.accessCodeRequired,
+    accessCode: r.accessCode,
+    setAccessCode: r.setAccessCode,
+    codeRefused: r.codeRefused,
+    setCodeRefused: r.setCodeRefused,
+  };
 }
 
 const SUCCESS_TOAST: Record<Exclude<Pending, null>, { title: string; description: string }> = {
@@ -218,6 +234,7 @@ function ReviewStateProvider({
       accessCode,
       setAccessCode,
       codeRefused,
+      setCodeRefused,
       replyId,
       dirty,
       busy,
@@ -239,6 +256,7 @@ function ReviewStateProvider({
       accessCode,
       setAccessCode,
       codeRefused,
+      setCodeRefused,
       dirty,
       busy,
       send,

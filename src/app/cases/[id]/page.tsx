@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { CircleAlert, ServerOff } from "lucide-react";
 import { BackLink, BUTTON_PRIMARY, IconTile } from "@/components/case/ui";
 import { CaseView } from "@/components/case-view";
+import { describeEngine, resolveEngine } from "@/lib/config";
 import { getCarrierRules } from "@/lib/rules/carriers";
 import { storageIsEphemeral } from "@/lib/storage";
 import { getCase } from "@/lib/store/cases";
@@ -72,5 +73,16 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  return <CaseView caseRecord={found} rules={rules} now={new Date()} accessCodeRequired={accessCodeRequired()} />;
+  // A follow-up reply runs on the engine the case was made with, or on the labelled mock when its
+  // credentials are missing on this server (resolveEngine, the same call the route makes): say so.
+  const followUpEngine = resolveEngine(found.engine);
+  return (
+    <CaseView
+      caseRecord={found}
+      rules={rules}
+      now={new Date()}
+      accessCodeRequired={accessCodeRequired()}
+      followUpEngine={{ engine: followUpEngine, detail: describeEngine(followUpEngine) }}
+    />
+  );
 }

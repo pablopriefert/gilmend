@@ -20,7 +20,7 @@ Two things address it:
 
 | Piece | File | Role |
 |---|---|---|
-| `ObjectStore` | `src/lib/storage/object-store.ts` | Bytes in, bytes out, safe keys, optional conditional write |
+| `ObjectStore` | `src/lib/storage/object-store.ts` | Bytes in, bytes out, safe keys, list, delete, optional conditional write |
 | Selection by environment | `src/lib/storage/index.ts` | `DAMAGE_DESK_STORAGE` unset or `file`: local files; `blob`: Vercel Blob. Any other value: an error, never a silent fallback |
 | Cases on an object store | `src/lib/store/object-case-store.ts` | One JSON object per case under `cases/` |
 | Files on an object store | `src/lib/storage/runtime-files.ts` | Local disk stays the working copy; each file is copied out after it is written and copied back when another instance asks for it |

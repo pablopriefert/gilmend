@@ -56,4 +56,46 @@ describe("Cases dashboard", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Cases could not be loaded.");
     expect(screen.queryByText("No cases yet")).not.toBeInTheDocument();
   });
+
+  it("marks a case the customer replied to with its round, and no other", () => {
+    const followed = makeCase({
+      id: "case-2",
+      followUps: [{ id: "fu", receivedAt: "2026-10-28T09:00:00.000Z", message: "Sharper photo.", photos: [] }],
+    });
+    render(<CasesDashboard cases={[makeCase(), followed]} error={null} now={NOW} />);
+    const rows = within(screen.getByRole("list", { name: "Cases" })).getAllByRole("listitem");
+    expect(within(rows[0]).queryByText(/^Round \d/)).not.toBeInTheDocument();
+    expect(within(rows[1]).getByText("Round 2")).toBeInTheDocument();
+  });
+
+  it("labels a case whose reply is the simulated one of the demo button, keeps its claim out of the counter and says so", () => {
+    // The recorded lamp after the demo button: round 2 found "up to 55.20". A rehearsal, not money.
+    const rehearsal = makeCase({
+      id: "case-lamp-followup",
+      followedFrom: "case-lamp",
+      followUps: [{ id: "fu", receivedAt: "2026-10-28T09:00:00.000Z", message: "Sharper photo.", photos: ["p.webp"], simulated: true }],
+    });
+    const live = makeCase({ id: "case-live", claim: { ...makeCase().claim!, maxCompensationEur: 40 } });
+    render(<CasesDashboard cases={[rehearsal, live]} error={null} now={NOW} />);
+
+    expect(screen.getByTestId("counter").textContent).toBe("€40 recoverable this month · 1 claim due this week");
+    expect(screen.getByTestId("simulated-reply-note")).toHaveTextContent(
+      "1 case answers a simulated customer reply (the demo button) and is listed below but not counted.",
+    );
+    const rows = within(screen.getByRole("list", { name: "Cases" })).getAllByRole("listitem");
+    const rehearsalRow = rows.find((r) => within(r).queryByText("Round 2"))!;
+    expect(within(rehearsalRow).getByText("Simulated reply")).toBeInTheDocument();
+    // The amount stays on the row (it is what the agent found), next to the label that says what it is.
+    expect(within(rehearsalRow).getByText("€55.20")).toBeInTheDocument();
+    const liveRow = rows.find((r) => within(r).queryByText("€40.00") || within(r).queryByText("€40"))!;
+    expect(within(liveRow).queryByText("Simulated reply")).not.toBeInTheDocument();
+  });
+
+  it("shows no simulated-reply note when no case has one, nor for a real reply", () => {
+    const real = makeCase({ id: "real", followUps: [{ id: "fu", receivedAt: "2026-10-28T09:00:00.000Z", message: "Sharper photo.", photos: [] }] });
+    render(<CasesDashboard cases={[real]} error={null} now={NOW} />);
+    expect(screen.queryByTestId("simulated-reply-note")).not.toBeInTheDocument();
+    expect(screen.queryByText("Simulated reply")).not.toBeInTheDocument();
+    expect(screen.getByTestId("counter").textContent).toBe("€55.20 recoverable this month · 1 claim due this week");
+  });
 });

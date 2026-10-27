@@ -45,6 +45,11 @@ const nextConfig: NextConfig = {
     ...Object.fromEntries(SHOWCASE_ROUTES.map((route) => [route, ["./data/showcase/**/*"]])),
     // The /eval page reads the committed evaluation (data/eval) from a computed path.
     "/eval": ["./data/eval/**/*"],
+    // The follow-up route resumes a case (a recorded one included: it reads the showcase),
+    // recognises the photo of the "simulate the customer's reply" button byte for byte (to label
+    // that reply as simulated) and, like /api/reports, runs the photo integrity check on the new
+    // photos, which hashes the demo photos: so it needs all of data/photos, not one file.
+    "/api/cases/\\[id\\]/follow-up": ["./data/showcase/**/*", "./data/photos/**/*"],
   },
   // Security headers (explained directive by directive in src/lib/security-headers.ts). The later
   // rule wins for a key both set: the claim PDF is framed by the case page, so it relaxes the two

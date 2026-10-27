@@ -1,5 +1,9 @@
 // Validation shared by the report form (browser) and POST /api/reports (server), so both
 // say the same thing. Pure functions over plain values: no DOM, no node APIs.
+// The follow-up of a case (the customer's reply, see src/lib/rounds.ts) has its own function at
+// the end of this file, used the same way by the "Customer replied" panel and its route.
+
+import { MAX_FOLLOW_UP_MESSAGE_CHARS, MAX_FOLLOW_UP_PHOTOS } from "@/lib/rounds";
 
 export const MIN_PHOTOS = 1;
 export const MAX_PHOTOS = 3;
@@ -68,6 +72,41 @@ export function validateReport(fields: ReportFields, photos: PhotoLike[]): Field
   const errors = validateFields(fields);
   const photoError = validatePhotos(photos);
   if (photoError) errors.photos = photoError;
+  return errors;
+}
+
+/**
+ * A follow-up needs something from the customer: words or at least one photo (never nothing), up
+ * to MAX_FOLLOW_UP_PHOTOS photos, and an order number that looks like one when it is given. Whether
+ * the case may take a corrected order number at all is the server's call (it depends on the case).
+ */
+export function validateFollowUp(fields: { message: string; orderNumber: string }, photos: PhotoLike[]): FieldErrors {
+  const errors: FieldErrors = {};
+  const message = fields.message.trim();
+  if (message.length > MAX_FOLLOW_UP_MESSAGE_CHARS) {
+    errors.message = `The message is too long (max ${MAX_FOLLOW_UP_MESSAGE_CHARS} characters).`;
+  } else if (message === "" && photos.length === 0) {
+    errors.message = "Add what the customer wrote, or at least one photo.";
+  }
+
+  const order = fields.orderNumber.trim();
+  if (order.length > MAX_ORDER_NUMBER_CHARS) errors.orderNumber = `The order number is too long (max ${MAX_ORDER_NUMBER_CHARS} characters).`;
+  else if (CONTROL_CHARS_RE.test(order)) errors.orderNumber = "The order number contains invalid characters.";
+
+  if (photos.length > MAX_FOLLOW_UP_PHOTOS) {
+    errors.photos = `You can add up to ${MAX_FOLLOW_UP_PHOTOS} photos.`;
+  } else {
+    for (const photo of photos) {
+      if (!(ACCEPTED_PHOTO_TYPES as readonly string[]).includes(photo.type)) {
+        errors.photos = `"${photo.name}" is not a JPEG, PNG or WebP image.`;
+      } else if (photo.size === 0) {
+        errors.photos = `"${photo.name}" is empty.`;
+      } else if (photo.size > MAX_PHOTO_BYTES) {
+        errors.photos = `"${photo.name}" is larger than ${MAX_PHOTO_BYTES / (1024 * 1024)} MB.`;
+      }
+      if (errors.photos) break;
+    }
+  }
   return errors;
 }
 

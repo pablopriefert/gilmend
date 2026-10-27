@@ -6,6 +6,7 @@ import type { Env } from "../config";
 import { loadImage, normaliseImage } from "../evidence/image-io";
 import { evidenceForPhotos } from "../evidence/merge";
 import { runtimeDir, safeFileStem, toStoredPath } from "../evidence/runtime-dir";
+import { allPhotos, caseRound, followUpsOf } from "../rounds";
 import { getCarrierRules } from "../rules/carriers";
 import { persistRuntimeFile } from "../storage/runtime-files";
 import type { CarrierId, CaseRecord, ClaimBasis, ClaimDocument, DamageAssessment, Evidence } from "../types";
@@ -215,9 +216,12 @@ async function embedPhoto(doc: PDFDocument, ref: string, runtime: string) {
   }
 }
 
-/** Every photo of the report, annotated when the agent outlined it (see evidenceForPhotos). */
+/**
+ * Every photo of the case (the report's, then those of each follow-up), annotated when the agent
+ * outlined it (see evidenceForPhotos).
+ */
 function photoSources(caseRecord: CaseRecord): Evidence[] {
-  return evidenceForPhotos(caseRecord.report.photos, caseRecord.evidence);
+  return evidenceForPhotos(allPhotos(caseRecord), caseRecord.evidence);
 }
 
 /**
@@ -331,6 +335,19 @@ export async function buildClaimDocument(
 
   w.heading("Description of the damage");
   w.row("Reported on", formatDate(report.receivedAt));
+  // The customer's replies (sharper photos...) are part of the file: say when they arrived, so the
+  // carrier sees the damage was reported on the date above and documented later.
+  const replies = followUpsOf(caseRecord).filter((f) => f.photos.length > 0);
+  if (replies.length > 0) {
+    // A reply that came from the demo button is not a customer's: the carrier file must not pass the
+    // photo (generated with Muse Image) off as real evidence.
+    w.row(
+      "Photos added on",
+      replies
+        .map((f) => `${formatDate(f.receivedAt)}${f.simulated ? " (simulated demo reply, AI-generated photo)" : ""}`)
+        .join(", "),
+    );
+  }
   if (assessment) {
     // Free text of the model: amounts and dates are removed, they come from computeClaim only.
     w.row("Item concerned", stripFigures(assessment.item) || "see the order");
@@ -466,7 +483,9 @@ export async function buildClaimDocument(
 
   const dir = path.join(runtime, "claims");
   await mkdir(dir, { recursive: true });
-  const file = path.join(dir, `${safeFileStem(caseRecord.id)}.pdf`);
+  // One file per round: a follow-up must not overwrite the PDF the earlier round kept a reference to.
+  const round = caseRound(caseRecord);
+  const file = path.join(dir, `${safeFileStem(caseRecord.id)}${round > 1 ? `-round-${round}` : ""}.pdf`);
   await writeFile(file, await doc.save());
   // Copy to the shared store when one is configured (no-op otherwise): the PDF route of
   // another serverless instance reads it from there.

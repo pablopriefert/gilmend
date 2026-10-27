@@ -60,6 +60,7 @@ export function Panel({
   children,
   index = 0,
   className,
+  titleFocusable = false,
 }: {
   id: string;
   title: string;
@@ -69,6 +70,8 @@ export function Panel({
   /** Position in the page, for the staggered entrance. */
   index?: number;
   className?: string;
+  /** The title can take focus from a script (tabIndex -1), to move a keyboard or screen-reader user to this card. */
+  titleFocusable?: boolean;
 }) {
   return (
     <section
@@ -79,7 +82,11 @@ export function Panel({
       <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 pt-5 sm:px-6 sm:pt-6">
         <div className="flex min-w-0 items-center gap-3">
           <IconTile icon={Icon} />
-          <h2 id={id} className="text-base font-semibold tracking-tight text-ink">
+          <h2
+            id={id}
+            tabIndex={titleFocusable ? -1 : undefined}
+            className={cn("text-base font-semibold tracking-tight text-ink", titleFocusable && "scroll-mt-24 rounded-sm")}
+          >
             {title}
           </h2>
         </div>

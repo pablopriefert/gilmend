@@ -13,7 +13,7 @@ import {
 
 export interface FauxObjectStore extends ObjectStore {
   /** Every call, in order, so a test can assert what was (not) sent to the backend. */
-  readonly calls: { op: "get" | "put" | "list"; key: string }[];
+  readonly calls: { op: "get" | "put" | "list" | "delete"; key: string }[];
   /** Make the next `put` fail with this error (once). */
   failNextPut(error: Error): void;
   /** Run `hook` right before the next `put` is applied (to simulate a concurrent writer). */
@@ -78,6 +78,12 @@ export function createFauxObjectStore(options: { conditional?: boolean } = {}): 
     async list(prefix) {
       calls.push({ op: "list", key: prefix });
       return [...objects.keys()].filter((k) => k.startsWith(prefix));
+    },
+
+    async delete(key) {
+      assertSafeObjectKey(key);
+      calls.push({ op: "delete", key });
+      objects.delete(key);
     },
   };
 }

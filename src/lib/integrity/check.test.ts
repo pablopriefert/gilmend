@@ -441,3 +441,66 @@ describe("integrityForModel", () => {
     expect(JSON.stringify(integrityForModel(result))).toMatch(/not proof that the photos are genuine/);
   });
 });
+
+describe("a follow-up round (resumed case)", () => {
+  it("does not read again the photos an earlier round already hashed, and keeps their hash and capture date", async () => {
+    const first = await syntheticPhoto(31, "2026:10:26 09:00:00");
+    const second = await syntheticPhoto(32);
+    const d = deps({ p1: first, p2: second });
+    const earlier = await checkPhotoIntegrity(input({ report: { photos: ["p1"], orderNumber: "#1001", customerEmail: "a@example.com" } }), d);
+    d.readPhoto.mockClear();
+
+    const result = await checkPhotoIntegrity(
+      input({
+        report: { photos: ["p1", "p2"], orderNumber: "#1001", customerEmail: "a@example.com" },
+        knownPhotos: earlier.photos,
+      }),
+      d,
+    );
+
+    // Only the new photo's file was opened; the first one comes from the record of round 1.
+    expect(d.readPhoto.mock.calls.map((c) => c[0])).toEqual(["p2"]);
+    expect(result.photos.map((p) => p.index)).toEqual([0, 1]);
+    expect(result.photos[0].hash).toEqual(earlier.photos[0].hash);
+    expect(result.photos[0].capturedAt).toBe(earlier.photos[0].capturedAt);
+    expect(result.photos[1].hash).not.toBeNull();
+  });
+
+  it("reads a photo again when the earlier round could not hash it", async () => {
+    const photo = await syntheticPhoto(33);
+    const d = deps({ p1: photo });
+    const result = await checkPhotoIntegrity(
+      input({
+        report: { photos: ["p1"], orderNumber: "#1001", customerEmail: "a@example.com" },
+        knownPhotos: [{ index: 0, hash: null, unreadable: "file missing", hasExif: false, capturedAt: null, matches: [] }],
+      }),
+      d,
+    );
+    expect(d.readPhoto).toHaveBeenCalledTimes(1);
+    expect(result.photos[0].hash).not.toBeNull();
+    expect(result.photos[0].unreadable).toBeUndefined();
+  });
+
+  it("still compares the earlier photos with other cases, and ignores the cases it was told to ignore", async () => {
+    const photo = await syntheticPhoto(34);
+    const continued = await storedCase("case_continued", photo, { order: "#9999", email: "a@example.com" });
+    const elsewhere = await storedCase("case_elsewhere", photo);
+    const report = { photos: ["p1"], orderNumber: "#1001", customerEmail: "a@example.com" };
+
+    const withBoth = await checkPhotoIntegrity(input({ report }), deps({ p1: photo }, [continued, elsewhere]));
+    expect(withBoth.signals).toHaveLength(1);
+    expect(withBoth.photos[0].matches.map((m) => m.caseId).sort()).toEqual(["case_continued", "case_elsewhere"]);
+
+    // The case a recorded run was forked from holds the same photo: it is not "another case".
+    const ignoring = await checkPhotoIntegrity(
+      input({ report, ignoreCaseIds: ["case_continued"] }),
+      deps({ p1: photo }, [continued, elsewhere]),
+    );
+    expect(ignoring.photos[0].matches.map((m) => m.caseId)).toEqual(["case_elsewhere"]);
+    expect(ignoring.comparedCases).toBe(1);
+
+    // And when it is the only one, nothing is flagged.
+    const alone = await checkPhotoIntegrity(input({ report, ignoreCaseIds: ["case_continued"] }), deps({ p1: photo }, [continued]));
+    expect(alone.signals).toEqual([]);
+  });
+});

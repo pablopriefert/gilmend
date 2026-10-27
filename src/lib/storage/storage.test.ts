@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createFauxObjectStore } from "./faux-object-store";
 import { overrideSharedObjects, sharedObjects, storageIsEphemeral } from "./index";
 import { assertSafeObjectKey, isSafeObjectKey } from "./object-store";
-import { persistRuntimeFile, restoreRuntimeFile, runtimeObjectKey } from "./runtime-files";
+import { discardRuntimeFiles, persistRuntimeFile, restoreRuntimeFile, runtimeObjectKey } from "./runtime-files";
 
 let scratch: string;
 let root: string;
@@ -130,5 +130,42 @@ describe("persistRuntimeFile and restoreRuntimeFile", () => {
     await expect(persistRuntimeFile(file(), root)).rejects.toThrow("backend down");
     await writeFile(path.join(scratch, "outside.jpg"), "bytes");
     await expect(persistRuntimeFile(path.join(scratch, "outside.jpg"), root)).rejects.toThrow(/Not a runtime file/);
+  });
+});
+
+describe("discardRuntimeFiles", () => {
+  const photo = () => path.join(root, "uploads", "fu", "photo-1.png");
+
+  it("removes the local copy and the shared object, and leaves the other files alone", async () => {
+    const objects = createFauxObjectStore();
+    overrideSharedObjects(objects);
+    await mkdir(path.dirname(photo()), { recursive: true });
+    await writeFile(photo(), "bytes");
+    await persistRuntimeFile(photo(), root);
+    const keep = path.join(root, "uploads", "fu", "photo-2.png");
+    await writeFile(keep, "other");
+    await persistRuntimeFile(keep, root);
+
+    expect(await discardRuntimeFiles([photo()], root)).toBe(0);
+    expect(objects.keys()).toEqual(["files/uploads/fu/photo-2.png"]);
+    expect(await readdir(path.dirname(photo()))).toEqual(["photo-2.png"]);
+  });
+
+  it("works without a shared store, and for a file that is not there", async () => {
+    await mkdir(path.dirname(photo()), { recursive: true });
+    await writeFile(photo(), "bytes");
+    expect(await discardRuntimeFiles([photo(), path.join(root, "uploads", "fu", "missing.png")], root)).toBe(0);
+    expect(await readdir(path.dirname(photo()))).toEqual([]);
+  });
+
+  it("keeps going and counts the objects the backend would not remove", async () => {
+    const objects = createFauxObjectStore();
+    overrideSharedObjects({ ...objects, delete: async () => { throw new Error("backend down"); } });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await mkdir(path.dirname(photo()), { recursive: true });
+    await writeFile(photo(), "bytes");
+    expect(await discardRuntimeFiles([photo()], root)).toBe(1);
+    // The local copy is gone even so.
+    expect(await readdir(path.dirname(photo()))).toEqual([]);
   });
 });

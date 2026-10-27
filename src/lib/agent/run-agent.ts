@@ -16,6 +16,7 @@ import {
 } from "../integrity/check";
 import { getOrder } from "../orders";
 import { getProvider, type Provider } from "../providers";
+import { allPhotos, caseRound, followUpsOf, snapshotRound, workingReport } from "../rounds";
 import { computeClaim, getCarrierRules } from "../rules/carriers";
 import { listCases } from "../store/cases";
 import type {
@@ -28,10 +29,12 @@ import type {
   Decision,
   Engine,
   Evidence,
+  FollowUp,
   Order,
   PhotoIntegrity,
   TraceStep,
 } from "../types";
+import { formatFollowUpMessage, type NotAttachedPhotos } from "./follow-up-prompt";
 import { applyGuardrails } from "./guardrails";
 import { photoToImageUrl } from "./photos";
 import { redactForTrace } from "./redact";
@@ -103,6 +106,15 @@ const MIN_SAM_CALL_TIMEOUT_MS = 5_000;
  */
 export const MIN_INTEGRITY_TIMEOUT_MS = 5_000;
 
+/**
+ * Most images one request of a resumed run carries (review of 28 Oct 2026). Every round used to send
+ * every photo of every earlier round: with MAX_FOLLOW_UPS = 3 the fourth request held up to 12 images of
+ * up to 10 MB each, which nobody had checked the Meta API accepts, and a refusal silently turned the case
+ * into one whose photos were "not read". The report's photos and the photos of the reply being processed
+ * always go first; the photos of the replies in between are described in words ("not attached").
+ */
+export const MAX_IMAGES_ON_RESUME = 6;
+
 /** The collaborators of the loop. Injectable so tests never touch disk, network or other lots. */
 export interface AgentDeps {
   getOrder: typeof getOrder;
@@ -116,6 +128,12 @@ export interface AgentDeps {
 
 export interface RunAgentOptions {
   engine: Engine;
+  /**
+   * resumeAgent only: produce the next round under this NEW case id instead of the id of `previous`,
+   * and mark the result `followedFrom` the id of `previous`. Used for a recorded showcase run, whose
+   * stored copy would otherwise hide the recording for every visitor (review of 28 Oct 2026).
+   */
+  forkAs?: string;
   /** Test hook: use this provider instead of getProvider(). */
   provider?: Provider;
   deps?: Partial<AgentDeps>;
@@ -140,6 +158,21 @@ const DEFAULT_DEPS: AgentDeps = {
 
 const errMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+const sameOrderNumber = (a: string, b: string): boolean =>
+  a.replace(/[#\s]/g, "").toLowerCase() === b.replace(/[#\s]/g, "").toLowerCase();
+
+/** The case a follow-up round resumes, and what the customer sent (see resumeAgent). */
+interface Resume {
+  previous: CaseRecord;
+  followUp: FollowUp;
+  /** Round being run: 2 for the first reply. */
+  round: number;
+  /** Photos that were in the case before this reply: the new ones start at this index. */
+  firstNewPhoto: number;
+  /** Set when the round is saved as a NEW case that starts from `previous` (a recorded run is never changed). */
+  followedFrom: string | null;
+}
+
 /**
  * Run the tool-calling agent on one customer report and return the resulting case
  * (status 'needs_review': nothing is sent anywhere, the merchant approves later).
@@ -149,13 +182,78 @@ const errMessage = (e: unknown): string => (e instanceof Error ? e.message : Str
  * `trace` and the case goes to the merchant with needsHuman=true, so the UI never crashes.
  */
 export async function runAgent(report: DamageReport, opts: RunAgentOptions): Promise<CaseRecord> {
+  return runCase(report, opts, null);
+}
+
+/**
+ * Resume a case after the customer replied (the follow-up loop, 28 Oct 2026): the same agent, the
+ * same tools, the same guardrails, on the SAME case, with the full context of what happened before.
+ *
+ *  - the model sees the original report and its photos, then a follow-up block: what it concluded
+ *    last time, the reply the customer was sent, their new message (as untrusted data) and the new
+ *    photos (follow-up-prompt.ts);
+ *  - the order found earlier is reused, so the delivery date the deadlines count from is the one
+ *    the case already had (a correction of the order number looks it up again);
+ *  - deadlines are computed by computeClaim exactly as in round 1: from the delivery date of the
+ *    order and the report's original date, never from the date of the reply;
+ *  - the trace keeps everything before it and continues with a "Round n" marker; every new step
+ *    carries `round`; the outcome of the round it replaces is kept in `previousRounds`;
+ *  - the engine is the one the caller passes (the route reuses the engine of the case: a private
+ *    run stays private, a mock stays a labelled mock).
+ *
+ * Returns the whole case, status 'needs_review', NOT saved (the caller stores it). Like runAgent it
+ * never throws for model, tool or provider problems.
+ */
+export async function resumeAgent(
+  previous: CaseRecord,
+  followUp: FollowUp,
+  opts: RunAgentOptions,
+): Promise<CaseRecord> {
+  const firstNewPhoto = allPhotos(previous).length;
+  return runCase(workingReport(previous, followUp), { ...opts, caseId: opts.forkAs ?? previous.id }, {
+    previous,
+    followUp,
+    round: caseRound(previous) + 1,
+    firstNewPhoto,
+    followedFrom: opts.forkAs ? previous.id : null,
+  });
+}
+
+/**
+ * Which photos of the working report go to the model, and which ones are only described. A round 1
+ * run sends them all (a report holds at most 3). A resumed run sends at most MAX_IMAGES_ON_RESUME: the
+ * new photos first, then the earlier ones in the order they came (the report's photos, then each
+ * reply's), so what is left out is always the most recent of the in-between replies.
+ */
+function planImages(report: DamageReport, resume: Resume | null): { send: number[]; notAttached: NotAttachedPhotos[] } {
+  const all = report.photos.map((_, i) => i);
+  if (!resume || all.length <= MAX_IMAGES_ON_RESUME) return { send: all, notAttached: [] };
+  const fresh = all.filter((i) => i >= resume.firstNewPhoto);
+  const earlier = all.filter((i) => i < resume.firstNewPhoto);
+  const room = Math.max(0, MAX_IMAGES_ON_RESUME - fresh.length);
+  const dropped = earlier.slice(room);
+  const notAttached: NotAttachedPhotos[] = [];
+  // Each group is one round's photos: round 1 is the report, round k + 2 is reply k.
+  let start = 0;
+  const sizes = [resume.previous.report.photos.length, ...followUpsOf(resume.previous).map((f) => f.photos.length)];
+  sizes.forEach((size, k) => {
+    const inGroup = dropped.filter((i) => i >= start && i < start + size);
+    if (inGroup.length > 0) notAttached.push({ round: k + 1, first: inGroup[0], last: inGroup[inGroup.length - 1] });
+    start += size;
+  });
+  return { send: [...earlier.slice(0, room), ...fresh], notAttached };
+}
+
+async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resume | null): Promise<CaseRecord> {
   const env = opts.env ?? process.env;
   const now = opts.now ?? new Date();
   const maxSteps = opts.maxSteps ?? MAX_AGENT_STEPS;
   const deps: AgentDeps = { ...DEFAULT_DEPS, ...opts.deps };
-  const createdAt = new Date().toISOString();
+  const round = resume?.round ?? 1;
+  const createdAt = resume ? resume.previous.createdAt : new Date().toISOString();
 
-  const trace: TraceStep[] = [];
+  // A follow-up continues the trace of the case: earlier rounds stay as they were written.
+  const trace: TraceStep[] = resume ? [...resume.previous.trace] : [];
   const log = (step: string, extra: Omit<TraceStep, "step" | "at"> = {}) => {
     trace.push({
       step,
@@ -163,8 +261,27 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
       ...(extra.input !== undefined ? { input: redactForTrace(extra.input) } : {}),
       ...(extra.output !== undefined ? { output: redactForTrace(extra.output) } : {}),
       at: new Date().toISOString(),
+      ...(resume ? { round } : {}),
     });
   };
+  if (resume) {
+    const sent = [
+      resume.followUp.message.trim() ? "a message" : null,
+      resume.followUp.photos.length > 0
+        ? `${resume.followUp.photos.length} new photo${resume.followUp.photos.length === 1 ? "" : "s"}`
+        : null,
+      resume.followUp.orderNumber?.trim() ? "a corrected order number" : null,
+    ].filter(Boolean);
+    log(
+      `Round ${round} starts: the customer replied (${sent.join(", ") || "nothing readable"}). The agent resumes this same case with what it concluded in round ${round - 1}.`,
+      { input: { followUpId: resume.followUp.id, round } },
+    );
+    if (resume.followedFrom) {
+      log(
+        `This case continues the recorded run ${resume.followedFrom}, which is left untouched: round ${round - 1} of this case is a copy of it.`,
+      );
+    }
+  }
 
   // Engine selection. Without credentials the engine silently becomes the mock; that is
   // allowed only because the case, the trace and the UI all say so.
@@ -202,7 +319,8 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
   const caseId = opts.caseId ?? `case_${randomUUID()}`;
   const startedAt = Date.now();
   const budgetMs = opts.timeBudgetMs ?? (engine === "demo-mock" ? Infinity : DEFAULT_TIME_BUDGET_MS);
-  const evidence: Evidence[] = [];
+  // A follow-up keeps the evidence of the photos already in the case: they are still in the case.
+  const evidence: Evidence[] = resume ? [...resume.previous.evidence] : [];
   const toolErrors: string[] = [];
   const toolOutputs: unknown[] = [];
   let failure: string | null = null;
@@ -216,7 +334,8 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
 
   const snapshot = (): CaseRecord => ({
     id: caseId,
-    report,
+    // The case keeps the ORIGINAL report; the working report (with the new photos) is only for the loop.
+    report: resume ? resume.previous.report : report,
     order,
     assessment,
     claim,
@@ -230,6 +349,14 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
     trace: [...trace],
     createdAt,
     updatedAt: new Date().toISOString(),
+    // `recorded` is deliberately not carried over: the case is no longer the recording (round 1 keeps it).
+    ...(resume
+      ? {
+          followUps: [...followUpsOf(resume.previous), resume.followUp],
+          previousRounds: [...(resume.previous.previousRounds ?? []), snapshotRound(resume.previous)],
+          ...(resume.followedFrom ? { followedFrom: resume.followedFrom } : {}),
+        }
+      : {}),
   });
 
   const toolError = (name: string, message: string) => {
@@ -252,6 +379,15 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
           typeof args.orderNumber === "string" && args.orderNumber.trim()
             ? args.orderNumber.trim()
             : report.orderNumber;
+        // A follow-up reuses the order found earlier (same delivery date, so the deadlines do not drift
+        // with the date of the reply) unless the customer corrected the order number.
+        const earlier = resume && !resume.followUp.orderNumber?.trim() ? resume.previous.order : null;
+        if (earlier && sameOrderNumber(number, earlier.id)) {
+          order = earlier;
+          const out = { found: true, order: earlier, note: `Order found in round ${round - 1}, reused.` };
+          toolOutputs.push(out);
+          return out;
+        }
         try {
           const found = await deps.getOrder(number, report.customerEmail);
           order = found;
@@ -396,6 +532,8 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
           reportReceivedAt: report.receivedAt,
           photosNotRead,
           integrity,
+          photosMissing: photosNotRead || engine === "demo-mock" ? 0 : unread.length,
+          round,
         });
         decision = result.decision;
         for (const adj of result.adjustments) log(`Guardrail: ${adj}`);
@@ -436,6 +574,15 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
           calledBy,
           now,
           cache: integrityCache,
+          // A follow-up checks every photo of the case, but reads only the new ones: the hashes and
+          // capture dates of the earlier rounds are on the case already. When the round is saved as
+          // a NEW case (a recorded run), the case it continues is not "another case".
+          ...(resume
+            ? {
+                knownPhotos: resume.previous.integrity?.photos.filter((p) => p.index < resume.firstNewPhoto) ?? [],
+                ...(resume.followedFrom ? { ignoreCaseIds: [resume.followedFrom] } : {}),
+              }
+            : {}),
         }),
         timeoutMs,
         "photo integrity check",
@@ -491,8 +638,14 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
     evidenceFallbackDone = true;
     if (engine !== "muse-spark-1.3" || photosNotRead || !assessment) return;
     if (assessment.photoQuality !== "ok" || !EVIDENCE_DAMAGE_TYPES.includes(assessment.damageType)) return;
-    if (report.photos.length === 0 || evidence.some((e) => e.method === "sam-3.1")) return;
-    if (markedWithAssessment.has(0)) return;
+    // In a follow-up the photo to outline is the first NEW one (the earlier ones were judged before),
+    // and an outline of an earlier photo does not count as this round's evidence. A reply with no new
+    // photo has nothing to outline.
+    const target = resume ? resume.firstNewPhoto : 0;
+    const roundPhotos = new Set(report.photos.slice(target));
+    if (target >= report.photos.length) return;
+    if (evidence.some((e) => e.method === "sam-3.1" && roundPhotos.has(e.photo))) return;
+    if (markedWithAssessment.has(target)) return;
     // Not just "is there budget left": enough of it for the SAM calls, each of which gets an equal
     // share of what remains (see MIN_EVIDENCE_FALLBACK_MS). Infinity (the mock) never reaches here.
     const remainingMs = budgetMs - (Date.now() - startedAt);
@@ -502,18 +655,18 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
     const { concepts, fallbackConcepts } = damageConceptsFor(null, assessment);
     let ev: Evidence;
     try {
-      ev = await deps.markDamage(report.photos[0], { engine, concepts, fallbackConcepts, timeoutMs });
+      ev = await deps.markDamage(report.photos[target], { engine, concepts, fallbackConcepts, timeoutMs });
     } catch (e) {
-      ev = { photo: report.photos[0], annotatedPhoto: null, method: "none", note: `mark_damage failed: ${errMessage(e)}` };
+      ev = { photo: report.photos[target], annotatedPhoto: null, method: "none", note: `mark_damage failed: ${errMessage(e)}` };
     }
     const at = evidence.findIndex((x) => x.photo === ev.photo);
     if (at >= 0) evidence[at] = ev;
     else evidence.push(ev);
     log(
-      `Evidence fallback: the model did not outline any photo, so the code (not the model) called mark_damage once on photo 1, for the concepts of the recorded assessment (${assessment.damageType.replace(/_/g, " ")}).`,
+      `Evidence fallback: the model did not outline any photo, so the code (not the model) called mark_damage once on photo ${target + 1}, for the concepts of the recorded assessment (${assessment.damageType.replace(/_/g, " ")}).`,
       {
         tool: TRACE_TOOL_NAME.mark_damage,
-        input: { photoIndex: 0, concepts, fallbackConcepts, calledBy: "code" },
+        input: { photoIndex: target, concepts, fallbackConcepts, calledBy: "code" },
         output: { annotated: ev.annotatedPhoto !== null, method: ev.method, note: ev.note },
       },
     );
@@ -550,9 +703,36 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
 
   // ---- opening message (text + photos) ---------------------------------------------
 
-  const content: ChatCompletionContentPart[] = [];
+  // In a follow-up the user turn holds the original report with its photos, then the follow-up
+  // block with the new ones. `originalCount` splits the photos of `report` between the two.
+  const originalCount = resume ? resume.firstNewPhoto : report.photos.length;
+  const plan = planImages(report, resume);
   const attached: number[] = [];
-  const imageParts: ChatCompletionContentPart[] = [];
+  // Photos the model was meant to see and that could not be read (see the missing-photos note below).
+  const unread: { index: number; why: string }[] = [];
+  const imageParts = new Map<number, ChatCompletionContentPart>();
+  // The note that tells the model some photos of the case are missing from what it sees. Empty when
+  // everything was attached, and when the photos are withheld altogether (that note says it all).
+  let missingNote = "";
+  // The text of the turn, for the photos attached so far (none at all when they are withheld).
+  const compose = (): ChatCompletionContentPart[] => {
+    const early = attached.filter((i) => i < originalCount);
+    const late = attached.filter((i) => i >= originalCount);
+    const parts: ChatCompletionContentPart[] = [
+      { type: "text", text: formatReportMessage(report, early) },
+      ...early.map((i) => imageParts.get(i)!),
+    ];
+    if (resume) {
+      parts.push(
+        { type: "text", text: formatFollowUpMessage(resume.previous, resume.followUp, round, late, plan.notAttached) },
+        ...late.map((i) => imageParts.get(i)!),
+      );
+    }
+    if (missingNote && !photosNotRead) parts.push({ type: "text", text: missingNote });
+    return parts;
+  };
+  // One array, edited in place: `messages` below holds it, and the retry without photos must reach it.
+  const content: ChatCompletionContentPart[] = [];
 
   /**
    * Tell the model, and the trace, that it will not see the photos. Used when the engine's model
@@ -562,15 +742,10 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
   const withholdPhotos = (why: string) => {
     photosNotRead = true;
     attached.length = 0;
-    content.splice(
-      0,
-      content.length,
-      { type: "text", text: formatReportMessage(report, []) },
-      {
-        type: "text",
-        text: `System note: the customer's photos were NOT shown to you (${why}). You cannot judge the damage from them. Do not guess what they show, do not call assess_photos or compute_claim: call finish_case with needsHuman=true and say in the reasons that the photos were not read by the model.`,
-      },
-    );
+    content.splice(0, content.length, ...compose(), {
+      type: "text",
+      text: `System note: the customer's photos were NOT shown to you (${why}). You cannot judge the damage from them. Do not guess what they show, do not call assess_photos or compute_claim: call finish_case with needsHuman=true and say in the reasons that the photos were not read by the model.`,
+    });
     log(
       `The photos were NOT read by the model (${why}). Nothing in this case comes from looking at them: it goes to a human.`,
     );
@@ -579,20 +754,43 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
   if (provider && provider.supportsImages === false && report.photos.length > 0) {
     withholdPhotos(`${provider.model} is configured without image input`);
   } else {
-    for (let i = 0; i < report.photos.length; i++) {
+    for (const i of plan.send) {
       try {
         const url = await photoToImageUrl(report.photos[i]);
-        imageParts.push({ type: "image_url", image_url: { url } });
+        imageParts.set(i, { type: "image_url", image_url: { url } });
         attached.push(i);
       } catch (e) {
+        unread.push({ index: i, why: errMessage(e) });
         log(`Photo ${i} could not be read and was not sent to the model: ${errMessage(e)}`);
       }
     }
-    content.push({ type: "text", text: formatReportMessage(report, attached) }, ...imageParts);
+    // The scripted mock never looks at an image and says so everywhere ("no image was analysed"): a missing
+    // file changes nothing about what it can say, and the six demo cases carry legacy ".jpg" paths that
+    // only the demo-photo lookup resolves. The rules below are for the engines that DO read the photos.
+    const readsPhotos = engine !== "demo-mock";
+    if (readsPhotos && report.photos.length > 0 && attached.length === 0) {
+      // Nothing to look at (every file is missing from this instance and from the shared store, or
+      // unreadable): the model must not be left to judge damage it was never shown, with a block that
+      // says "compare with the photos above" and no photo above (review of 28 Oct 2026).
+      withholdPhotos(`none of the ${report.photos.length} photo(s) of this case could be read from storage (${unread[0]?.why ?? "no reason given"})`);
+    } else {
+      if (readsPhotos && unread.length > 0) {
+        const list = unread.map((u) => u.index).join(", ");
+        missingNote = `System note: ${unread.length} photo(s) of this case (index ${list} in photo_index) could NOT be loaded and are not attached. You cannot rule out that they show something the other photos do not, and you cannot compare the new photos with them. Do not say you compared them: call finish_case with needsHuman=true and say in the reasons which photos you could not see.`;
+        log(
+          `${unread.length} photo(s) of this case could not be loaded (index ${list}). The model was told, and the case goes to a human.`,
+        );
+      }
+      content.push(...compose());
+    }
   }
-  log(`Report received (${attached.length} photo(s) attached)`, {
-    input: { orderNumber: report.orderNumber, language: report.language },
-  });
+  const leftOut = report.photos.length - plan.send.length;
+  log(
+    resume
+      ? `Follow-up received (${attached.filter((i) => i >= originalCount).length} new photo(s), ${attached.length} photo(s) attached in total${leftOut > 0 ? `, ${leftOut} earlier photo(s) described in words but not attached, to keep the request small` : ""})`
+      : `Report received (${attached.length} photo(s) attached)`,
+    { input: { orderNumber: report.orderNumber, language: report.language } },
+  );
 
   const messages: ChatCompletionMessageParam[] = [
     { role: "system", content: SYSTEM_PROMPT },

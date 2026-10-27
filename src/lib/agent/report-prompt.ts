@@ -14,7 +14,14 @@ const CLOSE_TAG = "</customer_message>";
  * data from instructions, so a customer must not be able to forge them.
  */
 export function neutraliseCustomerText(text: string): string {
-  return text.replace(/<\/?\s*customer_message\s*>/gi, "[tag removed]");
+  // The follow-up block (follow-up-prompt.ts) has its own tags: a customer must not be able to forge
+  // those either, in the first report or in a reply.
+  return text
+    .replace(/<\/?\s*(?:customer_message|customer_followup|previous_reply|previous_conclusions)\s*>/gi, "[tag removed]")
+    // The header that opens a follow-up block is read back by the demo provider with a line-anchored
+    // pattern, and the model takes a line that starts with it for ours: a line of free text that starts
+    // like it is defused.
+    .replace(/^([ \t]*)FOLLOW-UP ROUND\b/gim, "$1[follow-up header removed]");
 }
 
 export interface ReportPromptFields {

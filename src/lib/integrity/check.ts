@@ -89,14 +89,34 @@ export interface IntegrityInput {
   now?: Date;
   /** Filled on the first call and reused by the next ones of the same run. */
   cache?: IntegrityCache;
+  /**
+   * Other cases that must not be compared with this one, besides `caseId`: when a follow-up is saved
+   * as a NEW case (a recorded run, 28 Oct 2026) the case it continues holds the same earlier photos,
+   * and a customer who corrected the order number would otherwise "reuse" their own photos.
+   */
+  ignoreCaseIds?: string[];
+  /**
+   * Photos of a resumed case that an earlier round already read: index in `report.photos` to what
+   * was found then (hash, capture date). Those files are not read again, so a follow-up keeps the
+   * hashes of every round and does not depend on the old files still being there. Only entries
+   * with a hash are used; the others are read again.
+   */
+  knownPhotos?: PhotoIntegrityPhoto[];
 }
 
 const orderKey = (s: string): string => s.replace(/[#\s]/g, "").toLowerCase();
 const emailKey = (s: string): string => s.trim().toLowerCase();
 
-async function readFacts(photos: string[], deps: Pick<IntegrityDeps, "readPhoto">): Promise<PhotoFacts[]> {
+async function readFacts(
+  photos: string[],
+  deps: Pick<IntegrityDeps, "readPhoto">,
+  known: PhotoIntegrityPhoto[] = [],
+): Promise<PhotoFacts[]> {
+  const knownByIndex = new Map(known.filter((p) => p.hash !== null).map((p) => [p.index, p]));
   return Promise.all(
     photos.map(async (ref, index): Promise<PhotoFacts> => {
+      const earlier = knownByIndex.get(index);
+      if (earlier) return { index, hash: earlier.hash, hasExif: earlier.hasExif, capturedAt: earlier.capturedAt };
       let bytes: Uint8Array;
       try {
         bytes = await deps.readPhoto(ref);
@@ -132,7 +152,7 @@ function shortDate(iso: string): string {
 export async function checkPhotoIntegrity(input: IntegrityInput, deps: IntegrityDeps): Promise<PhotoIntegrity> {
   const { report, caseId, deliveredAt } = input;
   const cache = input.cache ?? {};
-  cache.facts ??= readFacts(report.photos, deps);
+  cache.facts ??= readFacts(report.photos, deps, input.knownPhotos);
   cache.cases ??= deps.listCases();
   const [facts, cases, demos] = await Promise.all([cache.facts, cache.cases, deps.demoPhotos()]);
 
@@ -145,7 +165,8 @@ export async function checkPhotoIntegrity(input: IntegrityInput, deps: Integrity
   // A stored photo that is too uniform to mean anything (isUniformHash) is not compared either.
   const stored: { caseId: string; order: string; email: string; hash: PhotoHash }[] = [];
   let comparedCases = 0;
-  const others = cases.filter((c) => c.id !== caseId);
+  const ignored = new Set([caseId, ...(input.ignoreCaseIds ?? [])]);
+  const others = cases.filter((c) => !ignored.has(c.id));
   const casesNotCompared = Math.max(0, others.length - MAX_COMPARED_CASES);
   for (const c of others.slice(0, MAX_COMPARED_CASES)) {
     const hashes = (c.integrity?.photos ?? []).map((p) => p.hash).filter(isPhotoHash).filter((h) => !isUniformHash(h));

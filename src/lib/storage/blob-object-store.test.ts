@@ -1,4 +1,4 @@
-import { BlobPreconditionFailedError } from "@vercel/blob";
+import { BlobNotFoundError, BlobPreconditionFailedError } from "@vercel/blob";
 import { describe, expect, it, vi } from "vitest";
 import { createBlobObjectStore, type BlobSdk } from "./blob-object-store";
 import { PreconditionFailedError } from "./object-store";
@@ -12,6 +12,7 @@ function fakeSdk(overrides: Partial<Record<keyof BlobSdk, unknown>> = {}): BlobS
     get: vi.fn(async () => null),
     put: vi.fn(async (pathname: string) => ({ pathname, etag: "\"e2\"" })),
     list: vi.fn(async () => ({ blobs: [], hasMore: false })),
+    del: vi.fn(async () => undefined),
     ...overrides,
   } as unknown as BlobSdk;
 }
@@ -78,5 +79,20 @@ describe("Vercel Blob object store", () => {
     const store = createBlobObjectStore(sdk);
     await expect(store.get("../secrets")).rejects.toThrow(/Unsafe object key/);
     expect(sdk.get).not.toHaveBeenCalled();
+  });
+
+  it("deletes by pathname, and treats a blob that is already gone as deleted", async () => {
+    const del = vi.fn(async () => undefined);
+    await createBlobObjectStore(fakeSdk({ del })).delete("files/uploads/x/photo-1.png");
+    expect(del).toHaveBeenCalledWith("files/uploads/x/photo-1.png");
+    const gone = vi.fn(async () => {
+      throw new BlobNotFoundError();
+    });
+    await expect(createBlobObjectStore(fakeSdk({ del: gone })).delete("files/uploads/x/photo-2.png")).resolves.toBeUndefined();
+    const down = vi.fn(async () => {
+      throw new Error("blob service down");
+    });
+    await expect(createBlobObjectStore(fakeSdk({ del: down })).delete("files/uploads/x/photo-3.png")).rejects.toThrow("blob service down");
+    await expect(createBlobObjectStore(fakeSdk()).delete("../x")).rejects.toThrow(/Unsafe object key/);
   });
 });
