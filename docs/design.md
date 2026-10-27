@@ -76,3 +76,30 @@ No chart library: bars and strips are HTML/CSS, drawn from the same numbers the 
    maths (the share of Mondial Relay parcels refused at delivery was, once). A negative result is
    said in words ("Less recovered…", "Extra time per case…"), not printed with a minus sign.
 
+## Live run (27 Oct 2026)
+
+While a report is sent, the form's fields give way to the live timeline
+(`src/components/report/live-run.tsx`, state in `live-run-state.ts`): one row per real event with the
+server's clock (`+4.2 s`) and duration, an ink thread on a hairline track, a status circle (spinner,
+check, cross, or a warning tone for guardrails and notices; never colour alone), and a side column
+with the order card, the SAM image (fades in on load, `motion-reduce` off) and the claim amount in a
+gold card under a Border Beam, rolled up with the Arc counter (gold is still only money).
+Layout, measured in a browser on 28 Oct 2026 at 375, 768, 1024 and 1280 px (the real component under the
+real Tailwind build, in a harness that copies the page's container and grid; the Arc counter's CSS module
+was not loaded there): one column below `md` (card 343 px at 375); two columns from `md` to `lg`, where the
+page is still one column and the card is full width (768 px: timeline 374, side column 256); ONE column
+from `lg` to `xl`, because at `lg` the page puts the demo cases beside the form, the card shrinks to ~600 px
+and a second column would leave the timeline ~270 px (1024 px: timeline 534, side column stacked under it);
+two columns again from `xl` (1280 px: card 720, timeline 350, side column 280). Not checked: widths
+between those four, and the real page with the real photo and the real counter. A polite `role="status"` region
+announces each finished step, what the page is doing at the start ("Sending the report."), and at the end that
+the case opens by itself in 5 seconds unless the person stays (WCAG 2.2.1); the list itself is not live.
+The footer follows the timeline, not the form: no "Investigating..." button or "can take a little while"
+line once the run is over, "File another report" instead (it empties the form). If the connection drops after
+the case was stored, the timeline stays with its own alert and a link to the case, and no "send again" hint.
+The header clock is labelled by whose it is: "N s since you sent it" (the browser's, upload included) while
+the run goes on, "N s on the server" at the end, and none at all in DEMO MODE. DEMO MODE is a warning pill,
+"DEMO MODE (scripted)", with no timings. The first model turn says what the model was really shown ("the
+report and the photos", "the report and some of the photos", or "the report (photos not shown to it)").
+Guardrail rows are plain sentences ("Sent to a human: ...", "No carrier claim: ..."), never field names. The old five-step list (`agent-working.tsx`) stays only as the fallback when no stream
+arrives, and says it is an illustration.

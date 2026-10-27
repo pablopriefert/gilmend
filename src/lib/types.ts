@@ -200,6 +200,8 @@ export interface Evidence {
   /** 'none' means the claim ships with the raw photo. */
   method: "sam-3.1" | "none";
   note: string;
+  /** How many regions SAM outlined on the annotated photo (absent on cases saved before the live run, and when none). */
+  regions?: number;
 }
 
 export interface ClaimDocument {

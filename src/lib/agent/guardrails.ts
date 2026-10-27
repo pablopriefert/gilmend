@@ -1,4 +1,11 @@
-import type { ClaimComputation, DamageAssessment, Decision, Order, PhotoIntegrity } from "../types";
+import type {
+  ClaimComputation,
+  DamageAssessment,
+  Decision,
+  IntegritySignalKind,
+  Order,
+  PhotoIntegrity,
+} from "../types";
 import type { RawDecision } from "./tools";
 
 // Rules that must hold whatever the model says. The prompt asks for the same things, but
@@ -34,24 +41,69 @@ export interface GuardrailContext {
   round?: number;
 }
 
+/**
+ * One thing a guardrail did, with the reason apart from the verdict (28 Oct 2026): `adjustments`
+ * keeps the internal wording for the trace, and this is what the live timeline words in plain English
+ * for the person who filed the report (see describeGuardrailNote).
+ */
+export interface GuardrailNote {
+  kind: "needs_human" | "needs_human_confirmed" | "claim_dropped";
+  /** The reason, already a plain sentence fragment ("confidence 0.52 is below 0.7"). */
+  why: string;
+}
+
 export interface GuardrailResult {
   decision: Decision;
   /** Human-readable list of what the guardrails changed, for the trace. */
   adjustments: string[];
+  /** The same changes, structured, for the live timeline. Same order as `adjustments`. */
+  notes: GuardrailNote[];
+}
+
+/** The live timeline's sentence for a guardrail: plain English, no internal field names. */
+export function describeGuardrailNote(note: GuardrailNote): string {
+  switch (note.kind) {
+    case "needs_human":
+      return `Sent to a human: ${note.why}.`;
+    case "needs_human_confirmed":
+      return `Still needs a human: ${note.why}.`;
+    case "claim_dropped":
+      return `No carrier claim: ${note.why}.`;
+  }
+}
+
+const INTEGRITY_KIND_WORDS: Record<IntegritySignalKind, string> = {
+  reused_photo: "a photo already filed in another case",
+  demo_photo_reused: "a demo photo filed for another order",
+  captured_before_delivery: "a capture date before the delivery",
+};
+
+/**
+ * The integrity signals as the live timeline says them: how many, and of which kind, never the
+ * message of a signal (it counts other cases) and never anything about who filed them.
+ */
+function integrityNote(integrity: PhotoIntegrity): string {
+  const n = integrity.signals.length;
+  const kinds = [...new Set(integrity.signals.map((s) => INTEGRITY_KIND_WORDS[s.kind] ?? "something to look at"))];
+  return `the photo check found ${n} ${n === 1 ? "thing" : "things"} to look at (${kinds.join(", ")}), a reason to look and not a verdict`;
 }
 
 const normaliseOrderNumber = (s: string): string => s.replace(/[#\s]/g, "").toLowerCase();
 
 export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): GuardrailResult {
   const adjustments: string[] = [];
+  const notes: GuardrailNote[] = [];
   const reasons = [...raw.reasons];
   let needsHuman = raw.needsHuman;
   let carrierClaim = raw.carrierClaim;
   const confidence = Math.min(1, Math.max(0, Number.isFinite(raw.confidence) ? raw.confidence : 0));
 
-  const force = (why: string) => {
+  // `plain` is the wording of the live timeline when the trace's wording would be too long or too
+  // technical for it (the integrity signals, which are whole sentences for the merchant).
+  const force = (why: string, plain: string = why) => {
     if (!needsHuman) adjustments.push(`needsHuman forced: ${why}`);
     else adjustments.push(`needsHuman confirmed: ${why}`);
+    notes.push({ kind: needsHuman ? "needs_human_confirmed" : "needs_human", why: plain });
     needsHuman = true;
     reasons.push(`Guardrail: ${why}`);
   };
@@ -70,6 +122,12 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
             : "compute_claim did not return eligible=true for a found order"
         }`,
       );
+      notes.push({
+        kind: "claim_dropped",
+        why: !decisionFitsClaim
+          ? `a “${raw.decision.replace(/_/g, " ")}” decision cannot carry a claim`
+          : "the claim was not computed as eligible for a found order",
+      });
       reasons.push("Guardrail: no carrier claim (not eligible or not computed).");
     }
   }
@@ -80,6 +138,7 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
     if (carrierClaim) {
       carrierClaim = false;
       adjustments.push("carrierClaim dropped: the photos were not read by the model");
+      notes.push({ kind: "claim_dropped", why: "the model did not read the photos" });
       reasons.push("Guardrail: no carrier claim drafted, the model did not read the photos.");
     }
     force("the photos were not read by the model, so the damage is not assessed");
@@ -127,6 +186,7 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
   if (ctx.integrity && ctx.integrity.signals.length > 0) {
     force(
       `photo integrity: ${ctx.integrity.signals.map((s) => s.message).join(" ")} A person must check the photos before anything is filed or sent.`,
+      integrityNote(ctx.integrity),
     );
   }
 
@@ -195,6 +255,7 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
       customerReply: raw.customerReply,
     },
     adjustments,
+    notes,
   };
 }
 

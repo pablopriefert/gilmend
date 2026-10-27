@@ -20,6 +20,7 @@ import { allPhotos, caseRound, followUpsOf, snapshotRound, workingReport } from 
 import { computeClaim, getCarrierRules } from "../rules/carriers";
 import { listCases } from "../store/cases";
 import type {
+  CarrierId,
   CaseRecord,
   ClaimComputation,
   ClaimDocument,
@@ -35,7 +36,16 @@ import type {
   TraceStep,
 } from "../types";
 import { formatFollowUpMessage, type NotAttachedPhotos } from "./follow-up-prompt";
-import { applyGuardrails } from "./guardrails";
+import {
+  scrub,
+  summarizeIntegrity,
+  summarizeMarkDamage,
+  summarizeOrder,
+  type AgentEventInput,
+  type AgentEventSink,
+  type ToolResult,
+} from "./events";
+import { applyGuardrails, describeGuardrailNote } from "./guardrails";
 import { photoToImageUrl } from "./photos";
 import { redactForTrace } from "./redact";
 import { formatReportMessage } from "./report-prompt";
@@ -145,6 +155,11 @@ export interface RunAgentOptions {
   caseId?: string;
   /** Wall-clock budget in ms; defaults to DEFAULT_TIME_BUDGET_MS for real engines, none for the mock. */
   timeBudgetMs?: number;
+  /**
+   * Live progress (see ./events): called as each thing really happens, never with the key, a photo
+   * or the customer's words. Whatever it throws is ignored: watching the run must never break it.
+   */
+  onEvent?: AgentEventSink;
 }
 
 const DEFAULT_DEPS: AgentDeps = {
@@ -251,6 +266,15 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
   const deps: AgentDeps = { ...DEFAULT_DEPS, ...opts.deps };
   const round = resume?.round ?? 1;
   const createdAt = resume ? resume.previous.createdAt : new Date().toISOString();
+  const startedAt = Date.now();
+  const emit = (event: AgentEventInput) => {
+    if (!opts.onEvent) return;
+    try {
+      opts.onEvent({ ...event, t: Date.now() - startedAt } as Parameters<AgentEventSink>[0]);
+    } catch {
+      // A broken listener (a closed stream, a bug in the page) must not take the agent down.
+    }
+  };
 
   // A follow-up continues the trace of the case: earlier rounds stay as they were written.
   const trace: TraceStep[] = resume ? [...resume.previous.trace] : [];
@@ -317,7 +341,6 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
   // goes to a human through the tool error it already counted.
   let integrityTimedOut = false;
   const caseId = opts.caseId ?? `case_${randomUUID()}`;
-  const startedAt = Date.now();
   const budgetMs = opts.timeBudgetMs ?? (engine === "demo-mock" ? Infinity : DEFAULT_TIME_BUDGET_MS);
   // A follow-up keeps the evidence of the photos already in the case: they are still in the case.
   const evidence: Evidence[] = resume ? [...resume.previous.evidence] : [];
@@ -331,6 +354,16 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
   // already asked SAM about with the assessment in hand (same concepts, same answer, a wasted call).
   let evidenceFallbackDone = false;
   const markedWithAssessment = new Set<number>();
+  // What the last mark_damage did, for the live events (set where the tool runs, read once it ends).
+  let lastMark: ToolResult | null = null;
+  // The model turn being waited on, for the live events: closed exactly once, on every way out.
+  let openTurn = null as { turn: number; startedAt: number } | null;
+  const closeTurn = (ok: boolean, toolCalls = 0) => {
+    if (!openTurn) return;
+    const { turn, startedAt: since } = openTurn;
+    openTurn = null;
+    emit({ type: "thinking", turn, phase: "end", ok, toolCalls, ms: Date.now() - since });
+  };
 
   const snapshot = (): CaseRecord => ({
     id: caseId,
@@ -455,6 +488,7 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
         const at = evidence.findIndex((x) => x.photo === photo);
         if (at >= 0) evidence[at] = ev;
         else evidence.push(ev);
+        lastMark = safeMarkResult(idx, [...concepts, ...(ev.method === "sam-3.1" ? [] : fallbackConcepts)], ev);
         // Never send the image back to the model: only whether the outline worked.
         return {
           photoIndex: idx,
@@ -537,6 +571,9 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
         });
         decision = result.decision;
         for (const adj of result.adjustments) log(`Guardrail: ${adj}`);
+        // The trace keeps the internal wording; the person watching the timeline gets a plain sentence
+        // (review of 28 Oct 2026: "needsHuman forced: ..." is code talk in an otherwise English list).
+        for (const note of result.notes) emit({ type: "guardrail", message: scrub(describeGuardrailNote(note), 240) });
         const needsDoc = decision.carrierClaim && !document;
         return {
           accepted: true,
@@ -610,8 +647,21 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
       : runEnded
         ? "the run ended before the model finished, and the case must still carry the photo hashes"
         : "the model did not call check_photo_integrity";
+    // The live timeline shows the code's own call as one, so the person watching sees the check ran
+    // even though the model did not ask for it (turn 0: it belongs to no model turn).
+    const toolStart = Date.now();
+    emit({ type: "tool_start", tool: "check_photo_integrity", turn: 0, calledBy: "code" });
     try {
       const result = await runIntegrity("code");
+      emit({
+        type: "tool_end",
+        tool: "check_photo_integrity",
+        turn: 0,
+        calledBy: "code",
+        ok: true,
+        ms: Date.now() - toolStart,
+        result: safeResult("check_photo_integrity", null),
+      });
       log(`Photo integrity check run by the code (${why}).`, {
         tool: TRACE_TOOL_NAME.check_photo_integrity,
         output: integrityForModel(result),
@@ -619,6 +669,16 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
       toolOutputs.push(integrityForModel(result));
     } catch (e) {
       toolErrors.push("check_photo_integrity");
+      emit({
+        type: "tool_end",
+        tool: "check_photo_integrity",
+        turn: 0,
+        calledBy: "code",
+        ok: false,
+        ms: Date.now() - toolStart,
+        result: null,
+        error: scrub(errMessage(e), 160),
+      });
       log(`Tool error: photo integrity check failed (${errMessage(e)}).`, { tool: TRACE_TOOL_NAME.check_photo_integrity });
     }
   }
@@ -653,6 +713,8 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
     const timeoutMs = Math.max(MIN_SAM_CALL_TIMEOUT_MS, Math.floor(remainingMs / EVIDENCE_FALLBACK_SAM_CALLS));
 
     const { concepts, fallbackConcepts } = damageConceptsFor(null, assessment);
+    const toolStart = Date.now();
+    emit({ type: "tool_start", tool: "mark_damage", turn: 0, calledBy: "code" });
     let ev: Evidence;
     try {
       ev = await deps.markDamage(report.photos[target], { engine, concepts, fallbackConcepts, timeoutMs });
@@ -662,6 +724,15 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
     const at = evidence.findIndex((x) => x.photo === ev.photo);
     if (at >= 0) evidence[at] = ev;
     else evidence.push(ev);
+    emit({
+      type: "tool_end",
+      tool: "mark_damage",
+      turn: 0,
+      calledBy: "code",
+      ok: true,
+      ms: Date.now() - toolStart,
+      result: safeMarkResult(0, [...concepts, ...(ev.method === "sam-3.1" ? [] : fallbackConcepts)], ev),
+    });
     log(
       `Evidence fallback: the model did not outline any photo, so the code (not the model) called mark_damage once on photo ${target + 1}, for the concepts of the recorded assessment (${assessment.damageType.replace(/_/g, " ")}).`,
       {
@@ -686,8 +757,79 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
           needsHuman: true,
           reasons: [...decision.reasons, `Guardrail: the claim document could not be generated (${errMessage(e)}).`],
         };
+        emit({ type: "guardrail", message: `The claim document could not be generated (${scrub(errMessage(e), 120)}).` });
       }
       return toolError("draft_claim_document", `claim document failed: ${errMessage(e)}`);
+    }
+  }
+
+  /** Same rule for the outline's summary, which is built inside the tools themselves. */
+  function safeMarkResult(photoIndex: number, concepts: readonly string[], ev: Evidence): ToolResult | null {
+    try {
+      return summarizeMarkDamage(photoIndex, concepts, ev);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Building an event must never cost the run: a result that cannot be summarised is simply not sent. */
+  function safeResult(name: string, output: unknown): ToolResult | null {
+    try {
+      return resultFor(name, output);
+    } catch {
+      return null;
+    }
+  }
+
+  /** The structured result of a tool that succeeded, for the live events: read from the state it just set. */
+  function resultFor(name: string, output: unknown): ToolResult | null {
+    switch (name as ModelToolName) {
+      case "get_order": {
+        const found = (output as { found?: unknown } | null)?.found === true;
+        return { tool: "get_order", found, order: found && order ? summarizeOrder(order) : null };
+      }
+      case "check_photo_integrity":
+        return integrity ? summarizeIntegrity(integrity) : null;
+      case "assess_photos":
+        return assessment
+          ? {
+              tool: "assess_photos",
+              item: scrub(assessment.item, 80),
+              damageType: assessment.damageType,
+              severity: assessment.severity,
+              photoQuality: assessment.photoQuality,
+            }
+          : null;
+      case "mark_damage":
+        return lastMark;
+      case "get_carrier_rules": {
+        const rules = output as { carrier?: CarrierId; label?: string } | null;
+        return rules?.carrier ? { tool: "get_carrier_rules", carrier: rules.carrier, label: scrub(rules.label, 60) } : null;
+      }
+      case "compute_claim":
+        return claim
+          ? {
+              tool: "compute_claim",
+              eligible: claim.eligible,
+              maxCompensationEur: claim.maxCompensationEur,
+              claimDeadline: claim.claimDeadline,
+              daysLeft: claim.daysLeft,
+            }
+          : null;
+      case "finish_case":
+        return decision
+          ? {
+              tool: "finish_case",
+              decision: decision.decision,
+              confidence: decision.confidence,
+              needsHuman: decision.needsHuman,
+              carrierClaim: decision.carrierClaim,
+            }
+          : null;
+      case "draft_claim_document":
+        return document ? { tool: "draft_claim_document", ok: true } : null;
+      default:
+        return null;
     }
   }
 
@@ -749,6 +891,11 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
     log(
       `The photos were NOT read by the model (${why}). Nothing in this case comes from looking at them: it goes to a human.`,
     );
+    emit({
+      type: "notice",
+      code: "photos_withheld",
+      message: `The photos were not read by the model (${scrub(why, 120)}). Nothing in this case comes from looking at them: it goes to a human.`,
+    });
   };
 
   if (provider && provider.supportsImages === false && report.photos.length > 0) {
@@ -762,6 +909,7 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
       } catch (e) {
         unread.push({ index: i, why: errMessage(e) });
         log(`Photo ${i} could not be read and was not sent to the model: ${errMessage(e)}`);
+        emit({ type: "notice", code: "photo_unreadable", message: `Photo ${i + 1} could not be read and was not sent to the model.` });
       }
     }
     // The scripted mock never looks at an image and says so everywhere ("no image was analysed"): a missing
@@ -797,6 +945,20 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
     { role: "user", content },
   ];
 
+  // Announced once the opening message is built, not before: only now is it known how many photos the
+  // model is really shown (none for a text-only model, fewer when one could not be read), and the page
+  // words "reading the photos" from that count (review of 28 Oct 2026). Any photo notice above therefore
+  // comes before this event; the page orders nothing by it.
+  emit({
+    type: "run_started",
+    engine,
+    model: provider?.model ?? "none",
+    label: (provider?.detail ?? describeEngine(engine, env)).label,
+    mock: engine === "demo-mock",
+    photos: report.photos.length,
+    photosSent: attached.length,
+  });
+
   // ---- the loop ---------------------------------------------------------------------
 
   let nudged = false;
@@ -807,6 +969,8 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
       break;
     }
     let completion;
+    openTurn = { turn: step, startedAt: Date.now() };
+    emit({ type: "thinking", turn: step, phase: "start" });
     const callModel = () =>
       provider!.chat(
         { messages, tools: AGENT_TOOLS },
@@ -827,21 +991,25 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
           completion = await callModel();
         } catch (e2) {
           failure = `model call failed at step ${step}: ${errMessage(e2)}`;
+          closeTurn(false);
           break;
         }
       } else {
         failure = `model call failed at step ${step}: ${errMessage(e)}`;
+        closeTurn(false);
         break;
       }
     }
     const message = completion.choices?.[0]?.message;
     if (!message) {
       failure = `model returned no message at step ${step}`;
+      closeTurn(false);
       break;
     }
     const calls = (message.tool_calls ?? []).filter(
       (c): c is ChatCompletionMessageFunctionToolCall => c.type === "function",
     );
+    closeTurn(true, calls.length);
     if (message.content?.trim()) log(`Model note (step ${step})`, { output: message.content.trim() });
 
     // The assistant turn must be replayed with its tool_calls, and each call answered
@@ -873,12 +1041,27 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
       // A tool must never take the run down: whatever it throws becomes a tool error the
       // model sees, counted so the guardrails send the case to a human.
       let output: unknown;
+      lastMark = null;
+      // An unknown name is the model's own text: it is not sent.
+      const wireName = known ? name : "unknown";
+      const toolStart = Date.now();
+      emit({ type: "tool_start", tool: wireName, turn: step, calledBy: "model" });
       try {
         output = await runTool(name, call.function.arguments);
       } catch (e) {
         output = toolError(name, `tool "${name}" crashed: ${errMessage(e)}`);
       }
       const isError = typeof output === "object" && output !== null && "error" in output;
+      emit({
+        type: "tool_end",
+        tool: wireName,
+        turn: step,
+        calledBy: "model",
+        ok: !isError,
+        ms: Date.now() - toolStart,
+        result: isError || !known ? null : safeResult(name, output),
+        ...(isError ? { error: scrub((output as { error?: unknown }).error, 160) } : {}),
+      });
       log(`${isError ? "Tool error" : "Tool"}: ${name}`, {
         ...(known ? { tool: TRACE_TOOL_NAME[name as ModelToolName] } : {}),
         input: call.function.arguments,
@@ -903,13 +1086,29 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
   // draft it ourselves, the document is deterministic and the merchant expects it.
   if (decision?.carrierClaim && !document && order && claim?.eligible) {
     log("Claim document not drafted by the model; generating it");
+    const toolStart = Date.now();
+    emit({ type: "tool_start", tool: "draft_claim_document", turn: 0, calledBy: "code" });
     const out = await draftDocument();
+    const drafted = !(typeof out === "object" && out !== null && "error" in out);
+    emit({
+      type: "tool_end",
+      tool: "draft_claim_document",
+      turn: 0,
+      calledBy: "code",
+      ok: drafted,
+      ms: Date.now() - toolStart,
+      result: drafted ? { tool: "draft_claim_document", ok: true } : null,
+      ...(drafted ? {} : { error: scrub((out as { error?: unknown }).error, 160) }),
+    });
     log("Tool: draft_claim_document (automatic)", { tool: TRACE_TOOL_NAME.draft_claim_document, output: out });
   }
 
+  // Read before the fallback below fills `decision` in: "the agent decided" and "the code ended the run" differ.
+  const reachedDecision = decision !== null;
   if (!decision) {
     const reason = failure ?? `no decision after ${maxSteps} steps`;
     log(`Agent did not reach a decision: ${reason}`);
+    emit({ type: "notice", code: "agent_incomplete", message: `The agent did not reach a decision: ${scrub(reason, 160)}. A human must handle this case.` });
     decision = {
       decision: "no_action",
       carrierClaim: false,
@@ -920,8 +1119,18 @@ async function runCase(report: DamageReport, opts: RunAgentOptions, resume: Resu
     };
   } else if (failure) {
     log(`Agent error after the decision was recorded: ${failure}`);
+    emit({ type: "notice", code: "agent_error", message: `The model failed after the decision was recorded: ${scrub(failure, 160)}.` });
   }
 
   log(`Case ready for review: ${decision.decision}${decision.needsHuman ? " (needs a human)" : ""}`);
+  emit({
+    type: "run_finished",
+    reachedDecision,
+    decision: decision.decision,
+    confidence: decision.confidence,
+    needsHuman: decision.needsHuman,
+    carrierClaim: decision.carrierClaim,
+    ms: Date.now() - startedAt,
+  });
   return snapshot();
 }

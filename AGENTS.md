@@ -75,4 +75,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   covers the 200 most recent cases (`MAX_COMPARED_CASES`): keep the record under 2 KB. What the model is shown
   (`integrityForModel`) must hold nothing about another customer.
 - Do not commit, push, deploy or create a GitHub repository unless Pablo asks.
-
+- **Live run events** (`src/lib/agent/events.ts`) are shown to the person who filed the report and
+  stream through proxies: never put the API key, photo bytes (a data URL), the customer's name,
+  e-mail, address or message, the reply, or model free text in one. Strings the code does not
+  control go through `scrub`. The integrity tool's event holds counts and signal kinds only (`summarizeIntegrity`):
+  never a hash, a case id or a signal's message, which describe other customers' cases. The timeline is only ever drawn from real events; keep the
+  illustration (`agent-working.tsx`) labelled as one and only as the no-stream fallback.
