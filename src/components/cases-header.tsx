@@ -50,7 +50,7 @@ export function CasesHeader({ cases, now }: { cases: CaseRecord[]; now: Date }) 
       </div>
 
       <p data-testid="counter" className="sr-only">
-        {`${formatEur(recoverableEur, { whole: true })} recoverable this month · ${claimsDueThisWeek} ${
+        {`${formatEur(recoverableEur)} recoverable this month · ${claimsDueThisWeek} ${
           claimsDueThisWeek === 1 ? "claim" : "claims"
         } due this week`}
       </p>
@@ -79,7 +79,8 @@ export function CasesHeader({ cases, now }: { cases: CaseRecord[]; now: Date }) 
             <div className="p-6 sm:p-8">
               <Label icon={Coins}>Recoverable this month</Label>
               <div className="mt-5" style={recoverableEur > 0 ? HERO_FIGURE : HERO_FIGURE_EMPTY}>
-                <AnimatedCounter value={recoverableEur} prefix="€" decimals={0} animateOnView />
+                {/* Cents shown whenever there are any: rounding 52.90 up to 53 would overstate the claim. */}
+                <AnimatedCounter value={recoverableEur} prefix="€" decimals={Number.isInteger(recoverableEur) ? 0 : 2} animateOnView />
               </div>
               <p className="mt-4 text-sm text-muted">Maximum under each carrier&apos;s rules, live cases only.</p>
             </div>

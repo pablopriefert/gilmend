@@ -19,8 +19,9 @@ describe("Cases dashboard", () => {
     });
     render(<CasesDashboard cases={[base, rejected]} error={null} now={NOW} />);
 
-    // Rejected and no-claim cases are left out of the money.
-    expect(screen.getByTestId("counter").textContent).toBe("€55 recoverable this month · 1 claim due this week");
+    // Rejected and no-claim cases are left out of the money. Cents are kept: a rounded total
+    // over- or under-states what can be claimed.
+    expect(screen.getByTestId("counter").textContent).toBe("€55.20 recoverable this month · 1 claim due this week");
     expect(screen.getByText(/Not a promise of payment/)).toBeInTheDocument();
 
     const rows = within(screen.getByRole("list", { name: "Cases" })).getAllByRole("listitem");

@@ -225,7 +225,8 @@ describe("VoiceRecorder", () => {
     const { unmount } = render(<VoiceRecorder language="auto" accessCode="" onTranscript={vi.fn()} onBusyChange={onBusyChange} />);
     start();
     await screen.findByRole("button", { name: "Stop recording" });
-    expect(onBusyChange).toHaveBeenLastCalledWith(true);
+    // Sent from an effect: under a loaded run it can land a tick after the button (27 Oct 2026).
+    await waitFor(() => expect(onBusyChange).toHaveBeenLastCalledWith(true));
     unmount();
     expect(onBusyChange).toHaveBeenLastCalledWith(false);
   });
