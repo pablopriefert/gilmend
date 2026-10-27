@@ -1,5 +1,6 @@
 import type {
   CarrierId,
+  CaseRecord,
   CaseStatus,
   ClaimComputation,
   DamageSeverity,
@@ -50,6 +51,15 @@ export function formatDateTime(iso: string): string {
 /** Whole days from `now` to `iso` (rounded up); negative once the date has passed. */
 export function daysUntil(iso: string, now: Date): number {
   return Math.ceil((Date.parse(iso) - now.getTime()) / DAY_MS);
+}
+
+/**
+ * The clock a case is read against. A recorded showcase run is a snapshot: its reasons say
+ * "17.0 h after delivery" and its amounts were computed on the day of the run, so its
+ * deadlines are shown as of that moment instead of turning "Overdue" a few days later.
+ */
+export function caseClock(c: Pick<CaseRecord, "recorded" | "createdAt">, now: Date): Date {
+  return c.recorded ? new Date(c.createdAt) : now;
 }
 
 export type DeadlineTone = "none" | "ok" | "soon" | "overdue";

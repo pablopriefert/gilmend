@@ -29,5 +29,14 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   `data/runtime/`. Runtime files are located by `src/lib/runtime-dir.ts` only.
 - The demo photos in `data/photos/` are provisional AI-generated stand-ins until the team's own
   photos replace them (`data/photos/README.md`). Do not strip their metadata or call them photos.
+- **`data/showcase/` is committed and read-only.** It holds six real Muse Spark 1.3 + SAM 3.1 runs
+  recorded on 27 Oct 2026 (`data/showcase/README.md`); the app lists them as "Recorded run" next to
+  the cases people file. Do not edit those files by hand and do not present them as live: rebuild
+  them with `npm run showcase:build` from new `npm run real` runs, which refuses anything but invented
+  orders, `example.*` e-mails, and files without keys or local paths. Approving a recorded case stores
+  a copy; it never writes to the folder. Tests see no showcase (`vitest.setup.ts` points
+  `DAMAGE_DESK_SHOWCASE_DIR` at a folder that does not exist).
+- Storage on a public deployment is explained in `docs/storage.md` (what is public, why there is no
+  shared backend yet).
 - Do not commit, push, deploy or create a GitHub repository unless Pablo asks.
 

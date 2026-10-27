@@ -75,6 +75,21 @@ describe("Case page", () => {
     expect(getCase).not.toHaveBeenCalled();
   });
 
+  it("explains a missing case on a deployment with temporary per-instance storage, instead of a bare 404", async () => {
+    vi.stubEnv("VERCEL", "1");
+    getCase.mockResolvedValue(null);
+    render(await CasePage(params("case_6f1c0d2e")));
+    expect(screen.getByRole("heading", { name: "This case is not on this server" })).toBeInTheDocument();
+    expect(screen.getByText(/open one of the recorded runs/)).toBeInTheDocument();
+    // Only for a case this deployment would have filed itself, and only without a shared store.
+    await expect(CasePage(params("some-other-id"))).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("keeps the plain 404 for a missing case on a local run", async () => {
+    getCase.mockResolvedValue(null);
+    await expect(CasePage(params("case_6f1c0d2e"))).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
   it("says the store is unavailable rather than pretending the case does not exist", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     getCase.mockRejectedValue(new Error("EACCES: /home/secret"));

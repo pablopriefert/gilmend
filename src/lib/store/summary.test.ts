@@ -118,3 +118,24 @@ describe("summarizeCases", () => {
     expect(summary.demoModeCases).toBe(1);
   });
 });
+
+describe("summarizeCases and recorded showcase runs", () => {
+  it("leaves them out of every number: they are snapshots, not live money", () => {
+    const live = fauxCase({ id: "live", claim: { maxCompensationEur: 40, claimDeadline: inDays(2) } });
+    const recorded = {
+      ...fauxCase({ id: "recorded", claim: { maxCompensationEur: 52.9, claimDeadline: inDays(2) } }),
+      engine: "muse-spark-1.3" as const,
+      recorded: { recordedOn: "2026-10-27" },
+    };
+    const summary = summarizeCases([live, recorded], NOW);
+    expect(summary.recoverableThisMonthEur).toBe(40);
+    expect(summary.claimsDueThisWeek).toBe(1);
+    expect(summary.dueCaseIds).toEqual(["live"]);
+    expect(summarizeCases([recorded], NOW)).toEqual({
+      recoverableThisMonthEur: 0,
+      demoModeCases: 0,
+      claimsDueThisWeek: 0,
+      dueCaseIds: [],
+    });
+  });
+});

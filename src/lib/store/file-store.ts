@@ -4,6 +4,8 @@ import path from "node:path";
 import type { Env } from "../config";
 import { runtimeDir } from "../runtime-dir";
 import type { CaseRecord } from "../types";
+import { newestFirst } from "./case-order";
+import { createKeyedLock } from "./keyed-lock";
 
 // One JSON file per case under <runtime dir>/cases/. No database to administer during the
 // hackathon week; the files are git-ignored (data/runtime/) and readable by hand.
@@ -48,17 +50,7 @@ function isCaseRecord(value: unknown, expectedId: string): value is CaseRecord {
 export function createCaseStore({ dir, now = () => new Date() }: CaseStoreOptions): CaseStore {
   // Serialise read-modify-write per case inside this process: two concurrent updates (the
   // agent finishing while the merchant clicks Approve) must not overwrite each other.
-  const queues = new Map<string, Promise<unknown>>();
-  function withLock<T>(id: string, task: () => Promise<T>): Promise<T> {
-    const previous = queues.get(id) ?? Promise.resolve();
-    const run = previous.then(task, task);
-    const tail = run.catch(() => undefined);
-    queues.set(id, tail);
-    void tail.then(() => {
-      if (queues.get(id) === tail) queues.delete(id);
-    });
-    return run;
-  }
+  const withLock = createKeyedLock();
 
   const fileOf = (id: string) => path.join(dir, `${id}.json`);
 
@@ -116,9 +108,7 @@ export function createCaseStore({ dir, now = () => new Date() }: CaseStoreOption
           console.warn(`[store] skipping unreadable case file ${name}`);
         }
       }
-      return records.sort(
-        (a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),
-      );
+      return records.sort(newestFirst);
     },
 
     async get(id) {

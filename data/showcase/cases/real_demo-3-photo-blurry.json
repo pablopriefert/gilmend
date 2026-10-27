@@ -1,0 +1,182 @@
+{
+  "id": "real_demo-3-photo-blurry",
+  "report": {
+    "id": "demo-3-photo-blurry",
+    "receivedAt": "2026-10-27T13:07:43.874Z",
+    "customerEmail": "ines.moreau@example.org",
+    "orderNumber": "#1003",
+    "message": "My lamp is damaged, I think the glass is cracked. Here is a photo.",
+    "photos": [
+      "data/showcase/photos/lamp-blurry.webp"
+    ],
+    "language": "en"
+  },
+  "order": {
+    "id": "#1003",
+    "name": "Ines Moreau",
+    "email": "ines.moreau@example.org",
+    "carrier": "colissimo",
+    "service": "Colissimo Domicile avec signature",
+    "trackingNumber": "6A99001003003",
+    "weightKg": 3.1,
+    "currency": "EUR",
+    "lineItems": [
+      {
+        "sku": "LAMP-BRASS-GLASS",
+        "title": "Brass table lamp with glass shade",
+        "quantity": 1,
+        "unitPrice": 129
+      }
+    ],
+    "shippingAddress": {
+      "city": "Lille",
+      "country": "FR"
+    },
+    "createdAt": "2026-10-23T01:07:48.911Z",
+    "deliveredAt": "2026-10-27T00:07:48.911Z",
+    "total": 129
+  },
+  "assessment": {
+    "item": "brass table lamp with glass shade",
+    "damageType": "unclear",
+    "severity": "minor",
+    "carrierLikelyAtFault": false,
+    "packagingAdequate": null,
+    "evidenceNotes": [
+      "photo 0 is heavily motion-blurred",
+      "lamp shape and open cardboard box visible but no crack detail can be verified"
+    ],
+    "photoQuality": "blurry"
+  },
+  "claim": null,
+  "decision": {
+    "decision": "ask_more_photos",
+    "carrierClaim": false,
+    "confidence": 0.35,
+    "reasons": [
+      "order #1003 was found",
+      "photo 0 is heavily motion-blurred and does not show the claimed crack",
+      "damage cannot be verified so clearer photos are needed before any reship or refund decision",
+      "Guardrail: confidence 0.35 is below 0.7"
+    ],
+    "needsHuman": true,
+    "customerReply": "Hello, thank you for your report. A member of our team is reviewing your case. Could you please send clearer, well-lit photos of the lamp and the packaging so we can check the damage?"
+  },
+  "evidence": [],
+  "document": null,
+  "status": "needs_review",
+  "engine": "muse-spark-1.3",
+  "trace": [
+    {
+      "step": "Engine: muse-spark-1.3",
+      "at": "2026-10-27T15:07:43.875Z"
+    },
+    {
+      "step": "Report received (1 photo(s) attached)",
+      "input": {
+        "orderNumber": "#1003",
+        "language": "en"
+      },
+      "at": "2026-10-27T15:07:43.879Z"
+    },
+    {
+      "step": "Model note (step 1)",
+      "output": "Your lamp photo came through blurry — I'll verify the order and check the image.",
+      "at": "2026-10-27T15:07:48.910Z"
+    },
+    {
+      "step": "Tool: get_order",
+      "tool": "get_order",
+      "input": "{\"orderNumber\":\"#1003\"}",
+      "output": {
+        "found": true,
+        "order": {
+          "id": "#1003",
+          "name": "Ines Moreau",
+          "email": "ines.moreau@example.org",
+          "carrier": "colissimo",
+          "service": "Colissimo Domicile avec signature",
+          "trackingNumber": "6A99001003003",
+          "weightKg": 3.1,
+          "currency": "EUR",
+          "lineItems": [
+            {
+              "sku": "LAMP-BRASS-GLASS",
+              "title": "Brass table lamp with glass shade",
+              "quantity": 1,
+              "unitPrice": 129
+            }
+          ],
+          "shippingAddress": {
+            "city": "Lille",
+            "country": "FR"
+          },
+          "createdAt": "2026-10-23T01:07:48.911Z",
+          "deliveredAt": "2026-10-27T00:07:48.911Z",
+          "total": 129
+        }
+      },
+      "at": "2026-10-27T15:07:48.911Z"
+    },
+    {
+      "step": "Tool: assess_photos",
+      "tool": "assess_photos",
+      "input": "{\"carrierLikelyAtFault\":false,\"damageType\":\"unclear\",\"evidenceNotes\":[\"photo 0 is heavily motion-blurred\",\"lamp shape and open cardboard box visible but no crack detail can be verified\"],\"item\":\"brass table lamp with glass shade\",\"packagingAdequate\":null,\"photoQuality\":\"blurry\",\"severity\":\"minor\"}",
+      "output": {
+        "recorded": true,
+        "assessment": {
+          "item": "brass table lamp with glass shade",
+          "damageType": "unclear",
+          "severity": "minor",
+          "carrierLikelyAtFault": false,
+          "packagingAdequate": null,
+          "evidenceNotes": [
+            "photo 0 is heavily motion-blurred",
+            "lamp shape and open cardboard box visible but no crack detail can be verified"
+          ],
+          "photoQuality": "blurry"
+        }
+      },
+      "at": "2026-10-27T15:07:53.860Z"
+    },
+    {
+      "step": "Guardrail: needsHuman confirmed: confidence 0.35 is below 0.7",
+      "at": "2026-10-27T15:08:00.252Z"
+    },
+    {
+      "step": "Tool: finish_case",
+      "tool": "draft_reply",
+      "input": "{\"carrierClaim\":false,\"confidence\":0.35,\"customerReply\":\"Hello, thank you for your report. A member of our team is reviewing your case. Could you please send clearer, well-lit photos of the lamp and the packaging so we can check the damage?\",\"decision\":\"ask_more_photos\",\"fraudSuspected\":false,\"needsHuman\":true,\"reasons\":[\"order #1003 was found\",\"photo 0 is heavily motion-blurred and does not show the claimed crack\",\"damage cannot be verified so clearer photos are needed before any reship or refund decision\"]}",
+      "output": {
+        "accepted": true,
+        "decision": {
+          "decision": "ask_more_photos",
+          "carrierClaim": false,
+          "confidence": 0.35,
+          "reasons": [
+            "order #1003 was found",
+            "photo 0 is heavily motion-blurred and does not show the claimed crack",
+            "damage cannot be verified so clearer photos are needed before any reship or refund decision",
+            "Guardrail: confidence 0.35 is below 0.7"
+          ],
+          "needsHuman": true,
+          "customerReply": "Hello, thank you for your report. A member of our team is reviewing your case. Could you please send clearer, well-lit photos of the lamp and the packaging so we can check the damage?"
+        },
+        "guardrailAdjustments": [
+          "needsHuman confirmed: confidence 0.35 is below 0.7"
+        ],
+        "next": "Done. Stop calling tools."
+      },
+      "at": "2026-10-27T15:08:00.253Z"
+    },
+    {
+      "step": "Case ready for review: ask_more_photos (needs a human)",
+      "at": "2026-10-27T15:08:00.253Z"
+    }
+  ],
+  "createdAt": "2026-10-27T15:07:43.875Z",
+  "updatedAt": "2026-10-27T15:08:00.253Z",
+  "recorded": {
+    "recordedOn": "2026-10-27"
+  }
+}

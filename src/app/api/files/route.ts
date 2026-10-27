@@ -16,7 +16,8 @@ const CONTENT_TYPES: Record<string, string> = {
 
 /**
  * GET /api/files?p=<path under data/runtime/>: serves uploaded and annotated photos to the
- * case page. Reads only inside data/runtime/ (see resolveRuntimeFile) and only image types.
+ * case page. Reads only inside data/runtime/ and the committed data/showcase/ (see
+ * resolveRuntimeFile) and only image types.
  */
 export async function GET(request: Request): Promise<Response> {
   const requested = new URL(request.url).searchParams.get("p") ?? "";

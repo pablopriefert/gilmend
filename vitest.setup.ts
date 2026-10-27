@@ -13,5 +13,10 @@ const runtimeRoot = mkdtempSync(path.join(os.tmpdir(), "damage-desk-vitest-"));
 process.env.DAMAGE_DESK_RUNTIME_DIR = runtimeRoot;
 afterAll(() => rmSync(runtimeRoot, { recursive: true, force: true }));
 
+// The committed showcase (data/showcase/, six recorded real runs) is layered under every case
+// store. Tests of the store, the routes and the pages assume an empty inbox, so they get a
+// folder that does not exist; the showcase tests point DAMAGE_DESK_SHOWCASE_DIR at the real one.
+process.env.DAMAGE_DESK_SHOWCASE_DIR = path.join(runtimeRoot, "no-showcase");
+
 // Unmount components between tests; a no-op in node-environment tests.
 afterEach(() => cleanup());

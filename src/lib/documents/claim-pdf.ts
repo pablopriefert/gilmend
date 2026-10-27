@@ -7,6 +7,7 @@ import { loadImage, normaliseImage } from "../evidence/image-io";
 import { evidenceForPhotos } from "../evidence/merge";
 import { runtimeDir, safeFileStem, toStoredPath } from "../evidence/runtime-dir";
 import { getCarrierRules } from "../rules/carriers";
+import { persistRuntimeFile } from "../storage/runtime-files";
 import type { CarrierId, CaseRecord, ClaimBasis, ClaimDocument, Evidence } from "../types";
 import { buildClaimEmail, getMerchant } from "./claim-email";
 import {
@@ -451,6 +452,9 @@ export async function buildClaimDocument(
   await mkdir(dir, { recursive: true });
   const file = path.join(dir, `${safeFileStem(caseRecord.id)}.pdf`);
   await writeFile(file, await doc.save());
+  // Copy to the shared store when one is configured (no-op otherwise): the PDF route of
+  // another serverless instance reads it from there.
+  await persistRuntimeFile(file, runtime);
 
   const email = buildClaimEmail(caseRecord, merchant);
   return { pdfPath: toStoredPath(file), emailSubject: email.subject, emailBody: email.body };

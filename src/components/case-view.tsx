@@ -12,7 +12,8 @@ import {
   type RulesView,
 } from "./case-sections";
 import { EngineBadge } from "./engine-badge";
-import { formatDateTime } from "./format";
+import { caseClock, formatDate, formatDateTime } from "./format";
+import { RecordedBadge } from "./recorded-badge";
 import { StatusPill } from "./status-pill";
 
 /**
@@ -45,6 +46,7 @@ export function CaseView({
           </h1>
           <StatusPill status={c.status} />
           <EngineBadge engine={c.engine} />
+          {c.recorded && <RecordedBadge recorded={c.recorded} />}
         </div>
         <p className="mt-1 text-sm text-muted">Reported {formatDateTime(c.report.receivedAt)}</p>
         {c.status === "new" && (
@@ -52,6 +54,13 @@ export function CaseView({
             <strong>The agent has not finished this case.</strong> It is either still running (reload in a
             moment) or was interrupted: the report and the photos are saved, and you can handle the case by
             hand.
+          </p>
+        )}
+        {c.recorded && (
+          <p role="note" data-testid="recorded-note" className="mt-3 rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm text-sky-950">
+            <strong>Recorded run.</strong> This is a real run of Muse Spark 1.3 and SAM 3.1 on the Meta Model API,
+            recorded on {formatDate(`${c.recorded.recordedOn}T12:00:00Z`)} and saved with the code. Nothing here was re-run for this page, and the deadlines are shown as of the recording. The
+            recording itself is read-only: approving, editing or rejecting it stores a copy.
           </p>
         )}
         {c.engine === "demo-mock" && (
@@ -81,7 +90,7 @@ export function CaseView({
           <EvidenceSection message={c.report.message} photos={c.report.photos} evidence={c.evidence} />
           <AssessmentSection assessment={c.assessment} />
           <OrderSection order={c.order} />
-          <ClaimSection claim={c.claim} rules={rules} now={now} />
+          <ClaimSection claim={c.claim} rules={rules} now={caseClock(c, now)} />
           <DocumentSection caseId={c.id} document={c.document} />
           <TraceSection trace={c.trace} />
         </div>
