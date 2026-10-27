@@ -5,6 +5,7 @@ import {
   isRecoverable,
   recoverableThisMonthEur,
   summarizeCases,
+  summarizeRecordedRuns,
 } from "./summary";
 
 const NOW = new Date("2026-10-30T12:00:00.000Z");
@@ -137,5 +138,45 @@ describe("summarizeCases and recorded showcase runs", () => {
       claimsDueThisWeek: 0,
       dueCaseIds: [],
     });
+  });
+});
+
+describe("summarizeRecordedRuns", () => {
+  // As the six recordings of 27 Oct 2026: each is read as of its own run, 3 days before its deadline.
+  const recordedAt = "2026-10-27T15:07:43.875Z";
+  const recorded = (id: string, eur: number, over: Partial<Parameters<typeof fauxCase>[0]> = {}) => ({
+    ...fauxCase({ id, createdAt: recordedAt, claim: { maxCompensationEur: eur, claimDeadline: "2026-10-30T09:00:00.000Z" }, ...over }),
+    recorded: { recordedOn: "2026-10-27" },
+  });
+
+  it("sums what the recorded runs found, to the cent, from the cases themselves", () => {
+    const cases = [recorded("a", 52.9), recorded("b", 25), recorded("c", 250), fauxCase({ id: "live", claim: { maxCompensationEur: 999 } })];
+    expect(summarizeRecordedRuns(cases)).toEqual({ count: 3, recoverableEur: 327.9, asOf: "2026-10-27" });
+  });
+
+  it("reads each run as of its recording: a deadline that passed since does not remove it", () => {
+    // Looked at on 4 Nov the 30 Oct deadline is long gone, the figure is the one of the day of the run.
+    expect(summarizeRecordedRuns([recorded("a", 25)]).recoverableEur).toBe(25);
+  });
+
+  it("leaves out a run that found nothing to claim, an ineligible one and one a visitor rejected", () => {
+    const cases = [
+      recorded("none", 0, { claim: null }),
+      recorded("late", 40, { claim: { eligible: false, maxCompensationEur: 40, claimDeadline: null } }),
+      recorded("no-claim", 40, { carrierClaim: false }),
+      recorded("rejected", 40, { status: "rejected" }),
+      recorded("kept", 25),
+    ];
+    expect(summarizeRecordedRuns(cases)).toMatchObject({ count: 5, recoverableEur: 25 });
+  });
+
+  it("is empty without recorded runs, and dates the figure from the latest recording", () => {
+    expect(summarizeRecordedRuns([fauxCase({ id: "live" })])).toEqual({ count: 0, recoverableEur: 0, asOf: null });
+    const later = { ...recorded("b", 10), recorded: { recordedOn: "2026-10-29" } };
+    expect(summarizeRecordedRuns([recorded("a", 10), later]).asOf).toBe("2026-10-29");
+  });
+
+  it("does not change summarizeCases: the live counter still excludes the recorded runs", () => {
+    expect(summarizeCases([recorded("a", 25)], NOW).recoverableThisMonthEur).toBe(0);
   });
 });

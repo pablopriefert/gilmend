@@ -45,7 +45,7 @@ What has been run live, and what has not (details in [Limitations](#limitations)
 | Muse Image: the six demo photos | Public deployment: not deployed yet |
 | OpenRouter test engine: one real photo call | |
 
-719 tests, `tsc` and `eslint` pass, and `next build` passes.
+753 tests, `tsc` and `eslint` pass, and `next build` passes.
 
 ## The problem
 
@@ -148,9 +148,9 @@ multipart), and the transcript lands in the message box. Details that matter:
 - A clip is capped at 90 s, and several clips can be added to one message.
 - The real transcription returns a signed receipt (HMAC derived from `MODEL_API_KEY`, valid 30
   minutes). The case says "Voice message, transcribed by muse-voice-transcribe-1.0" only when every
-  clip has a valid receipt. Without a key, or on a public deployment without the access code, the
-  endpoint returns a labelled canned transcript and the case says "DEMO MODE, canned transcript":
-  it is never attributed to Muse.
+  clip has a valid receipt. Without a key the endpoint returns a labelled canned transcript and the
+  case says "DEMO MODE, canned transcript": it is never attributed to Muse. On a public deployment
+  the endpoint needs the access code, like a report does.
 - Spoken digits can come back as words ("Order one thousand one"), so the agent is told that a
   verified dictation may contain misheard names and numbers.
 - Voice is off in "Run privately" mode (the audio would go to Meta), and a dictated message cannot
@@ -224,7 +224,7 @@ Environment variables (all listed, empty, in [`.env.example`](.env.example)):
 | `SAM_BASE_URL` | SAM 3.1 endpoint if different from `MODEL_BASE_URL`. |
 | `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_ADMIN_ACCESS_TOKEN` | Optional read-only dev store. Empty means fictitious orders. |
 | `MERCHANT_NAME`, `MERCHANT_ADDRESS`, `MERCHANT_EMAIL` | Merchant identity printed on the claim. |
-| `DAMAGE_DESK_ACCESS_CODE`, `DAMAGE_DESK_REAL_RUNS_PER_DAY` | For a public deployment: a shared code for real engines, voice transcription and approve/edit/reject, and a daily cap of real runs (default 100, counted per instance in memory). |
+| `DAMAGE_DESK_ACCESS_CODE`, `DAMAGE_DESK_REAL_RUNS_PER_DAY` | For a public deployment: a shared code that every new report (demo mode included), every dictation and every approve/edit/reject needs (401 without it, 429 after 10 wrong codes in 10 minutes from one client; use a random code of 16+ characters), and a daily cap of real runs (default 100, counted per instance in memory). |
 | `DAMAGE_DESK_STORAGE` (empty, `file` or `blob`), `BLOB_READ_WRITE_TOKEN` | Case storage: local files (default) or a private Vercel Blob store ([`docs/storage.md`](docs/storage.md)). |
 
 **Demo mode.** Without `MODEL_API_KEY` the app uses a deterministic mock provider and labels every
@@ -293,7 +293,9 @@ edited, nothing re-run to look better). The app lists them next to the cases you
 **Recorded run**, so a fresh clone or deployment is never an empty inbox and a judge sees real
 model output, not the scripted mode. They are read-only: Approve, Edit or Reject on one stores a
 copy and the recording never changes. Their deadlines are shown as of the recording and they are
-left out of the "recoverable this month" counter. Everything in them is fictitious, and a test
+left out of the "recoverable this month" counter, which therefore reads 0 on a fresh deployment; a
+second line, "Recorded runs: EUR 327.90 recoverable (as of 27 Oct 2026)", shows what they found,
+computed from the recordings. Everything in them is fictitious, and a test
 (`src/lib/showcase/audit.ts`) refuses anything else.
 
 ## Deploy to Vercel
@@ -315,8 +317,13 @@ left out of the "recoverable this month" counter. Everything in them is fictitio
    File one report to check the whole flow, and from a second browser open its case.
 
 Do **not** put real customer data on the public URL: the case list, every case page, the photos
-and the claim PDFs are open to anyone with the link. Real runs, voice transcription and
-approve/edit/reject need the access code.
+and the claim PDFs are open to anyone with the link. New reports (demo mode included), voice
+transcription and approve/edit/reject need the access code, so a stranger cannot put anything on
+the page the judges look at; the six recorded runs stay visible to everyone. The code is a shared
+secret in the submission: make it random and at least 16 characters (`openssl rand -base64 18`).
+Nothing caps the number of cases stored by people who hold the code (each report is limited to 30
+per 10 minutes per client), so after a public round purge the store by hand (Vercel dashboard,
+Storage, the Blob store).
 
 ## Limitations
 

@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { fileURLToPath } from "node:url";
+import { pdfFrameHeaders, securityHeaders } from "./src/lib/security-headers";
 
 /** Routes whose server code reads data/showcase at run time (see outputFileTracingIncludes). */
 const SHOWCASE_ROUTES = [
@@ -39,6 +40,15 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/demo-photo": ["./data/photos/**/*"],
     ...Object.fromEntries(SHOWCASE_ROUTES.map((route) => [route, ["./data/showcase/**/*"]])),
+  },
+  // Security headers (explained directive by directive in src/lib/security-headers.ts). The later
+  // rule wins for a key both set: the claim PDF is framed by the case page, so it relaxes the two
+  // framing headers (frame-ancestors 'self', SAMEORIGIN) while everything else keeps the policy.
+  async headers() {
+    return [
+      { source: "/:path*", headers: securityHeaders({ dev: process.env.NODE_ENV === "development" }) },
+      { source: "/api/cases/:id/pdf", headers: pdfFrameHeaders() },
+    ];
   },
   outputFileTracingExcludes: { "/*": ["./data/runtime/**/*", "./tsconfig.tsbuildinfo"] },
   turbopack: {

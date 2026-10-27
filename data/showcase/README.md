@@ -28,7 +28,8 @@ What is in here, and how the app treats it:
   case stores a *copy* in the normal store (`src/lib/store/layered-store.ts`), and that copy
   shadows the recording; the committed files never change.
 - Amounts and deadlines are those of the day of the run (the page shows deadlines "as of the
-  recording"); the "recoverable this month" counter ignores recorded runs.
+  recording"); the "recoverable this month" counter ignores recorded runs (the header shows their own figure on a second line, "Recorded
+  runs: ... recoverable (as of <recording day>)", computed from the recordings).
 - Everything is **fictitious**: the orders are the invented ones of `data/fixtures/orders.json`,
   the e-mail addresses are `example.com/.org/.net` (and the demo merchant's `.example`).
   `src/lib/showcase/audit.ts` refuses a case or PDF holding anything else, a key-like string,

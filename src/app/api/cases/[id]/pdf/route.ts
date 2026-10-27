@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import { buildClaimDocument } from "@/lib/documents/claim-pdf";
 import { getCase, updateCase } from "@/lib/store/cases";
+import { requireAccessCode } from "../../../_lib/access";
 import { errorResponse, failureResponse, isValidCaseId } from "../../../_lib/responses";
 import { resolveRuntimeFile } from "../../../_lib/runtime-files";
 
@@ -27,6 +28,8 @@ export async function GET(request: Request, { params }: RouteContext): Promise<R
       if (!found.decision?.carrierClaim) {
         return errorResponse(404, "no_claim_document", "This case has no carrier claim, so there is no PDF.");
       }
+      const refused = requireAccessCode(request, "The claim PDF of this case is not built yet: building it needs the access code.");
+      if (refused) return refused;
       const document = await buildClaimDocument(found);
       await updateCase(id, { document });
       file = await resolveRuntimeFile(document.pdfPath);

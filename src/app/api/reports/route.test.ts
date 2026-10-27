@@ -270,29 +270,57 @@ describe("POST /api/reports", () => {
 });
 
 describe("POST /api/reports on a public deployment", () => {
-  it("runs a real engine only with the access code, and falls back to labelled demo mode without it", async () => {
+  const CODE = "judges-2026-k7Qm";
+  const withCode = (fields: Record<string, string> = {}, code: string = CODE) =>
+    reportRequest({ fields, headers: { "x-access-code": code } });
+
+  it("takes NO new report without the code, whatever the engine, demo mode included", async () => {
     vi.stubEnv("MODEL_API_KEY", "fake-key-for-test");
-    vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", "judges-2026");
+    vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", CODE);
 
-    const without = await POST(reportRequest({ fields: { engine: "muse-spark-1.3" } }));
-    expect(runAgent.mock.calls[0][1].engine).toBe("demo-mock");
-    expect(await without.json()).toMatchObject({ engine: "demo-mock", fellBack: true, fellBackReason: "access_code" });
-
-    const wrong = await POST(reportRequest({ fields: { engine: "muse-spark-1.3" }, headers: { "x-access-code": "nope" } }));
-    expect((await wrong.json()).fellBackReason).toBe("access_code");
-
-    const right = await POST(
-      reportRequest({ fields: { engine: "muse-spark-1.3" }, headers: { "x-access-code": "judges-2026" } }),
-    );
-    expect(runAgent.mock.calls[2][1].engine).toBe("muse-spark-1.3");
-    expect(await right.json()).toMatchObject({ engine: "muse-spark-1.3", fellBack: false, fellBackReason: null });
+    for (const engine of ["muse-spark-1.3", "open-weights", "openrouter", "demo-mock", ""]) {
+      const res = await POST(reportRequest({ fields: engine ? { engine } : {} }));
+      expect(res.status, engine).toBe(401);
+      const body = await res.json();
+      expect(body.error).toBe("access_code_required");
+      // The message tells the judge what to do, and what stays available without the code.
+      expect(body.message).toMatch(/access code from the submission/);
+      expect(body.message).toMatch(/recorded runs/);
+    }
+    // Nothing was stored or run: no case, no agent call, no photo on disk.
+    expect(runAgent).not.toHaveBeenCalled();
+    expect(saveCase).not.toHaveBeenCalled();
+    expect(existsSync(path.join(runtimeRoot, "uploads"))).toBe(false);
   });
 
-  it("lets demo mode through without any code: the public can try the product for free", async () => {
-    vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", "judges-2026");
-    const res = await POST(reportRequest({ fields: { engine: "demo-mock" } }));
-    expect(res.status).toBe(201);
-    expect(runAgent.mock.calls[0][1].engine).toBe("demo-mock");
+  it("refuses a wrong code the same way", async () => {
+    vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", CODE);
+    const res = await POST(withCode({}, "nope"));
+    expect(res.status).toBe(401);
+    expect((await res.json()).message).toMatch(/not correct/);
+    expect(saveCase).not.toHaveBeenCalled();
+  });
+
+  it("runs the requested engine with the right code", async () => {
+    vi.stubEnv("MODEL_API_KEY", "fake-key-for-test");
+    vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", CODE);
+
+    const right = await POST(withCode({ engine: "muse-spark-1.3" }));
+    expect(right.status).toBe(201);
+    expect(runAgent.mock.calls[0][1].engine).toBe("muse-spark-1.3");
+    expect(await right.json()).toMatchObject({ engine: "muse-spark-1.3", fellBack: false, fellBackReason: null });
+
+    // Demo mode is allowed too, for the person who has the code.
+    const demo = await POST(withCode({ engine: "demo-mock" }));
+    expect(demo.status).toBe(201);
+    expect(runAgent.mock.calls[1][1].engine).toBe("demo-mock");
+  });
+
+  it("is open when no code is configured (local use): nothing changes", async () => {
+    vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", "");
+    expect((await POST(reportRequest())).status).toBe(201);
+    // A header sent for nothing is ignored, and does not count as an attempt.
+    expect((await POST(reportRequest({ headers: { "x-access-code": "whatever" } }))).status).toBe(201);
   });
 
   it("caps real runs per day, then answers in labelled demo mode instead of failing", async () => {
@@ -363,15 +391,16 @@ describe("POST /api/reports, voice note", () => {
 
   it("does not believe the old label alone: a typed message cannot pass for a Muse transcription", async () => {
     vi.stubEnv("MODEL_API_KEY", KEY);
-    // A public deployment with a key and an access code, a request WITHOUT the code: /api/transcribe
-    // would only have answered canned text, so no receipt exists and none can be invented.
+    // A public deployment with a key and an access code, a request WITH the code: whatever the note
+    // says, only a receipt issued by /api/transcribe makes it a Muse transcription, and none can be
+    // invented.
     vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", "judges-2026");
     const forged = JSON.stringify({ durationMs: 5000, demo: false });
     const noReceipt = JSON.stringify({ clips: [{ transcript: SAID, durationMs: 5000 }] });
     const fakeReceipt = JSON.stringify({ clips: [{ transcript: SAID, durationMs: 5000, token: "e30.e30" }] });
     for (const voiceNote of [forged, noReceipt, fakeReceipt]) {
       runAgent.mockClear();
-      const res = await POST(reportRequest({ fields: { voiceNote } }));
+      const res = await POST(reportRequest({ fields: { voiceNote }, headers: { "x-access-code": "judges-2026" } }));
       expect(res.status).toBe(201);
       const note = runAgent.mock.calls[0][0].voiceNote;
       expect(note === undefined || note.demo).toBe(true);

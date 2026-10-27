@@ -59,16 +59,27 @@ describe("POST /api/transcribe, demo mode", () => {
     expect((await res.json()).transcript).toMatch(/^Bonjour/);
   });
 
-  it("on a public deployment, a real key without the access code still falls back to demo mode", async () => {
-    vi.stubEnv("MODEL_API_KEY", "k"); // secret-factice
+  it("on a public deployment, refuses a dictation without the access code, with a real key or none", async () => {
     vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", "judges-2026");
-    const without = await POST(request());
-    const canned = await without.json();
-    expect(canned).toMatchObject({ demo: true, fellBackReason: "access_code" });
-    expect(canned).not.toHaveProperty("voiceReceipt");
-    const wrong = await POST(request({ headers: { "x-access-code": "nope" } }));
-    expect((await wrong.json()).fellBackReason).toBe("access_code");
+    for (const key of ["k", ""]) {
+      vi.stubEnv("MODEL_API_KEY", key); // secret-factice
+      const without = await POST(request());
+      expect(without.status).toBe(401);
+      const body = await without.json();
+      expect(body.error).toBe("access_code_required");
+      expect(body.message).toMatch(/access code from the submission/);
+      expect(body).not.toHaveProperty("transcript");
+      expect(body).not.toHaveProperty("voiceReceipt");
+      const wrong = await POST(request({ headers: { "x-access-code": "nope" } }));
+      expect(wrong.status).toBe(401);
+    }
     expect(transcribeAudio).not.toHaveBeenCalled();
+  });
+
+  it("on a public deployment, the right code gets the labelled canned text when there is no key", async () => {
+    vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", "judges-2026");
+    const res = await POST(request({ headers: { "x-access-code": "judges-2026" } }));
+    expect(await res.json()).toMatchObject({ demo: true, fellBackReason: "no_credentials" });
   });
 });
 

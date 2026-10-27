@@ -16,7 +16,7 @@ import {
   type FieldErrors,
   type ImageKind,
 } from "@/components/report-validation";
-import { accessCodeRequired, hasValidAccessCode } from "../_lib/access";
+import { requireAccessCode } from "../_lib/access";
 import { detectLanguage } from "../_lib/language";
 import { clientKey, rateLimit, realRunsPerDay, takeRealRun } from "../_lib/rate-limit";
 import { errorResponse } from "../_lib/responses";
@@ -60,6 +60,8 @@ function text(form: FormData, key: string): string {
  * "auto") and engine, and 1 to 3 `photos`. Stores the photos under data/runtime/uploads/,
  * runs the agent, saves the resulting case and answers `{ caseId, status, engine }`.
  * Nothing is ever sent to anyone: the case waits in "needs_review" for a human click.
+ * When DAMAGE_DESK_ACCESS_CODE is set (a public deployment) the `x-access-code` header must carry
+ * it, whatever the engine: else 401, and 429 after too many wrong codes.
  */
 export async function POST(request: Request): Promise<Response> {
   const limited =
@@ -71,6 +73,15 @@ export async function POST(request: Request): Promise<Response> {
     res.headers.set("Retry-After", String(limited.retryAfterSeconds));
     return res;
   }
+
+  // On a public deployment (access code set) NO new report is taken without the code, demo mode
+  // included: the case list is public, so an anonymous report would be shown to the judges.
+  // Refused before the body is read. Locally (no code set) this does nothing.
+  const refused = requireAccessCode(
+    request,
+    "Filing a report on this public demo needs the access code from the submission. The recorded runs on the Cases page show the real agent without it.",
+  );
+  if (refused) return refused;
 
   const declaredLength = Number(request.headers.get("content-length") ?? "0");
   if (declaredLength > MAX_BODY_BYTES) {
@@ -130,18 +141,12 @@ export async function POST(request: Request): Promise<Response> {
       "This message was dictated with the Meta Model API, so it cannot run privately. Type it instead, or pick another engine.",
     );
   }
-  // A real engine spends credits or wakes a GPU. On a public deployment (access code set) it
-  // needs the code, and it is capped per day; otherwise the report runs in labelled DEMO MODE.
-  let fellBackReason: "no_credentials" | "access_code" | "daily_limit" | null =
-    engine !== requestedEngine ? "no_credentials" : null;
-  if (engine !== "demo-mock") {
-    if (accessCodeRequired() && !hasValidAccessCode(request)) {
-      engine = "demo-mock";
-      fellBackReason = "access_code";
-    } else if (!takeRealRun(realRunsPerDay())) {
-      engine = "demo-mock";
-      fellBackReason = "daily_limit";
-    }
+  // A real engine spends credits or wakes a GPU: it is capped per day, and beyond the ceiling the
+  // report runs in labelled DEMO MODE. (The access code was checked at the top of the route.)
+  let fellBackReason: "no_credentials" | "daily_limit" | null = engine !== requestedEngine ? "no_credentials" : null;
+  if (engine !== "demo-mock" && !takeRealRun(realRunsPerDay())) {
+    engine = "demo-mock";
+    fellBackReason = "daily_limit";
   }
 
   const languageField = text(form, "language").trim().toLowerCase();
@@ -242,7 +247,7 @@ export async function POST(request: Request): Promise<Response> {
       engine: saved.engine,
       requestedEngine,
       // True when the server could not honour the requested engine (no key / no endpoint,
-      // no access code on a public deployment, daily ceiling of real runs reached).
+      // daily ceiling of real runs reached).
       fellBack: saved.engine !== requestedEngine,
       fellBackReason: saved.engine !== requestedEngine ? fellBackReason : null,
     },

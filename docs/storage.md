@@ -77,7 +77,12 @@ The deployed app has no accounts. Everything the pages show is readable by anyon
   says so).
 - **Not public:** the Meta key, the access code, the storage token, `.env.local`. They are only read on
   the server and never sent to the browser. Approving, editing or rejecting a case needs the access
-  code when `DAMAGE_DESK_ACCESS_CODE` is set; so does a real (paid) run.
+  code when `DAMAGE_DESK_ACCESS_CODE` is set; so does every new report (demo mode included, so that a
+  stranger cannot put text and photos on the page the judges look at) and every dictation. Wrong codes
+  are counted per client (10 per 10 minutes, then 429). The six recorded runs stay readable by anyone.
+- **Not capped:** the number of cases stored by people who have the code. Each client is limited to 30
+  reports per 10 minutes and real runs to `DAMAGE_DESK_REAL_RUNS_PER_DAY`, but nothing deletes or hides
+  old cases: after a public round, empty the Blob store by hand.
 - **The store itself must be private.** Objects are only reachable through the app's own routes, which
   serve images and PDFs by path (`/api/files`, `/api/cases/[id]/pdf`). A public blob URL would make every
   case readable without going through the app, and its listing could be crawled. Use a private store.

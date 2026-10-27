@@ -48,7 +48,8 @@ lines that no longer hold.
    250.00), and the number of claims due this week depends on the clock because the demo reports
    are timed relative to "now". Re-run `npm run demo` shortly before filming so the deadlines are
    fresh. The recorded runs are left out of the counter by design: on a deployment with only
-   recorded runs it reads zero.
+   recorded runs it reads zero, and a second, labelled line under it ("Recorded runs: EUR 327.90
+   recoverable (as of 27 Oct 2026)") gives their figure, computed from the recordings.
 6. Fictitious customers and orders only. No real tracking labels, addresses or people anywhere.
 
 ## Shot list

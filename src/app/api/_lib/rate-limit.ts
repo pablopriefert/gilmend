@@ -23,6 +23,30 @@ export function rateLimit(
   return { ok: true, retryAfterSeconds: 0 };
 }
 
+/**
+ * Whether `key` already used up `limit` hits in the window, WITHOUT counting this call: the
+ * caller records a hit (recordHit) only for what it wants to count. Used for the failed
+ * access-code attempts, where a successful request must not use up the allowance.
+ */
+export function isRateLimited(
+  key: string,
+  { limit, windowMs, now = Date.now() }: { limit: number; windowMs: number; now?: number },
+): { limited: boolean; retryAfterSeconds: number } {
+  const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
+  if (recent.length < limit) return { limited: false, retryAfterSeconds: 0 };
+  return { limited: true, retryAfterSeconds: Math.max(1, Math.ceil((recent[0] + windowMs - now) / 1000)) };
+}
+
+/** Count one hit for `key` (see isRateLimited). */
+export function recordHit(key: string, { windowMs, now = Date.now() }: { windowMs: number; now?: number }): void {
+  const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
+  recent.push(now);
+  hits.set(key, recent);
+  if (hits.size > 5000) {
+    for (const [k, v] of hits) if (v.every((t) => now - t >= windowMs)) hits.delete(k);
+  }
+}
+
 export function resetRateLimits(): void {
   hits.clear();
   daily.day = "";
