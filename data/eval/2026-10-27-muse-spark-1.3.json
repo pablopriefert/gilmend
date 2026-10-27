@@ -1,0 +1,917 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-27T17:43:03.977Z",
+  "engine": "muse-spark-1.3",
+  "model": "muse-spark-1.3",
+  "engineLabel": "Muse Spark 1.3 (Meta Model API)",
+  "runsPerCase": 3,
+  "command": "npm run eval -- --runs 3",
+  "commit": "0eab783",
+  "dirty": false,
+  "pricing": {
+    "inputPerMillionTokensUsd": 1.25,
+    "outputPerMillionTokensUsd": 4.25,
+    "samPerRequestUsd": 0.0025,
+    "source": "Meta Model API pricing page (dev.meta.ai), read 27 Oct 2026; cache discounts ignored"
+  },
+  "estimatedCostUsd": 1.1804137499999998,
+  "cases": [
+    {
+      "id": "demo-1-vase-broken",
+      "title": "Broken vase (Colissimo): reship and claim the carrier",
+      "expected": {
+        "decision": "reship",
+        "acceptableDecisions": [
+          "reship"
+        ],
+        "carrierClaim": true,
+        "needsHuman": false,
+        "claimEligible": true
+      },
+      "runs": [
+        {
+          "run": 1,
+          "failure": null,
+          "completed": true,
+          "decision": "reship",
+          "carrierClaim": true,
+          "needsHuman": false,
+          "claimEligible": true,
+          "claimAmountEur": 52.9,
+          "claimDocument": true,
+          "confidence": 0.95,
+          "guardrails": [],
+          "reasons": [
+            "Order #1001 found for Camille Laurent with Colissimo tracking matching the label visible in the photo",
+            "Photo shows total breakage of the vase in several pieces with adequate packaging visible",
+            "compute_claim returned eligible=true with carrier likely at fault, so reship with carrier claim"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 2,
+            "concepts": [
+              "ceramic vase pieces"
+            ],
+            "calledByCode": false,
+            "requests": 1
+          },
+          "durationMs": 29730,
+          "modelCalls": 7,
+          "toolCalls": 7,
+          "usage": {
+            "promptTokens": 50851,
+            "completionTokens": 2445,
+            "totalTokens": 53296,
+            "cachedTokens": 18771,
+            "callsWithUsage": 7
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        },
+        {
+          "run": 2,
+          "failure": null,
+          "completed": true,
+          "decision": "reship",
+          "carrierClaim": true,
+          "needsHuman": false,
+          "claimEligible": true,
+          "claimAmountEur": 52.9,
+          "claimDocument": true,
+          "confidence": 0.95,
+          "guardrails": [],
+          "reasons": [
+            "Order #1001 found for Camille Laurent, carrier Colissimo, tracking 6A99001001001, delivered 2026-10-26T21:45:56.003Z with item Hand-thrown stoneware vase, tall value 58 EUR.",
+            "Photo shows white vase shattered into many fragments in box with packing paper, severity total, photoQuality ok, carrier likely at fault.",
+            "compute_claim returned eligible=true, maximum compensation 52.90 EUR (23 EUR/kg x 2.3 kg = 52.90 EUR, cap 690.00 EUR), reserve closes 2026-10-29T21:45:56.003Z, claim must be filed by 2027-10-22T21:45:56.003Z."
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 2,
+            "concepts": [
+              "ceramic vase pieces"
+            ],
+            "calledByCode": false,
+            "requests": 1
+          },
+          "durationMs": 32495,
+          "modelCalls": 7,
+          "toolCalls": 7,
+          "usage": {
+            "promptTokens": 51022,
+            "completionTokens": 3521,
+            "totalTokens": 54543,
+            "cachedTokens": 30901,
+            "callsWithUsage": 7
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        },
+        {
+          "run": 3,
+          "failure": null,
+          "completed": true,
+          "decision": "reship",
+          "carrierClaim": true,
+          "needsHuman": false,
+          "claimEligible": true,
+          "claimAmountEur": 52.9,
+          "claimDocument": true,
+          "confidence": 0.92,
+          "guardrails": [],
+          "reasons": [
+            "Order #1001 found for Camille Laurent, carrier Colissimo",
+            "Photo shows white ceramic vase in many fragments inside box with packing paper, severity total",
+            "Packaging appears adequate and damage looks like transport damage",
+            "Tracking label visible on box matches order tracking number"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 2,
+            "concepts": [
+              "ceramic vase pieces"
+            ],
+            "calledByCode": false,
+            "requests": 1
+          },
+          "durationMs": 25312,
+          "modelCalls": 7,
+          "toolCalls": 7,
+          "usage": {
+            "promptTokens": 50709,
+            "completionTokens": 2776,
+            "totalTokens": 53485,
+            "cachedTokens": 44695,
+            "callsWithUsage": 7
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "demo-2-carton-crushed",
+      "title": "Crushed carton, product intact: no claim",
+      "expected": {
+        "decision": "no_action",
+        "acceptableDecisions": [
+          "no_action"
+        ],
+        "carrierClaim": false,
+        "needsHuman": false,
+        "claimEligible": false
+      },
+      "runs": [
+        {
+          "run": 1,
+          "failure": null,
+          "completed": true,
+          "decision": "no_action",
+          "carrierClaim": false,
+          "needsHuman": false,
+          "claimEligible": false,
+          "claimAmountEur": null,
+          "claimDocument": false,
+          "confidence": 0.95,
+          "guardrails": [],
+          "reasons": [
+            "Order #1002 found for Hugo Bernard via Chronopost",
+            "Photo shows crushed corner of outer cardboard box",
+            "Customer confirms print and frame look fine after opening and framed print appears intact in photo",
+            "No real product damage so no reshipment, refund or carrier claim"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 1,
+            "concepts": [
+              "torn cardboard"
+            ],
+            "calledByCode": true,
+            "requests": 1
+          },
+          "durationMs": 31586,
+          "modelCalls": 4,
+          "toolCalls": 4,
+          "usage": {
+            "promptTokens": 26476,
+            "completionTokens": 4394,
+            "totalTokens": 30870,
+            "cachedTokens": 12258,
+            "callsWithUsage": 4
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        },
+        {
+          "run": 2,
+          "failure": null,
+          "completed": true,
+          "decision": "no_action",
+          "carrierClaim": false,
+          "needsHuman": false,
+          "claimEligible": false,
+          "claimAmountEur": null,
+          "claimDocument": false,
+          "confidence": 0.95,
+          "guardrails": [],
+          "reasons": [
+            "Order #1002 found for Hugo Bernard",
+            "Photo shows crushed box corner but framed print behind appears intact",
+            "Customer confirms print and frame look fine - no product damage to reship or refund"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 1,
+            "concepts": [
+              "torn cardboard"
+            ],
+            "calledByCode": false,
+            "requests": 1
+          },
+          "durationMs": 21798,
+          "modelCalls": 4,
+          "toolCalls": 4,
+          "usage": {
+            "promptTokens": 25735,
+            "completionTokens": 2767,
+            "totalTokens": 28502,
+            "cachedTokens": 12258,
+            "callsWithUsage": 4
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        },
+        {
+          "run": 3,
+          "failure": null,
+          "completed": true,
+          "decision": "no_action",
+          "carrierClaim": false,
+          "needsHuman": false,
+          "claimEligible": false,
+          "claimAmountEur": null,
+          "claimDocument": false,
+          "confidence": 0.92,
+          "guardrails": [],
+          "reasons": [
+            "Order 1002 found for Hugo Bernard",
+            "Customer states print and frame look fine after opening",
+            "Photo shows crushed box corner but framed print appears intact",
+            "No real product damage so no reship, refund or carrier claim"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 1,
+            "concepts": [
+              "torn cardboard"
+            ],
+            "calledByCode": true,
+            "requests": 1
+          },
+          "durationMs": 28784,
+          "modelCalls": 4,
+          "toolCalls": 4,
+          "usage": {
+            "promptTokens": 26473,
+            "completionTokens": 4340,
+            "totalTokens": 30813,
+            "cachedTokens": 18003,
+            "callsWithUsage": 4
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "demo-3-photo-blurry",
+      "title": "Blurry photo: ask for another one",
+      "expected": {
+        "decision": "ask_more_photos",
+        "acceptableDecisions": [
+          "ask_more_photos"
+        ],
+        "carrierClaim": false,
+        "needsHuman": false,
+        "claimEligible": false
+      },
+      "runs": [
+        {
+          "run": 1,
+          "failure": null,
+          "completed": true,
+          "decision": "ask_more_photos",
+          "carrierClaim": false,
+          "needsHuman": true,
+          "claimEligible": false,
+          "claimAmountEur": null,
+          "claimDocument": false,
+          "confidence": 0.9,
+          "guardrails": [],
+          "reasons": [
+            "Order #1003 found",
+            "Photo 0 is heavily motion-blurred and shows no verifiable crack or damage",
+            "Damage cannot be confirmed without clearer photos"
+          ],
+          "sam": {
+            "method": "none",
+            "regions": 0,
+            "concepts": [],
+            "calledByCode": false,
+            "requests": 0
+          },
+          "durationMs": 23311,
+          "modelCalls": 3,
+          "toolCalls": 3,
+          "usage": {
+            "promptTokens": 18812,
+            "completionTokens": 3869,
+            "totalTokens": 22681,
+            "cachedTokens": 0,
+            "callsWithUsage": 3
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": false,
+            "claimEligible": true,
+            "all": false
+          }
+        },
+        {
+          "run": 2,
+          "failure": null,
+          "completed": true,
+          "decision": "ask_more_photos",
+          "carrierClaim": false,
+          "needsHuman": false,
+          "claimEligible": false,
+          "claimAmountEur": null,
+          "claimDocument": false,
+          "confidence": 0.9,
+          "guardrails": [],
+          "reasons": [
+            "Order #1003 was found",
+            "Photo 0 is heavily motion-blurred and does not show any crack or damage detail",
+            "Damage cannot be confirmed without clearer photos"
+          ],
+          "sam": {
+            "method": "none",
+            "regions": 0,
+            "concepts": [],
+            "calledByCode": false,
+            "requests": 0
+          },
+          "durationMs": 16690,
+          "modelCalls": 3,
+          "toolCalls": 3,
+          "usage": {
+            "promptTokens": 18818,
+            "completionTokens": 2447,
+            "totalTokens": 21265,
+            "cachedTokens": 6001,
+            "callsWithUsage": 3
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        },
+        {
+          "run": 3,
+          "failure": null,
+          "completed": true,
+          "decision": "ask_more_photos",
+          "carrierClaim": false,
+          "needsHuman": false,
+          "claimEligible": false,
+          "claimAmountEur": null,
+          "claimDocument": false,
+          "confidence": 0.9,
+          "guardrails": [],
+          "reasons": [
+            "photo 0 is severely motion-blurred and shows no verifiable crack or damage",
+            "order #1003 exists but damage cannot be confirmed from this photo",
+            "clearer photos are needed before any reship or claim decision"
+          ],
+          "sam": {
+            "method": "none",
+            "regions": 0,
+            "concepts": [],
+            "calledByCode": false,
+            "requests": 0
+          },
+          "durationMs": 24071,
+          "modelCalls": 3,
+          "toolCalls": 3,
+          "usage": {
+            "promptTokens": 18835,
+            "completionTokens": 3836,
+            "totalTokens": 22671,
+            "cachedTokens": 12130,
+            "callsWithUsage": 3
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "demo-4-opened-missing",
+      "title": "Parcel opened at the relay, item missing (Mondial Relay, 72 h window)",
+      "expected": {
+        "decision": "reship",
+        "acceptableDecisions": [
+          "reship",
+          "refund"
+        ],
+        "carrierClaim": true,
+        "needsHuman": false,
+        "claimEligible": true
+      },
+      "runs": [
+        {
+          "run": 1,
+          "failure": null,
+          "completed": true,
+          "decision": "reship",
+          "carrierClaim": true,
+          "needsHuman": false,
+          "claimEligible": true,
+          "claimAmountEur": 25,
+          "claimDocument": true,
+          "confidence": 0.92,
+          "guardrails": [],
+          "reasons": [
+            "Commande #1004 retrouvée : set 4 tasses + set 4 soucoupes, transporteur Mondial Relay, suivi 99100404.",
+            "Photo ok : carton ouvert avec scotch déchiré, 4 tasses présentes, calage des soucoupes vide.",
+            "Client déclare avoir refusé le colis au point relais comme exigé par le transporteur.",
+            "compute_claim eligible=true : dommage documenté, cause transporteur probable, signalement dans le délai de 72h, compensation max 25.00 EUR, réclamation à déposer avant 2026-10-29T11:44:28.607Z."
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 5,
+            "concepts": [
+              "torn cardboard"
+            ],
+            "calledByCode": false,
+            "requests": 1
+          },
+          "durationMs": 27679,
+          "modelCalls": 7,
+          "toolCalls": 7,
+          "usage": {
+            "promptTokens": 50944,
+            "completionTokens": 2589,
+            "totalTokens": 53533,
+            "cachedTokens": 22468,
+            "callsWithUsage": 7
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        },
+        {
+          "run": 2,
+          "failure": null,
+          "completed": true,
+          "decision": "reship",
+          "carrierClaim": true,
+          "needsHuman": false,
+          "claimEligible": true,
+          "claimAmountEur": 25,
+          "claimDocument": true,
+          "confidence": 0.9,
+          "guardrails": [],
+          "reasons": [
+            "Order #1004 found for Mondial Relay tracking 99100404 with missing saucers set value 36.00 EUR",
+            "Photos show opened parcel with torn tape and 4 empty cavities where saucers should be, severity major, carrier likely at fault",
+            "Customer reported 25.9 h after delivery inside 72 h reserve window and refused parcel at relay as required",
+            "compute_claim eligible=true, maximum compensation 25.00 EUR, claim must be filed by 2026-10-29T11:47:06.988Z"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 5,
+            "concepts": [
+              "open cardboard box",
+              "torn cardboard"
+            ],
+            "calledByCode": false,
+            "requests": 2
+          },
+          "durationMs": 28952,
+          "modelCalls": 7,
+          "toolCalls": 7,
+          "usage": {
+            "promptTokens": 50605,
+            "completionTokens": 2194,
+            "totalTokens": 52799,
+            "cachedTokens": 29365,
+            "callsWithUsage": 7
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        },
+        {
+          "run": 3,
+          "failure": null,
+          "completed": true,
+          "decision": "reship",
+          "carrierClaim": true,
+          "needsHuman": false,
+          "claimEligible": true,
+          "claimAmountEur": 25,
+          "claimDocument": true,
+          "confidence": 0.9,
+          "guardrails": [],
+          "reasons": [
+            "Order #1004 found for Stoneware espresso cups, set of 4 and Matching saucers, set of 4 with tracking 99100404 matching photo note 99100404",
+            "Photo shows open box with torn tape and 4 wrapped cups with 4 empty cavities, documented as missing_item major",
+            "Customer wrote they refused the parcel at the relay, as required by Mondial Relay (Offre Start)",
+            "Claim eligible per compute_claim with maximum compensation 25.00 EUR and claim deadline 2026-10-29T11:49:44.883Z"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 5,
+            "concepts": [
+              "torn cardboard"
+            ],
+            "calledByCode": false,
+            "requests": 1
+          },
+          "durationMs": 27817,
+          "modelCalls": 7,
+          "toolCalls": 7,
+          "usage": {
+            "promptTokens": 50519,
+            "completionTokens": 3824,
+            "totalTokens": 54343,
+            "cachedTokens": 45463,
+            "callsWithUsage": 7
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "demo-5-expensive-escalation",
+      "title": "Expensive item: hand over to a human",
+      "expected": {
+        "decision": "refund",
+        "acceptableDecisions": [
+          "refund",
+          "reship"
+        ],
+        "carrierClaim": true,
+        "needsHuman": true,
+        "claimEligible": true
+      },
+      "runs": [
+        {
+          "run": 1,
+          "failure": null,
+          "completed": true,
+          "decision": "reship",
+          "carrierClaim": true,
+          "needsHuman": true,
+          "claimEligible": true,
+          "claimAmountEur": 250,
+          "claimDocument": true,
+          "confidence": 0.85,
+          "guardrails": [
+            "needsHuman confirmed: order value is above 300 EUR"
+          ],
+          "reasons": [
+            "Order #1005 found for Studio wireless headphones, delivered 2026-10-26T19:44:56.287Z via Chronopost",
+            "Photo shows major damage: left ear cup cracked open and hinge bent, with dented box and label XW99001005ITS",
+            "Damage reported 19.0 h after delivery, inside the 72 h reserve window (closes 2026-10-29T19:44:56.287Z)",
+            "Maximum compensation 250.00 EUR under Chronopost (professional terms), claim must be filed by 2026-10-29T19:44:56.287Z"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 1,
+            "concepts": [
+              "headphones"
+            ],
+            "calledByCode": false,
+            "requests": 2
+          },
+          "durationMs": 31173,
+          "modelCalls": 7,
+          "toolCalls": 7,
+          "usage": {
+            "promptTokens": 50155,
+            "completionTokens": 2577,
+            "totalTokens": 52732,
+            "cachedTokens": 27204,
+            "callsWithUsage": 7
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        },
+        {
+          "run": 2,
+          "failure": null,
+          "completed": true,
+          "decision": "reship",
+          "carrierClaim": true,
+          "needsHuman": true,
+          "claimEligible": true,
+          "claimAmountEur": 250,
+          "claimDocument": true,
+          "confidence": 0.9,
+          "guardrails": [
+            "needsHuman confirmed: order value is above 300 EUR"
+          ],
+          "reasons": [
+            "Order #1005 found for Studio wireless headphones via Chronopost",
+            "Photo shows shattered left ear cup and bent hinge with dented box",
+            "Carrier likely at fault and claim assessed as eligible",
+            "High order value requires human review before reshipment"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 1,
+            "concepts": [
+              "black headphones"
+            ],
+            "calledByCode": false,
+            "requests": 2
+          },
+          "durationMs": 28625,
+          "modelCalls": 7,
+          "toolCalls": 7,
+          "usage": {
+            "promptTokens": 49781,
+            "completionTokens": 2839,
+            "totalTokens": 52620,
+            "cachedTokens": 40358,
+            "callsWithUsage": 7
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        },
+        {
+          "run": 3,
+          "failure": null,
+          "completed": true,
+          "decision": "reship",
+          "carrierClaim": true,
+          "needsHuman": true,
+          "claimEligible": true,
+          "claimAmountEur": 250,
+          "claimDocument": true,
+          "confidence": 0.92,
+          "guardrails": [
+            "needsHuman confirmed: order value is above 300 EUR"
+          ],
+          "reasons": [
+            "Order #1005 found for Studio wireless headphones, total 349 EUR, delivered 2026-10-26T19:50:12.700Z",
+            "Photos show major broken_product: left ear cup cracked open with bent hinge, box dented; tracking XW990010051TS visible matches order",
+            "Carrier likely at fault and claim eligible with max 250 EUR, deadline 2026-10-29T19:50:12.700Z",
+            "High order value 349 EUR requires human approval before reshipment"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 1,
+            "concepts": [
+              "black headphones"
+            ],
+            "calledByCode": false,
+            "requests": 2
+          },
+          "durationMs": 30471,
+          "modelCalls": 7,
+          "toolCalls": 7,
+          "usage": {
+            "promptTokens": 49829,
+            "completionTokens": 3181,
+            "totalTokens": 53010,
+            "cachedTokens": 32565,
+            "callsWithUsage": 7
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "demo-6-late-report",
+      "title": "Reported too late: refund, no carrier claim possible",
+      "expected": {
+        "decision": "refund",
+        "acceptableDecisions": [
+          "refund",
+          "reship"
+        ],
+        "carrierClaim": false,
+        "needsHuman": false,
+        "claimEligible": false
+      },
+      "runs": [
+        {
+          "run": 1,
+          "failure": null,
+          "completed": true,
+          "decision": "refund",
+          "carrierClaim": false,
+          "needsHuman": false,
+          "claimEligible": false,
+          "claimAmountEur": null,
+          "claimDocument": false,
+          "confidence": 0.9,
+          "guardrails": [],
+          "reasons": [
+            "Order #1006 exists for Thomas Garnier delivered on 2026-10-18T17:45:27.460Z via Chronopost",
+            "Photo shows glass water carafe with major crack from rim down neck, photoQuality ok",
+            "compute_claim returned eligible=false as reserve deadline 2026-10-21T17:45:27.460Z has passed so no carrier claim is possible",
+            "Damage shown with no carrier recourse: refund applies"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 1,
+            "concepts": [
+              "glass carafe"
+            ],
+            "calledByCode": false,
+            "requests": 2
+          },
+          "durationMs": 28543,
+          "modelCalls": 6,
+          "toolCalls": 6,
+          "usage": {
+            "promptTokens": 40579,
+            "completionTokens": 3177,
+            "totalTokens": 43756,
+            "cachedTokens": 18899,
+            "callsWithUsage": 6
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        },
+        {
+          "run": 2,
+          "failure": null,
+          "completed": true,
+          "decision": "refund",
+          "carrierClaim": false,
+          "needsHuman": false,
+          "claimEligible": false,
+          "claimAmountEur": null,
+          "claimDocument": false,
+          "confidence": 0.9,
+          "guardrails": [],
+          "reasons": [
+            "Photo shows broken_product with major severity on the carafe, photo quality ok",
+            "Order #1006 exists with Chronopost carrier",
+            "compute_claim returned eligible=false so no carrier claim is possible, reshipping cannot be recovered",
+            "Customer did not ask for a specific remedy, refund is appropriate when carrier claim is no longer possible"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 1,
+            "concepts": [
+              "glass carafe"
+            ],
+            "calledByCode": false,
+            "requests": 2
+          },
+          "durationMs": 22147,
+          "modelCalls": 6,
+          "toolCalls": 6,
+          "usage": {
+            "promptTokens": 40623,
+            "completionTokens": 2587,
+            "totalTokens": 43210,
+            "cachedTokens": 21316,
+            "callsWithUsage": 6
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        },
+        {
+          "run": 3,
+          "failure": null,
+          "completed": true,
+          "decision": "refund",
+          "carrierClaim": false,
+          "needsHuman": false,
+          "claimEligible": false,
+          "claimAmountEur": null,
+          "claimDocument": false,
+          "confidence": 0.85,
+          "guardrails": [],
+          "reasons": [
+            "Order #1006 found for Thomas Garnier, photo shows glass water carafe with major crack along neck",
+            "compute_claim returned eligible=false as carrier claim deadline has passed so no carrier claim is possible",
+            "Damage is shown and customer reported late unpacking, reshipping at merchant cost without carrier recourse makes refund the appropriate goodwill gesture"
+          ],
+          "sam": {
+            "method": "sam-3.1",
+            "regions": 1,
+            "concepts": [
+              "glass carafe"
+            ],
+            "calledByCode": false,
+            "requests": 2
+          },
+          "durationMs": 24881,
+          "modelCalls": 6,
+          "toolCalls": 6,
+          "usage": {
+            "promptTokens": 40525,
+            "completionTokens": 2237,
+            "totalTokens": 42762,
+            "cachedTokens": 32550,
+            "callsWithUsage": 6
+          },
+          "matches": {
+            "decision": true,
+            "carrierClaim": true,
+            "needsHuman": true,
+            "claimEligible": true,
+            "all": true
+          }
+        }
+      ]
+    }
+  ]
+}
