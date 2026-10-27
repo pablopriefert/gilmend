@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { after } from "next/server";
+import {
+  NDJSON_CONTENT_TYPE,
+  type AgentEventSink,
+  type RunOutcomeFields,
+  type StreamEvent,
+} from "@/lib/agent/events";
 import { runAgent } from "@/lib/agent/run-agent";
 import { resolveEngine } from "@/lib/config";
 import { parseVoiceNote } from "@/lib/voice/note";
@@ -211,46 +218,174 @@ export async function POST(request: Request): Promise<Response> {
     return errorResponse(500, "storage_failed", "Could not store the report on the server.");
   }
 
-  let result: CaseRecord;
-  try {
-    result = await runAgent(report, { engine, caseId });
-  } catch (err) {
-    // runAgent is meant never to throw; if it does, keep the report as a "new" case a human
-    // can open, with the failure on the trace.
-    console.error("[gilmend] agent run failed:", err instanceof Error ? err.message : err);
-    const failedAt = new Date().toISOString();
+  // What the page needs to know about the engine, whatever the answer format.
+  const engineFields = (actual: Engine) => ({
+    engine: actual,
+    requestedEngine,
+    // True when the server could not honour the requested engine (no key / no endpoint,
+    // daily ceiling of real runs reached).
+    fellBack: actual !== requestedEngine,
+    fellBackReason: actual !== requestedEngine ? fellBackReason : null,
+  });
+
+  /**
+   * The run itself, identical for both answer formats: agent, then save, never throwing. `onEvent`
+   * is given only to a streaming client; without it runAgent is called exactly as before.
+   */
+  const run = async (onEvent?: AgentEventSink): Promise<RunResult> => {
+    let result: CaseRecord;
     try {
-      await saveCase({
-        ...pending,
-        trace: [...pending.trace, { step: "The agent run failed: report stored without an investigation.", at: failedAt }],
-        updatedAt: failedAt,
-      });
-    } catch {
-      // The store went away between the two writes: the first save still holds the report.
+      result = await runAgent(report, { engine, caseId, ...(onEvent ? { onEvent } : {}) });
+    } catch (err) {
+      // runAgent is meant never to throw; if it does, keep the report as a "new" case a human
+      // can open, with the failure on the trace.
+      console.error("[gilmend] agent run failed:", err instanceof Error ? err.message : err);
+      const failedAt = new Date().toISOString();
+      try {
+        await saveCase({
+          ...pending,
+          trace: [...pending.trace, { step: "The agent run failed: report stored without an investigation.", at: failedAt }],
+          updatedAt: failedAt,
+        });
+      } catch {
+        // The store went away between the two writes: the first save still holds the report.
+      }
+      return {
+        ok: false,
+        status: 502,
+        code: "agent_failed",
+        message: "The agent could not process this report.",
+        extra: { caseId },
+      };
     }
-    return errorResponse(502, "agent_failed", "The agent could not process this report.", { caseId });
+
+    // runAgent may or may not persist; saving is idempotent (insert or replace by id).
+    try {
+      return { ok: true, saved: await saveCase(result) };
+    } catch (err) {
+      console.error("[gilmend] could not save the case:", err instanceof Error ? err.message : err);
+      return {
+        ok: false,
+        status: 500,
+        code: "storage_failed",
+        message: "The case was processed but could not be saved.",
+        extra: {},
+      };
+    }
+  };
+
+  if (!wantsStream(request)) {
+    const outcome = await run();
+    if (!outcome.ok) return errorResponse(outcome.status, outcome.code, outcome.message, outcome.extra);
+    return Response.json(
+      { caseId: outcome.saved.id, status: outcome.saved.status, ...engineFields(outcome.saved.engine) },
+      { status: 201, headers: { "Cache-Control": "no-store" } },
+    );
   }
 
-  // runAgent may or may not persist; saving is idempotent (insert or replace by id).
-  let saved: CaseRecord;
-  try {
-    saved = await saveCase(result);
-  } catch (err) {
-    console.error("[gilmend] could not save the case:", err instanceof Error ? err.message : err);
-    return errorResponse(500, "storage_failed", "The case was processed but could not be saved.");
-  }
+  return streamRun({ caseId, engineAtStart: engine, engineFields, run });
+}
 
-  return Response.json(
-    {
-      caseId: saved.id,
-      status: saved.status,
-      engine: saved.engine,
-      requestedEngine,
-      // True when the server could not honour the requested engine (no key / no endpoint,
-      // daily ceiling of real runs reached).
-      fellBack: saved.engine !== requestedEngine,
-      fellBackReason: saved.engine !== requestedEngine ? fellBackReason : null,
+type RunResult =
+  | { ok: true; saved: CaseRecord }
+  | { ok: false; status: number; code: string; message: string; extra: Record<string, unknown> };
+
+/** The client asks for progress with `Accept: application/x-ndjson` (or `?stream=1`); else the JSON answer. */
+function wantsStream(request: Request): boolean {
+  if ((request.headers.get("accept") ?? "").toLowerCase().includes(NDJSON_CONTENT_TYPE)) return true;
+  return new URL(request.url).searchParams.get("stream") === "1";
+}
+
+// Idle proxies cut a connection that says nothing for a while, and one model turn can take 45 s.
+const PING_EVERY_MS = 10_000;
+
+/**
+ * Answer with NDJSON (one JSON object per line, see StreamEvent): `accepted`, then the agent's
+ * events as they happen, then `done` (or `error`). The case is saved exactly as in the JSON
+ * answer, BEFORE `done` is sent, and `done` carries its id. If the browser leaves (a closed tab, a
+ * dropped connection) the run is not interrupted: it finishes and is saved, only the sending stops.
+ */
+function streamRun({
+  caseId,
+  engineAtStart,
+  engineFields,
+  run,
+}: {
+  caseId: string;
+  engineAtStart: Engine;
+  engineFields: (actual: Engine) => Omit<RunOutcomeFields, "caseId">;
+  run: (onEvent: AgentEventSink) => Promise<RunResult>;
+}): Response {
+  const encoder = new TextEncoder();
+  const began = Date.now();
+  let open = true;
+  let ping: ReturnType<typeof setInterval> | undefined;
+  let controllerRef: ReadableStreamDefaultController<Uint8Array> | undefined;
+
+  const send = (event: StreamEvent) => {
+    if (!open || !controllerRef) return;
+    try {
+      controllerRef.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+    } catch {
+      // The reader is gone: stop sending, keep running.
+      open = false;
+    }
+  };
+  const endStream = () => {
+    clearInterval(ping);
+    if (!open) return;
+    open = false;
+    try {
+      controllerRef?.close();
+    } catch {
+      // Already closed by the reader.
+    }
+  };
+
+  let finished: Promise<void> = Promise.resolve();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controllerRef = controller;
+      send({ type: "accepted", t: 0, caseId, ...engineFields(engineAtStart) });
+      ping = setInterval(() => send({ type: "ping", t: Date.now() - began }), PING_EVERY_MS);
+      ping.unref?.();
+      finished = run((event) => send(event))
+        .then((outcome) => {
+          if (outcome.ok) {
+            send({ type: "done", t: Date.now() - began, caseId: outcome.saved.id, status: outcome.saved.status, ...engineFields(outcome.saved.engine) });
+          } else {
+            // The report was stored as "new" before the run, so its id is always worth giving.
+            send({ type: "error", t: Date.now() - began, code: outcome.code, message: outcome.message, caseId });
+          }
+        })
+        .catch((err) => {
+          console.error("[gilmend] streamed run failed:", err instanceof Error ? err.message : err);
+          send({ type: "error", t: Date.now() - began, code: "internal_error", message: "The run failed unexpectedly.", caseId });
+        })
+        .finally(endStream);
     },
-    { status: 201, headers: { "Cache-Control": "no-store" } },
-  );
+    cancel() {
+      // The browser went away. `finished` keeps going (and is kept alive below).
+      open = false;
+      clearInterval(ping);
+    },
+  });
+
+  // On a serverless platform a function may be frozen once the response is over: keep it alive
+  // until the case is saved, even when the browser has left. Outside a request (tests) there is
+  // no scope to register with; the promise then simply runs on.
+  try {
+    after(() => finished);
+  } catch {
+    // not in a request scope
+  }
+
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "Content-Type": `${NDJSON_CONTENT_TYPE}; charset=utf-8`,
+      "Cache-Control": "no-store, no-transform",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

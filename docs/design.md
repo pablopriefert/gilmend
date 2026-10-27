@@ -46,3 +46,16 @@ Everything off under `prefers-reduced-motion`.
 - `src/components/ui/border-beam.tsx` (21st.dev, appica-dev) and `shimmer-button.tsx` (21st.dev,
   Magic UI / dillionverma).
 - Icons: lucide-react only, 16/20 px, stroke 1.75–2. No emoji as icons.
+
+## Live run (27 Oct 2026)
+
+While a report is sent, the form's fields give way to the live timeline
+(`src/components/report/live-run.tsx`, state in `live-run-state.ts`): one row per real event with the
+server's clock (`+4.2 s`) and duration, an ink thread on a hairline track, a status circle (spinner,
+check, cross, or a warning tone for guardrails and notices; never colour alone), and a side column
+with the order card, the SAM image (fades in on load, `motion-reduce` off) and the claim amount in a
+gold card under a Border Beam, rolled up with the Arc counter (gold is still only money). Below `xl`
+the side column stacks under the timeline. A polite `role="status"` region announces each finished
+step; the list itself is not live. DEMO MODE is a warning pill, "DEMO MODE (scripted)", with no
+timings. The old five-step list (`agent-working.tsx`) stays only as the fallback when no stream
+arrives, and says it is an illustration.

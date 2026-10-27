@@ -256,6 +256,7 @@ export async function markDamage(photo: string, options: MarkDamageOptions = {})
       photo,
       annotatedPhoto: toStoredPath(file),
       method: "sam-3.1",
+      regions: regions.length,
       note:
         `SAM 3.1 outlined ${regions.length} region${regions.length > 1 ? "s" : ""} ${matchedText}` +
         (scores.length ? ` (confidence ${scores.join(", ")})` : "") +

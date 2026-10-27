@@ -14,7 +14,10 @@ import { DEMO_SCENARIOS, type DemoScenario } from "./demo-scenarios";
 import { effectiveEngine, type EngineAvailability } from "./engine-choice";
 import { EngineSwitch } from "./engine-switch";
 import { prepareImage } from "./image-prep";
+import { NDJSON_CONTENT_TYPE, readStreamEvents } from "@/lib/agent/events";
 import { AgentWorking } from "./report/agent-working";
+import { LiveRun } from "./report/live-run";
+import { initialLiveRun, loseLiveRun, reduceLiveRun, type LiveRunState } from "./report/live-run-state";
 import { Field, FieldError, INPUT_CLASS, Section } from "./report/form-primitives";
 import { ScenarioCard } from "./report/scenario-card";
 import { VoiceRecorder, type VoiceResult } from "./voice-recorder";
@@ -52,7 +55,30 @@ const ACCESS_CODE_NEEDED =
  * the access code, the private-run dictation ban, the voice receipts, what is posted) is
  * unchanged from the first version.
  */
-export function ReportForm({ availability }: { availability: EngineAvailability }) {
+// A server that streams answers within a few seconds (it has only to store the report). Past this
+// with nothing heard, the answer is not being streamed (a proxy that buffers, an older server):
+// the page then falls back to the illustration, labelled as one.
+const STREAM_SILENCE_MS = 10_000;
+
+/** Wait before showing the next event of a DEMO MODE run: its steps take milliseconds and would flash by. */
+const DEMO_PACE_MS = 450;
+
+/** The events a DEMO MODE run pauses on (a step starting or ending): enough for each row to be seen. */
+const PACED_EVENTS: ReadonlySet<string> = new Set(["accepted", "tool_start", "tool_end", "guardrail", "notice"]);
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+export function ReportForm({
+  availability,
+  demoPaceMs = DEMO_PACE_MS,
+  silenceMs = STREAM_SILENCE_MS,
+}: {
+  availability: EngineAvailability;
+  /** Pause between the events of a DEMO MODE run (the scripted steps are instant). Tests pass 0. */
+  demoPaceMs?: number;
+  /** How long the server may stay silent before the page falls back to the illustration. */
+  silenceMs?: number;
+}) {
   const router = useRouter();
   const reducedMotion = useReducedMotion();
   const [orderNumber, setOrderNumber] = useState("");
@@ -70,6 +96,11 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
   const [serverError, setServerError] = useState<string | null>(null);
   const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // The live timeline of the run being streamed (null until a report is sent), and whether the
+  // server has been silent for so long that the answer is evidently not streamed.
+  const [live, setLive] = useState<LiveRunState | null>(null);
+  const [silent, setSilent] = useState(false);
+  const streamAbort = useRef<AbortController | null>(null);
   const [loadedDemo, setLoadedDemo] = useState<string | null>(null);
   const [loadedDemoId, setLoadedDemoId] = useState<string | null>(null);
   const [loadingDemo, setLoadingDemo] = useState<string | null>(null);
@@ -89,6 +120,16 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
   const orderRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const messageRef = useRef<HTMLTextAreaElement>(null);
+
+  // Leaving the page (or opening the case) stops reading the stream; the run itself carries on
+  // on the server and is saved.
+  useEffect(() => () => streamAbort.current?.abort(), []);
+
+  useEffect(() => {
+    if (!submitting || live?.phase !== "sending") return;
+    const timer = setTimeout(() => setSilent(true), silenceMs);
+    return () => clearTimeout(timer);
+  }, [submitting, live?.phase, silenceMs]);
 
   // Object URLs made for a demo case's rows are released with the page (the dropzone releases
   // the ones it makes itself).
@@ -199,6 +240,14 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
     }
 
     setSubmitting(true);
+    setLive(initialLiveRun());
+    setSilent(false);
+    // The card turns into the live timeline: bring its top into view.
+    formRef.current?.scrollIntoView?.({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    const abort = new AbortController();
+    streamAbort.current = abort;
+    // Once the case is done and its timeline is on screen, the form must not come back under it.
+    let finished = false;
     try {
       const body = new FormData();
       body.set("orderNumber", orderNumber.trim());
@@ -222,7 +271,17 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
       }
       for (const file of await Promise.all(files.map((file) => prepareImage(file)))) body.append("photos", file);
 
-      const res = await fetch("/api/reports", { method: "POST", body, headers: accessHeaders(accessCode) });
+      // Asks for the progress stream; a server (or a proxy) that answers plain JSON still works.
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        body,
+        headers: { ...accessHeaders(accessCode), Accept: `${NDJSON_CONTENT_TYPE}, application/json;q=0.5` },
+        signal: abort.signal,
+      });
+      if (res.ok && res.body && (res.headers?.get?.("content-type") ?? "").includes("ndjson")) {
+        finished = await followRun(res.body, abort.signal);
+        return;
+      }
       const data = (await res.json().catch(() => null)) as {
         caseId?: string;
         message?: string;
@@ -240,11 +299,51 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
       setServerError(data?.message ?? "The report could not be processed.");
       if (data?.caseId) setSavedCaseId(data.caseId);
     } catch {
+      if (abort.signal.aborted) return;
       setServerError("Could not reach the server. Check your connection and try again.");
     } finally {
-      setSubmitting(false);
+      if (!finished) setSubmitting(false);
     }
   }
+
+  /**
+   * Read the run's NDJSON stream into the live timeline. Returns true when the case is done (the
+   * timeline then stays, with its "Open the case" button); false when the run failed or the
+   * connection dropped (the form comes back with the reason and, when the case was stored, a link to it).
+   */
+  async function followRun(body: ReadableStream<Uint8Array>, signal: AbortSignal): Promise<boolean> {
+    let state = initialLiveRun();
+    const show = (next: LiveRunState) => {
+      state = next;
+      setLive(next);
+    };
+    try {
+      for await (const event of readStreamEvents(body)) {
+        show(reduceLiveRun(state, event));
+        if (state.phase === "done" || state.phase === "error") break;
+        // A DEMO MODE run is over in milliseconds: its steps are shown one after the other, not all at once.
+        if (state.mock && demoPaceMs > 0 && PACED_EVENTS.has(event.type)) await sleep(demoPaceMs / 2);
+      }
+    } catch {
+      if (signal.aborted) return false;
+      // A read error mid-stream is a dropped connection: handled below like a stream that just ended.
+    }
+    if (state.phase === "done") return true;
+    if (state.phase === "error") {
+      setServerError(state.error ?? "The report could not be processed.");
+    } else {
+      show(loseLiveRun(state));
+      setServerError(
+        "The connection dropped before the agent finished. The report is stored and the run goes on: the case shows up in Cases when it ends.",
+      );
+    }
+    if (state.caseId) setSavedCaseId(state.caseId);
+    return false;
+  }
+
+  // The live timeline replaces the form's fields while a report is sent, unless the server stays
+  // silent so long that the answer is evidently not streamed (then the illustration below stands in).
+  const showLive = submitting && live !== null && !(silent && live.phase === "sending");
 
   const statusLine = submitting
     ? `The agent is looking up the order and reading the photos (${runsAs === "demo-mock" ? "demo mode" : "this can take a little while"}).`
@@ -295,7 +394,7 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
               </div>
             )}
 
-            <div inert={submitting} className="divide-y divide-border">
+            <div inert={submitting} hidden={showLive} className="divide-y divide-border">
               <Section id="order" step={1} title="Order & customer" description="How the agent finds the order. Fictitious data only.">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Field id="orderNumber" label="Order number" error={errors.orderNumber}>
@@ -435,6 +534,14 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
               )}
             </div>
 
+            {showLive && live && (
+              <LiveRun
+                state={live}
+                expectedEngine={runsAs}
+                onOpen={(id) => router.push(`/cases/${encodeURIComponent(id)}`)}
+              />
+            )}
+
             <div className="flex flex-col gap-4 rounded-b-2xl border-t border-border bg-surface-muted px-5 py-5 sm:px-8">
               {serverError && (
                 <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">
@@ -484,7 +591,8 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
               </div>
             </div>
 
-            {submitting && <AgentWorking engine={runsAs} />}
+            {/* The illustration is only the fallback: when no stream is arriving. It says it is one. */}
+            {submitting && !showLive && <AgentWorking engine={runsAs} />}
           </form>
         </BorderBeam>
       </div>

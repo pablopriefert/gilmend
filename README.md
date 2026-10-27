@@ -135,6 +135,40 @@ flowchart TD
     J -->|"Reject"| L["Closed, nothing sent"]
 ```
 
+### Live run
+
+The report page shows the investigation as it happens, not an illustration of it. `runAgent` takes
+an `onEvent` callback and emits a structured event at the line of code that does each thing: the
+run starts (engine, model), a model turn starts and ends ("Muse is reading the report and the
+photos", never its reasoning text), each tool starts and ends with what it found (the order, the
+reading, the SAM outline with its region count and the stored image path, the carrier, the claim
+amount and deadline, the decision), each guardrail that changes the decision, and every notice
+(photos not read, run ended without a decision). `POST /api/reports` streams them as NDJSON when
+the client sends `Accept: application/x-ndjson` (or `?stream=1`): `accepted`, the agent's events,
+then `done` with the case id (or `error`). Without that header the route answers the same JSON as
+before, and every gate (access code, rate limit, daily cap, validation, storage) runs before the
+first line is sent. The case is saved exactly as in the JSON answer, before `done`. If the browser
+leaves, the run still finishes and is saved (the route registers it with `after()` so a serverless
+function is not frozen when the response ends; tested by cancelling the reader, not on Vercel).
+
+On the page, each step appears with the server's own clock (`+4.2 s`, and how long it took), the
+order card, the SAM image fading in once it is stored, the claim amount rolling up in gold (the
+number is the code's), and guardrail warnings; when the case is saved, "Open the case" (it also
+opens by itself after 5 s unless you stay). A DEMO MODE run streams the same real steps (the order
+lookup, the claim maths and the PDF are code) but is labelled "DEMO MODE (scripted)", shows no
+timings and never shows an outline. If nothing streams within 10 s (a proxy that buffers, an older
+server), the page falls back to the old step list, labelled as an illustration.
+
+Events never carry the API key, a photo's bytes (a data URL is dropped, only a stored path is
+kept), the customer's name, e-mail, address or message, the reply, or the model's free text:
+errors and model-written strings go through `scrub` (`src/lib/agent/events.ts`) first, and a test
+checks a full run's events for all of these.
+
+Measured on 27 Oct 2026 by calling the route handler in-process with the real key (demo case 1,
+Muse Spark 1.3 and SAM 3.1): 34 events over 27 s, the first line sent 9 ms after the request, each
+event read 8 to 10 ms after the server stamped it, the SAM image stored (2 regions) at +12.9 s. That
+is not a measurement over the deployed Vercel URL, whose buffering and latency were not tested.
+
 **Amounts and deadlines never come from the model.** They come from the dated, sourced carrier
 rules and from deterministic code in `src/lib/rules`. The model can only choose which tool to call
 and what to conclude from what the tools return.

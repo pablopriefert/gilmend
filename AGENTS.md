@@ -40,4 +40,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   Vercel Blob backend is switched on with `DAMAGE_DESK_STORAGE=blob`; the adapter,
   `src/lib/storage/blob-object-store.ts`, has been tested against a fake SDK only).
 - Do not commit, push, deploy or create a GitHub repository unless Pablo asks.
-
+- **Live run events** (`src/lib/agent/events.ts`) are shown to the person who filed the report and
+  stream through proxies: never put the API key, photo bytes (a data URL), the customer's name,
+  e-mail, address or message, the reply, or model free text in one. Strings the code does not
+  control go through `scrub`. The timeline is only ever drawn from real events; keep the
+  illustration (`agent-working.tsx`) labelled as one and only as the no-stream fallback.
