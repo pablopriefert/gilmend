@@ -29,9 +29,10 @@ into a claim, money recovered. Tagline: **Broken parcels, mended in gold.**
 | Money | `gold` (decor only), `gold-bright`, `gold-ink` (text), `gold-soft` | amounts, seam |
 | Status | `success`, `warning`, `danger` + `-soft` | pills with icon + text, never colour alone |
 
-**Type.** Display: Instrument Serif (`font-display`) for page titles, the logo and big money
-figures. UI: Inter (`font-sans`). References (tracking numbers, order ids, model ids): JetBrains
-Mono (`font-mono`). Money and dates in `.tabular`.
+**Type.** One family, Geist (`font-sans`), chosen by Pablo on 27 Oct 2026. Page titles, the logo
+and big money figures use `font-display`: the same Geist in semibold with tight tracking
+(`-0.035em`). References (tracking numbers, order ids, model ids): Geist Mono (`font-mono`). Money and
+dates in `.tabular`.
 
 **Motion.** 150–300 ms, ease-out in; `animate-rise` for entrances (stagger 40 ms), the seam
 draws itself once (`animate-seam`), Border Beam only while the agent works or on the hero total.

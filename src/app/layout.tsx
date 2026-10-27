@@ -1,20 +1,15 @@
 import type { Metadata } from "next";
-import { Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import { AppHeader } from "@/components/app-header";
 import { SiteFooter } from "@/components/shell/site-footer";
 import { hasOpenRouterKey, openRouterModel, resolveOpenWeights } from "@/lib/config";
 import "./globals.css";
 
-// Self-hosted by next/font at build time (no request to Google from the visitor's browser).
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
-const instrumentSerif = Instrument_Serif({
-  subsets: ["latin"],
-  weight: "400",
-  style: ["normal", "italic"],
-  variable: "--font-instrument-serif",
-  display: "swap",
-});
-const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono", display: "swap" });
+// One family everywhere, Geist (Pablo's choice, 27 Oct 2026): headings and money figures are the
+// same face in semibold with tight tracking (see .font-display in globals.css), references in
+// Geist Mono. Self-hosted by next/font at build time: no request to Google from the browser.
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 
 export const metadata: Metadata = {
   title: { default: "Gilmend · Broken parcels, mended in gold", template: "%s · Gilmend" },
@@ -35,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`h-full antialiased ${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
+      className={`h-full antialiased ${geist.variable} ${geistMono.variable}`}
     >
       <body className="paper flex min-h-full flex-col">
         <a

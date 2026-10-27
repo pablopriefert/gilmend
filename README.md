@@ -450,8 +450,8 @@ Storage, the Blob store).
   animated counter, metric card, badge, timeline, file dropzone, segmented control, toast);
   `src/components/ui/border-beam.tsx` from [21st.dev](https://21st.dev/@appica-dev/components/border-beam)
   (appica-dev) and `src/components/ui/shimmer-button.tsx` from
-  [21st.dev / Magic UI](https://21st.dev/@dillionverma/components/shimmer-button). Fonts: Inter,
-  Instrument Serif and JetBrains Mono (SIL Open Font License), self-hosted by `next/font`.
+  [21st.dev / Magic UI](https://21st.dev/@dillionverma/components/shimmer-button). Fonts: Geist and
+  Geist Mono (SIL Open Font License), self-hosted by `next/font`.
 
 This repository's own code is MIT-licensed (see [`LICENSE`](LICENSE)). It depends on packages under
 their own licences:

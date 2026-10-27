@@ -12,7 +12,7 @@ vi.mock("@/lib/rules/carriers", () => ({ getCarrierRules: (c: string) => getCarr
 // next/font/google only exists inside the Next build; the layout test below needs stand-ins.
 vi.mock("next/font/google", () => {
   const font = () => ({ variable: "", className: "", style: {} });
-  return { Inter: font, Instrument_Serif: font, JetBrains_Mono: font };
+  return { Geist: font, Geist_Mono: font };
 });
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),

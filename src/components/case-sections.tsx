@@ -170,7 +170,7 @@ export function EvidenceSection({
           </span>
         </p>
       )}
-      <blockquote className="whitespace-pre-wrap border-l-2 border-ink py-1 pl-4 font-display text-[1.375rem] leading-snug text-ink">
+      <blockquote className="whitespace-pre-wrap border-l-2 border-border-strong py-1 pl-4 text-lg leading-relaxed text-ink-soft">
         {message}
       </blockquote>
 

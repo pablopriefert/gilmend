@@ -46,14 +46,14 @@
   --surface-raised: var(--surface);
   --text-secondary: var(--muted);
   --text-muted: var(--muted);
-  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --font-body: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-3xl: 1.875rem;
   --leading-body: 1.5;
   --tracking-body: 0;
-  --tracking-display: -0.01em;
+  --tracking-display: -0.035em;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
@@ -103,9 +103,9 @@
   --color-primary: var(--primary);
   --color-ring: var(--ring);
   /* Fonts come from next/font (layout.tsx) as CSS variables, with system fallbacks. */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: var(--font-instrument-serif), ui-serif, Georgia, "Times New Roman", serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-geist), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   --shadow-card: var(--shadow-card);
   --shadow-raised: var(--shadow-raised);
 
@@ -182,6 +182,18 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
   font-feature-settings: "cv11", "ss01";
+}
+
+/*
+ * Display = Geist semibold with tight tracking: the headings and money figures used to stand out
+ * by being a serif; now weight and tracking do it. In the base layer so an explicit weight
+ * utility (font-medium...) on the same element still wins.
+ */
+@layer base {
+  .font-display {
+    font-weight: 600;
+    letter-spacing: -0.035em;
+  }
 }
 
 /* Tabular figures wherever money, dates and counts line up. */
