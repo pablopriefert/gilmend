@@ -5,7 +5,7 @@ only syntax-checked. Read "What to verify before the first deploy" in deploy/REA
 
 What it does: starts `vllm serve` for meta-models/Muse-Glimmer-30B inside a Modal GPU
 container and exposes vLLM's OpenAI-compatible server (/v1/chat/completions, /health).
-Damage Desk then talks to it like to any OpenAI endpoint:
+Gilmend then talks to it like to any OpenAI endpoint:
 
     OPEN_WEIGHTS_BASE_URL=https://<workspace>--damage-desk-glimmer-glimmer-serve.modal.run/v1
     OPEN_WEIGHTS_API_KEY=<the VLLM_API_KEY you stored in the Modal secret>
@@ -51,7 +51,7 @@ SERVED_MODEL_NAME = "muse-glimmer"
 GPU = os.environ.get("GLIMMER_GPU", "H200")
 N_GPU = int(GPU.split(":")[1]) if ":" in GPU else 1
 
-# Damage Desk prompts are small (system prompt + 1 to 3 photos + tool results), so a short
+# Gilmend prompts are small (system prompt + 1 to 3 photos + tool results), so a short
 # context keeps the KV cache cheap. The model supports 131,072.
 MAX_MODEL_LEN = int(os.environ.get("GLIMMER_MAX_MODEL_LEN", "32768"))
 
@@ -157,7 +157,7 @@ def smoke():
     Starts a fresh replica, so it bills GPU time and takes minutes on a cold cache.
     """
     url = Glimmer().serve.get_web_url()
-    # The same token pair Damage Desk sends (OPEN_WEIGHTS_PROXY_KEY / _SECRET), read from the shell.
+    # The same token pair Gilmend sends (OPEN_WEIGHTS_PROXY_KEY / _SECRET), read from the shell.
     proxy = {
         "Modal-Key": os.environ.get("OPEN_WEIGHTS_PROXY_KEY", ""),
         "Modal-Secret": os.environ.get("OPEN_WEIGHTS_PROXY_SECRET", ""),

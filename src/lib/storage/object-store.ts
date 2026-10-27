@@ -1,4 +1,4 @@
-// The one seam between Damage Desk and any shared storage (a bucket, a blob store...).
+// The one seam between Gilmend and any shared storage (a bucket, a blob store...).
 //
 // Why it exists: on Vercel every serverless instance has its own /tmp, so a case written by
 // one instance can answer 404 on another (README, "Limitations"). Cases and their files

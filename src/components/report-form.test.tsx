@@ -19,8 +19,9 @@ function fill(order: string, email: string, message: string) {
   fireEvent.change(screen.getByLabelText("Message from the customer"), { target: { value: message } });
 }
 
+// The Arc dropzone keeps its file input hidden: it is the one input of that type on the page.
 function attach(...files: File[]) {
-  fireEvent.change(screen.getByLabelText(/Photos of the damage/), { target: { files } });
+  fireEvent.change(document.querySelector<HTMLInputElement>('input[type="file"]')!, { target: { files } });
 }
 
 function submit() {
@@ -59,20 +60,28 @@ describe("report form validation", () => {
     expect(screen.getByText("Enter a valid e-mail address.")).toBeInTheDocument();
   });
 
-  it("refuses a 4th photo, a wrong type and a file over 8 MB as soon as they are picked", () => {
+  it("refuses a 4th photo, a wrong type and a file over 8 MB as soon as they are picked", async () => {
     render(<ReportForm availability={NONE} />);
     attach(image("a.jpg"), image("b.jpg"), image("c.jpg"));
-    expect(screen.getAllByRole("img")).toHaveLength(3);
-    expect(screen.getByLabelText(/Photos of the damage/)).toBeDisabled(); // full
+    expect(screen.getAllByRole("button", { name: /^Remove / })).toHaveLength(3);
+
+    // A 4th photo: the dropzone says so and keeps the three.
+    attach(image("d.jpg"));
+    expect(screen.getByRole("alert")).toHaveTextContent("You can add up to 3 files.");
+    expect(screen.getAllByRole("button", { name: /^Remove / })).toHaveLength(3);
 
     // Remove one, then try a PDF and an oversized photo
-    fireEvent.click(screen.getByRole("button", { name: /Remove photo 3/ }));
-    expect(screen.getAllByRole("img")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Remove c.jpg" }));
+    // The row leaves with a short exit animation.
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Remove / })).toHaveLength(2));
     attach(image("doc.pdf", "application/pdf"));
-    expect(screen.getByRole("alert")).toHaveTextContent(/not a JPEG, PNG or WebP/);
-    fireEvent.click(screen.getByRole("button", { name: /Remove photo 3/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/doc\.pdf is not an accepted file type/);
     attach(image("huge.jpg", "image/jpeg", 8 * 1024 * 1024 + 1));
-    expect(screen.getByRole("alert")).toHaveTextContent(/larger than 8 MB/);
+    // (the dropzone's own error fades out while this one comes in: look for the text, not the role)
+    expect(await screen.findByText(/"huge\.jpg" is larger than 8 MB/)).toBeInTheDocument();
+    // The message stays until the offending file is removed.
+    fireEvent.click(screen.getByRole("button", { name: "Remove huge.jpg" }));
+    expect(screen.queryByText(/"huge\.jpg" is larger than 8 MB/)).not.toBeInTheDocument();
   });
 
   it("says what it will really run as: demo mode when there is no key", () => {
@@ -203,8 +212,9 @@ describe("demo case buttons", () => {
     await screen.findByText(/Demo case loaded: Parcel opened, item missing/);
     expect(screen.getByLabelText("Order number")).toHaveValue("#1004");
     expect((screen.getByLabelText("Message from the customer") as HTMLTextAreaElement).value).toContain("Bonjour");
-    expect(screen.getByLabelText("Customer language")).toHaveValue("fr");
-    expect(screen.getByAltText(/Attached photo 1: illustration-opened-parcel\.png/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "French" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Parcel opened, item missing/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("illustration-opened-parcel.png")).toBeInTheDocument();
     expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
       "/api/demo-photo?name=parcel-open-missing",
       "/demo/illustration-opened-parcel.png",
@@ -219,7 +229,7 @@ describe("demo case buttons", () => {
     render(<ReportForm availability={NONE} />);
     fireEvent.click(screen.getByRole("button", { name: /Broken vase/ }));
     await screen.findByText(/Demo case loaded/);
-    expect(screen.getByAltText(/vase-broken\.jpg/)).toBeInTheDocument();
+    expect(screen.getByText("vase-broken.jpg")).toBeInTheDocument(); // named after the real type, not .png
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
@@ -285,5 +295,124 @@ describe("access code on a public deployment", () => {
   it("has no access-code field on a local run", () => {
     render(<ReportForm availability={NONE} />);
     expect(screen.queryByLabelText("Access code")).not.toBeInTheDocument();
+  });
+});
+
+describe("the agent working state", () => {
+  // /api/reports answers once, when the case is done: nothing here is live progress.
+  const pending = () => {
+    let release!: (r: Response) => void;
+    const promise = new Promise<Response>((resolve) => (release = resolve));
+    vi.stubGlobal("fetch", vi.fn(() => promise));
+    return release;
+  };
+
+  it("shows the step list as an illustration, with the engine, while the request is out", async () => {
+    pending();
+    render(<ReportForm availability={{ museKey: true, openWeights: false }} />);
+    fill("#1001", "camille@example.com", "My vase arrived broken");
+    attach(image());
+    submit();
+
+    const panel = await screen.findByTestId("agent-working");
+    expect(within(panel).getByText("Muse Spark 1.3 (Meta Model API)")).toBeInTheDocument();
+    expect(within(panel).getByRole("list", { name: /Steps the agent goes through \(illustration\)/ })).toBeInTheDocument();
+    expect(within(panel).getAllByRole("listitem")).toHaveLength(5);
+    expect(within(panel).getByText("Reading the photos", { exact: false })).toBeInTheDocument();
+    expect(within(panel).getByText("Outlining the damage with SAM 3.1", { exact: false })).toBeInTheDocument();
+    // Said in words: an illustration, not progress reported by the server.
+    expect(panel).toHaveTextContent(/illustrate what the agent does/);
+    expect(panel).toHaveTextContent(/not live progress/);
+    expect(panel).toHaveTextContent(/40 to 60 seconds/);
+    // The button says it is busy and cannot be pressed twice.
+    expect(screen.getByRole("button", { name: /Investigating/ })).toBeDisabled();
+    expect(screen.getAllByRole("status").map((n) => n.textContent).join(" ")).toMatch(/The agent is looking up the order and reading the photos/);
+  });
+
+  it("says DEMO MODE on the working panel when no model will be called", async () => {
+    pending();
+    render(<ReportForm availability={NONE} />);
+    fill("#1001", "camille@example.com", "My vase arrived broken");
+    attach(image());
+    submit();
+    const panel = await screen.findByTestId("agent-working");
+    expect(panel).toHaveTextContent("DEMO MODE: deterministic mock, not Muse");
+    expect(panel).toHaveTextContent(/DEMO MODE: canned answers, no model is called/);
+    expect(panel).not.toHaveTextContent(/40 to 60 seconds/);
+  });
+
+  it("goes away and keeps everything typed when the request fails, with a way to recover", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    render(<ReportForm availability={NONE} />);
+    fill("#1001", "camille@example.com", "My vase arrived broken");
+    attach(image("vase.jpg"));
+    submit();
+    expect(await screen.findByText(/Could not reach the server/)).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-working")).not.toBeInTheDocument();
+    expect(screen.getByText(/Your answers and photos are still here/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Order number")).toHaveValue("#1001");
+    expect(screen.getByText("vase.jpg")).toBeInTheDocument();
+  });
+
+  it("moves focus to the first field the server flagged", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, json: async () => ({ message: "The report is not valid.", fields: { email: "No such customer." } }) }) as Response),
+    );
+    render(<ReportForm availability={NONE} />);
+    fill("#1001", "camille@example.com", "My vase arrived broken");
+    attach(image());
+    submit();
+    expect(await screen.findByText("No such customer.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText("E-mail used for the order")).toHaveFocus());
+  });
+});
+
+describe("the redesigned form: grouping, language, engine line", () => {
+  it("groups the fields in numbered sections", () => {
+    render(<ReportForm availability={NONE} />);
+    for (const title of ["Order & customer", "Message", "Photos of the damage", "Engine"]) {
+      expect(screen.getByRole("heading", { name: title })).toBeInTheDocument();
+    }
+  });
+
+  it("sends the language picked on the segmented control, and none on auto-detect", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ caseId: "c1" }) }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReportForm availability={NONE} />);
+    expect(screen.getByRole("button", { name: "Auto-detect" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "French" }));
+    expect(screen.getByRole("button", { name: "French" })).toHaveAttribute("aria-pressed", "true");
+    fill("#1001", "camille@example.com", "Mon vase est cassé");
+    attach(image());
+    submit();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
+    expect(body.get("language")).toBe("fr");
+  });
+
+  it("says where the photos go for what the report will really run as", () => {
+    render(<ReportForm availability={{ museKey: true, openWeights: true }} />);
+    expect(screen.getByTestId("photo-destination")).toHaveTextContent(/go to the Meta Model API/);
+    fireEvent.click(screen.getByRole("radio", { name: /Run privately \(open weights\)/ }));
+    expect(screen.getByTestId("photo-destination")).toHaveTextContent(/never to the Meta Model API/);
+    fireEvent.click(screen.getByRole("radio", { name: /Demo mode/ }));
+    expect(screen.getByTestId("photo-destination")).toHaveTextContent(/No model is called/);
+  });
+
+  it("shows each demo case with its carrier and the outcome it is built to show, and marks the loaded one", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, blob: async () => new Blob([new Uint8Array(10)], { type: "image/jpeg" }) }) as Response),
+    );
+    render(<ReportForm availability={NONE} />);
+    const card = screen.getByRole("button", { name: /Expensive item/ });
+    expect(card).toHaveTextContent("Chronopost");
+    expect(card).toHaveTextContent("Needs a human");
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(card);
+    await screen.findByText(/Demo case loaded: Expensive item/);
+    expect(screen.getByRole("button", { name: /Expensive item/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Broken vase/ })).toHaveAttribute("aria-pressed", "false");
   });
 });

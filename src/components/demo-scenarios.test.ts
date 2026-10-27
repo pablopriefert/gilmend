@@ -28,6 +28,30 @@ describe("demo scenarios", () => {
     }
   });
 
+  // Presentation fields (carrier and designed outcome, shown on the cards) must not drift from the
+  // orders the agent will really look up.
+  it("shows the carrier of the order each case is about", () => {
+    const orders = JSON.parse(readFileSync(path.join(process.cwd(), "data", "fixtures", "orders.json"), "utf8")) as
+      | { email: string; carrier: string }[]
+      | { orders: { email: string; carrier: string }[] };
+    const list = Array.isArray(orders) ? orders : orders.orders;
+    for (const s of DEMO_SCENARIOS) {
+      const order = list.find((o) => o.email.toLowerCase() === s.email.toLowerCase());
+      expect(order, s.id).toBeDefined();
+      expect(order!.carrier.replace("_", " ").toLowerCase(), s.id).toBe(s.carrier.toLowerCase());
+    }
+  });
+
+  it("gives every case a carrier and a short outcome label with a tone", () => {
+    for (const s of DEMO_SCENARIOS) {
+      expect(s.carrier, s.id).not.toBe("");
+      expect(s.outcome.label.length, s.id).toBeGreaterThan(0);
+      expect(["success", "neutral", "info", "warning"], s.id).toContain(s.outcome.tone);
+    }
+    // The case that must stay flagged as "needs a human" keeps its warning.
+    expect(DEMO_SCENARIOS.find((s) => s.id === "expensive-item")?.outcome.label).toBe("Needs a human");
+  });
+
   it("ids are unique", () => {
     expect(new Set(DEMO_SCENARIOS.map((s) => s.id)).size).toBe(DEMO_SCENARIOS.length);
   });

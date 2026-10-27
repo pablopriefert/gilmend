@@ -14,7 +14,7 @@ export default async function CasesPage() {
     cases = await listCases();
   } catch (err) {
     // An unreadable store must not look like "no cases". The server log keeps the detail.
-    console.error("[damage-desk] listing cases failed:", err instanceof Error ? err.message : err);
+    console.error("[gilmend] listing cases failed:", err instanceof Error ? err.message : err);
     error = "Cases could not be loaded. Check the server log, then reload the page.";
   }
   return <CasesDashboard cases={cases} error={error} now={new Date()} />;

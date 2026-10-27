@@ -16,7 +16,7 @@ import type { Provider, ChatParams } from "./index";
 // It is a pure function of the conversation so far: no state, no clock, no randomness.
 
 const DEMO_WARNING =
-  "[damage-desk] DEMO MODE: deterministic mock provider (scripted, no image analysed, not Muse).";
+  "[gilmend] DEMO MODE: deterministic mock provider (scripted, no image analysed, not Muse).";
 let warned = false;
 
 type Json = Record<string, unknown>;

@@ -67,7 +67,8 @@ afterEach(() => {
 function sendReport() {
   fireEvent.change(screen.getByLabelText("Order number"), { target: { value: "#1001" } });
   fireEvent.change(screen.getByLabelText("E-mail used for the order"), { target: { value: "camille@example.com" } });
-  fireEvent.change(screen.getByLabelText(/Photos of the damage/), {
+  // The Arc dropzone keeps its file input hidden: it is the one input of that type on the page.
+  fireEvent.change(document.querySelector<HTMLInputElement>('input[type="file"]')!, {
     target: { files: [new File([new Uint8Array(2000)], "vase.jpg", { type: "image/jpeg" })] },
   });
   fireEvent.click(screen.getByRole("button", { name: "Send report" }));

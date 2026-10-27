@@ -1,21 +1,27 @@
+import { CircleCheck, CircleDot, CircleX, Eye, Send, type LucideIcon } from "lucide-react";
 import type { CaseStatus } from "@/lib/types";
+import { Badge, type BadgeSize, type BadgeTone } from "./arc/badge/badge";
 import { STATUS_LABEL } from "./format";
 
-const STYLES: Record<CaseStatus, string> = {
-  new: "bg-slate-100 text-slate-800",
-  needs_review: "bg-amber-100 text-amber-900",
-  approved: "bg-emerald-100 text-emerald-900",
-  rejected: "bg-stone-200 text-stone-800",
-  sent_to_customer: "bg-blue-100 text-blue-900",
+// Icon + text + tone, so a status never rests on colour alone. "Needs review" is the one that
+// asks something of the merchant, hence the amber tone and the eye.
+const VIEW: Record<CaseStatus, { tone: BadgeTone; icon: LucideIcon }> = {
+  new: { tone: "neutral", icon: CircleDot },
+  needs_review: { tone: "warning", icon: Eye },
+  approved: { tone: "success", icon: CircleCheck },
+  rejected: { tone: "neutral", icon: CircleX },
+  sent_to_customer: { tone: "info", icon: Send },
 };
 
-export function StatusPill({ status }: { status: CaseStatus }) {
+/**
+ * The status of a case, on the Arc Badge. The label is passed as a plain string so that, on a
+ * case page, "Needs review" turns into "Approved" with Arc's swap animation instead of snapping.
+ */
+export function StatusPill({ status, size }: { status: CaseStatus; size?: BadgeSize }) {
+  const { tone, icon: Icon } = VIEW[status];
   return (
-    <span
-      data-status={status}
-      className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${STYLES[status]}`}
-    >
+    <Badge data-status={status} tone={tone} size={size} icon={<Icon className="h-3.5 w-3.5" strokeWidth={2} />}>
       {STATUS_LABEL[status]}
-    </span>
+    </Badge>
   );
 }

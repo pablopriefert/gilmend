@@ -1,8 +1,11 @@
 "use client";
 
+import { CircleAlert, LoaderCircle, Mic, Square } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { MAX_VOICE_SECONDS } from "@/lib/voice/limits";
 import { accessHeaders } from "./access-code";
+import { cn } from "@/lib/utils";
 import { blobToWav } from "./voice-wav";
 
 export interface VoiceResult {
@@ -217,46 +220,91 @@ export function VoiceRecorder({
   if (supported === null) return null;
   if (!supported) {
     return (
-      <p className="text-xs text-muted">
+      <p className="text-xs leading-5 text-muted">
         Voice messages are not supported in this browser (or the page is not served over HTTPS). Type the message instead.
       </p>
     );
   }
 
   const recording = phase === "recording";
+  const transcribing = phase === "transcribing";
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <button
           type="button"
           onClick={() => (recording ? stop() : void start())}
           // Stop stays available while recording even if the form is busy: the microphone must
           // always be possible to close.
-          disabled={(disabled && !recording) || phase === "transcribing"}
-          className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60 ${
-            recording ? "border-danger bg-danger-soft text-danger" : "border-border bg-surface hover:bg-background"
-          }`}
+          disabled={(disabled && !recording) || transcribing}
+          className={cn(
+            "inline-flex min-h-11 items-center gap-2.5 rounded-full border py-1.5 pl-1.5 pr-4 text-sm font-medium",
+            "transition-[background-color,border-color,color] duration-200 active:translate-y-px motion-reduce:transition-none",
+            "disabled:cursor-not-allowed disabled:opacity-60",
+            recording
+              ? "border-danger/40 bg-danger-soft text-danger"
+              : "border-border-strong/70 bg-surface text-foreground enabled:hover:border-ink enabled:hover:bg-surface-muted",
+          )}
         >
           <span
             aria-hidden="true"
-            className={`h-2.5 w-2.5 rounded-full ${recording ? "motion-safe:animate-pulse bg-danger" : "bg-accent"}`}
-          />
+            className={cn(
+              "inline-flex h-8 w-8 items-center justify-center rounded-full",
+              recording ? "bg-danger text-white" : "bg-ink text-white",
+            )}
+          >
+            {transcribing ? (
+              <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" strokeWidth={2} />
+            ) : recording ? (
+              <Square className="h-3.5 w-3.5 fill-current" strokeWidth={2} />
+            ) : (
+              <Mic className="h-4 w-4" strokeWidth={2} />
+            )}
+          </span>
           {recording ? "Stop recording" : "Record a voice message"}
         </button>
         {recording && (
-          <span role="timer" aria-label="Recording time" className="text-sm tabular-nums text-muted">
-            {clock(elapsed)} / {clock(MAX_VOICE_SECONDS)}
-          </span>
+          <div className="flex items-center gap-3">
+            <Waveform />
+            <span role="timer" aria-label="Recording time" className="tabular text-sm text-danger">
+              {clock(elapsed)} / {clock(MAX_VOICE_SECONDS)}
+            </span>
+          </div>
         )}
       </div>
-      <p role="status" aria-live="polite" className="text-xs text-muted">
+      <p role="status" aria-live="polite" className="text-xs leading-5 text-muted">
         {status}
       </p>
       {error && (
-        <p role="alert" className="text-sm text-danger">
-          {error}
+        <p role="alert" className="flex items-start gap-1.5 text-sm text-danger">
+          <CircleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+          <span>{error}</span>
         </p>
       )}
     </div>
+  );
+}
+
+const BARS = [0.5, 0.9, 0.65, 1, 0.55, 0.85, 0.45, 0.95, 0.6, 0.8];
+
+/**
+ * A waveform-like pulse while the microphone is open. It is decoration: the bars do not follow
+ * the real audio level (no analyser is wired), so it is hidden from screen readers, and it
+ * stands still under prefers-reduced-motion. The state is also said in words and by the timer.
+ */
+function Waveform() {
+  const reduced = useReducedMotion();
+  return (
+    <span aria-hidden="true" className="flex h-6 items-center gap-[3px]">
+      {BARS.map((peak, i) => (
+        <motion.span
+          key={i}
+          className="block h-full w-[3px] origin-center rounded-full bg-danger"
+          style={{ scaleY: reduced ? peak : 0.25 }}
+          animate={reduced ? undefined : { scaleY: [0.25, peak, 0.3, peak * 0.7, 0.25] }}
+          transition={reduced ? undefined : { duration: 1.1 + (i % 4) * 0.12, repeat: Infinity, ease: "easeInOut", delay: i * 0.07 }}
+        />
+      ))}
+    </span>
   );
 }

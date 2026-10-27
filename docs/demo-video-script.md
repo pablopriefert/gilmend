@@ -1,11 +1,11 @@
-# Demo video script (3 minutes, voice-over in English)
+# Gilmend demo video script (3 minutes, voice-over in English)
 
 Story: **a broken vase becomes a claim ready to recover the money.** One case told in full (the
 customer dictates it live, the agent investigates, the merchant approves), the others in a montage,
 then, only if it ran for real, the open-weights switch, ending on the recoverable counter.
 
-Target length: at most 3:00. The spoken text below is 383 words with the optional open-weights
-shot and 333 without it (counted on the one-piece text, each bracketed figure as one word), which
+Target length: at most 3:00. The spoken text below is 381 words with the optional open-weights
+shot and 331 without it (counted on the one-piece text, each bracketed figure as one word), which
 leaves room for the screen-only beats (the microphone, the trace, the PDF). Subtitles on. If the open-weights shot is cut, the video is shorter: never pad.
 
 ## Before recording: what must be true
@@ -88,14 +88,14 @@ the counter reads what the three demo claims add up to. Put the folder back afte
 | 0:00 – 0:12 | **New report** screen, the "Broken vase" scenario: the customer's message, order #1001. | "A customer writes: my vase arrived broken. For a small shop, that is two jobs: make the customer whole, then chase the carrier for the money." |
 | 0:12 – 0:25 | Cut to the **carrier rules** card of a case, then the three carrier names. Highlight "72 hours" (Mondial Relay), "3 days" (Chronopost), "12 months" (Colissimo). | "Every carrier has its own proof, its own cap, and its own deadline. Mondial Relay gives you 72 hours. Chronopost, three days. Miss it, and the claim is lost." |
 | 0:25 – 0:43 | **Voice report, live**: click the microphone in the message box, speak ("My vase arrived broken. Order 1001."), the transcript fills the box (check the order number on screen). Caption: "Demo photos generated with Muse Image". The one photo is attached. | "She doesn't type, she talks. Muse Voice Transcribe turns the clip into the message, still editable, and the case records that it was dictated. The demo photos are generated with Muse Image, so no real customer appears here." |
-| 0:43 – 0:50 | Engine selector: **Muse Spark 1.3 (Model API)**. Click submit on the dictated report and cut the wait (caption "sped up"). The case that opens is this live run. | "Damage Desk is an agent on Muse Spark 1.3 through the Meta Model API, Standard mode." |
+| 0:43 – 0:50 | Engine selector: **Muse Spark 1.3 (Model API)**. Click submit on the dictated report and cut the wait (caption "sped up"). The case that opens is this live run. | "Gilmend is an agent on Muse Spark 1.3 through the Meta Model API, Standard mode." |
 | 0:50 – 1:18 | Open **Agent reasoning trace** and scroll: order lookup, photo reading, damage marking, carrier rules, claim computation, decision. Pause on the SAM step (if the trace shows a line "Evidence fallback", the code asked SAM, not Muse: say "the code asks SAM" or skip the line). | "It looks up the order, reads the photo, and calls tools. It asks SAM 3.1 to outline the broken item, so the claim carries a marked photo. Plain code reads the carrier's rules and computes the claim. The model never writes an amount or a deadline." |
 | 1:18 | **[DEMO MODE]** variant of the two lines above | "In demo mode a scripted mock plays the same steps. It does not look at the image, and the screen says so." |
 | 1:18 – 1:45 | **Case view**: "What the agent saw", the **annotated photo** (what SAM outlined: say "the broken pieces" only if that is what is outlined in the take) next to the raw one, then **Decision**: reship, carrier claim yes, and the confidence. Zoom on the maximum compensation and the deadline. | "Decision: reship the vase, and claim Colissimo, confidence [confidence]. SAM marks the broken pieces on the photo, as context, not as a verdict. The maximum compensation is [amount] euros: 23 euros a kilo, 2.3 kilos, from Colissimo's published terms, with the source and its date shown next to it." |
-| 1:45 – 2:07 | **Claim document**: the PDF preview, the e-mail to the carrier, the drafted reply to the customer. End on **Approve**; click it. Banner: "Approved: ready to send. Damage Desk sends nothing by itself." | "It builds the claim PDF and the e-mail to the carrier, and drafts the reply in the customer's language. Guardrails in code can only make a decision stricter. Nothing leaves without a click, and this app sends nothing: the merchant files the claim." |
+| 1:45 – 2:07 | **Claim document**: the PDF preview, the e-mail to the carrier, the drafted reply to the customer. End on **Approve**; click it. Banner: "Approved: ready to send. Gilmend sends nothing by itself." | "It builds the claim PDF and the e-mail to the carrier, and drafts the reply in the customer's language. Guardrails in code can only make a decision stricter. Nothing leaves without a click, and this app sends nothing: the merchant files the claim." |
 | 2:07 – 2:35 | **Cases** list (badge "Recorded run" on the six real runs), then quick cuts on four cases: crushed carton (no action), blurry photo (asks for another one), Mondial Relay case with the French reply, headphones (handed to a human: the value is above 300 euros). | "All six demo cases ran on the real models, and not every case is a claim. A crushed box with the product intact: no action. A blurry photo: it asks for another one. A parcel opened at the relay: a reply in French, inside the 72 hours. Headphones worth 349 euros: it prepares everything, then hands the decision to a human." |
 | 2:35 – 2:50 | **Only if it ran for real.** **New report**, same scenario. Select **Run privately (open weights)**; the line under the selector names the engine and host. Submit; the case opens with the badge naming the model and host. | "Some merchants will not send customer photos to a cloud API. The same agent, with the same tools and output, runs on open weights: Muse Spark Open, served by Baseten. A private run never calls the Meta Model API, so SAM is skipped and the claim carries the raw photo." |
-| 2:50 – 3:00 | **Cases** header, full width: the counter "€… recoverable this month · … claims due this week". Hold on it, then the title card: "Damage Desk. Built during the Meta Global AI Developer Hackathon." | "At the top, the money still recoverable, and the claims about to expire. A broken vase, turned into a claim ready to file. Damage Desk." |
+| 2:50 – 3:00 | **Cases** header, full width: the counter "€… recoverable this month · … claims due this week". Hold on it, then the title card: "Gilmend. Broken parcels, mended in gold. Built during the Meta Global AI Developer Hackathon." | "At the top, the money still recoverable, and the claims about to expire. A broken vase, turned into a claim ready to file. Gilmend." |
 
 ## Spoken text, in one piece (for the recording take)
 
@@ -112,7 +112,7 @@ Replace each `[bracket]` with the figure read from the screen of the take.
 > editable, and the case records that it was dictated. The demo photos are generated with Muse
 > Image, so no real customer appears here.
 >
-> Damage Desk is an agent on Muse Spark 1.3 through the Meta Model API, Standard mode.
+> Gilmend is an agent on Muse Spark 1.3 through the Meta Model API, Standard mode.
 >
 > It looks up the order, reads the photo, and calls tools. It asks SAM 3.1 to outline the broken
 > item, so the claim carries a marked photo. Plain code reads the carrier's rules and computes the
@@ -138,7 +138,7 @@ Replace each `[bracket]` with the figure read from the screen of the take.
 > photo.
 >
 > At the top, the money still recoverable, and the claims about to expire. A broken vase, turned
-> into a claim ready to file. Damage Desk.
+> into a claim ready to file. Gilmend.
 
 ## Claims checklist (each line of the voice-over, and where the code does it)
 
@@ -164,7 +164,7 @@ Replace each `[bracket]` with the figure read from the screen of the take.
 ## Things the narrator must not say
 
 - "Muse analysed the image" in any take recorded in demo mode.
-- That Damage Desk files, sends or submits anything on its own.
+- That Gilmend files, sends or submits anything on its own.
 - Any amount or percentage that is not on screen (no "recovers X percent", no market figures).
 - That Colissimo's figures are current: they come from the 2020 terms, the 2026 terms are not public.
 - That the open-weights run was tested, unless it was, and "on our own hardware" for a Baseten run.

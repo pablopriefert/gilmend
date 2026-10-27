@@ -1,55 +1,223 @@
 @import "tailwindcss";
 
 /*
- * Calm B2B look (think Linear / Stripe dashboard): neutral greys, one blue accent, status
- * colours only where they carry meaning. Light theme only on purpose: every text/background
- * pair below was picked for WCAG AA contrast (4.5:1), and a second theme would double that
- * checking work during an 8-day hackathon.
+ * Gilmend design system (27 Oct 2026). Kintsugi: a broken thing repaired with gold. Warm paper
+ * background, ink for text and primary actions, gold only where money is recovered or where
+ * the brand speaks (the seam in the logo, the recoverable total, the primary button's shimmer).
+ * Light theme only, on purpose: every text/background pair below is checked for WCAG AA
+ * (4.5:1) by src/app/contrast.test.ts, and a second theme would double that work.
+ *
+ * Token names kept from the first design (background, surface, muted, accent, danger...) so
+ * nothing silently loses its colour; new ones: ink, gold, success, warning.
  */
 :root {
   color-scheme: light;
-  --background: #f6f7f9;
-  --foreground: #111827;
+  --background: #f6f4ef; /* warm paper */
+  --background-deep: #efebe2;
+  --foreground: #15161c;
+  --ink: #15161c;
+  --ink-soft: #2a2c36;
   --surface: #ffffff;
-  --border: #dfe3ea;
-  --muted: #566074; /* 6.1:1 on white, 5.6:1 on --background */
-  --accent: #2748c9; /* 7.4:1 against white text */
-  --accent-hover: #1d38a6;
-  --accent-soft: #eaeffd;
-  --danger: #b42318;
+  --surface-muted: #faf8f4;
+  --border: #e4ded1;
+  --border-strong: #d3cbba;
+  --muted: #5d5a53; /* 6.4:1 on white, 5.8:1 on paper */
+  --accent: #1f2b47; /* deep lacquer blue-ink: links and secondary actions, 13:1 on white */
+  --accent-hover: #2d3d63;
+  --accent-soft: #eef0f5;
+  --gold: #c9971f; /* decorative only (lines, glows, the seam): never text on white */
+  --gold-bright: #f0cd6e;
+  --gold-ink: #7a560a; /* gold for text: 6.2:1 on white */
+  --gold-soft: #fbf3dc;
+  --success: #1f6b45; /* 6.3:1 on white */
+  --success-soft: #e8f3ec;
+  --warning: #8a4b06; /* 6.6:1 on white */
+  --warning-soft: #fdf1e1;
+  --danger: #b42318; /* 6.0:1 on white */
   --danger-soft: #fef0ee;
+  --primary: var(--ink);
+  --ring: #1f2b47;
+  --shadow-card: 0 1px 2px rgb(21 22 28 / 0.04), 0 8px 24px -12px rgb(21 22 28 / 0.12);
+  --shadow-raised: 0 1px 2px rgb(21 22 28 / 0.06), 0 18px 40px -18px rgb(21 22 28 / 0.28);
+
+  /* Tokens the Arc components (src/components/arc, uiarc.dev) read, mapped onto Gilmend's. */
+  --accent-strong: var(--accent-hover);
+  --accent-subtle: var(--accent-soft);
+  --surface-raised: var(--surface);
+  --text-secondary: var(--muted);
+  --text-muted: var(--muted);
+  --font-body: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-3xl: 1.875rem;
+  --leading-body: 1.5;
+  --tracking-body: 0;
+  --tracking-display: -0.01em;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --radius-control: 10px;
+  --radius-surface: 14px;
+  --radius-panel: 18px;
+  --radius-pill: 999px;
+  --control-height-sm: 2rem;
+  --shadow-resting: var(--shadow-card);
+  --shadow-floating: var(--shadow-raised);
+  --duration-instant: 100ms;
+  --duration-fast: 160ms;
+  --duration-standard: 240ms;
+  --duration-spring: 420ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.22, 1.2, 0.36, 1);
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-background-deep: var(--background-deep);
   --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
   --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-soft: var(--accent-soft);
+  --color-gold: var(--gold);
+  --color-gold-bright: var(--gold-bright);
+  --color-gold-ink: var(--gold-ink);
+  --color-gold-soft: var(--gold-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-primary: var(--primary);
+  --color-ring: var(--ring);
+  /* Fonts come from next/font (layout.tsx) as CSS variables, with system fallbacks. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-instrument-serif), ui-serif, Georgia, "Times New Roman", serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+
+  /* 21st.dev Border Beam: a comet running around a card's border. */
+  --animate-border-beam: border-beam var(--border-beam-duration, 5s) linear var(--border-beam-delay, 0s) infinite;
+  /* 21st.dev / Magic UI Shimmer Button. */
+  --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite alternate;
+  --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear;
+  /* Entrances: short, eased out, and switched off for reduced motion (below). */
+  --animate-rise: rise 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-seam: seam 1.2s cubic-bezier(0.65, 0, 0.35, 1) both;
 }
+
+@property --border-beam-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes border-beam {
+  to {
+    --border-beam-angle: 360deg;
+  }
+}
+
+@keyframes shimmer-slide {
+  to {
+    transform: translate(calc(100cqw - 100%), 0);
+  }
+}
+
+@keyframes spin-around {
+  0% {
+    transform: translateZ(0) rotate(0);
+  }
+  15%,
+  35% {
+    transform: translateZ(0) rotate(90deg);
+  }
+  65%,
+  85% {
+    transform: translateZ(0) rotate(270deg);
+  }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The gold seam draws itself (stroke-dasharray set on the element). */
+@keyframes seam {
+  from {
+    stroke-dashoffset: var(--seam-length, 100);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@custom-variant hover-none (@media (hover: none));
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  font-feature-settings: "cv11", "ss01";
+}
+
+/* Tabular figures wherever money, dates and counts line up. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Paper grain, very faint, behind the page: depth without a gradient blob. */
+.paper {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(120% 60% at 50% -10%, rgb(201 151 31 / 0.07), transparent 60%),
+    radial-gradient(rgb(21 22 28 / 0.035) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    18px 18px;
 }
 
 /* One visible focus ring for every keyboard-reachable control. */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
-/* Respect users who ask for less motion (we only animate the "working" spinner). */
 @media (prefers-reduced-motion: reduce) {
-  .motion-safe-spin {
+  .motion-safe-spin,
+  .animate-rise,
+  .animate-seam,
+  .animate-shimmer-slide,
+  .animate-spin-around {
     animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

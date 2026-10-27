@@ -1,5 +1,6 @@
 "use client";
 
+import { KeyRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
 // The public demo can be protected by a shared access code (DAMAGE_DESK_ACCESS_CODE, see
@@ -61,20 +62,27 @@ export function AccessCodeField({
   hint: string;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium">
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-sm font-medium text-foreground">
         Access code
       </label>
-      <input
-        id={id}
-        type="password"
-        autoComplete="off"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-describedby={`${id}-hint`}
-        className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm sm:w-60"
-      />
-      <p id={`${id}-hint`} className="text-xs text-muted">
+      <div className="relative sm:max-w-xs">
+        <KeyRound
+          aria-hidden="true"
+          strokeWidth={1.75}
+          className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+        />
+        <input
+          id={id}
+          type="password"
+          autoComplete="off"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-describedby={`${id}-hint`}
+          className="h-11 w-full rounded-lg border border-border-strong/70 bg-surface pl-10 pr-3.5 text-[0.9375rem] text-foreground transition-[border-color] duration-150 hover:border-border-strong focus:border-ink"
+        />
+      </div>
+      <p id={`${id}-hint`} className="text-xs leading-5 text-muted">
         {hint}
       </p>
     </div>

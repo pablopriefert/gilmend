@@ -1,0 +1,21 @@
+/* Highlights for the steps that matter most in the Arc timeline (its own CSS cannot know them):
+   a guardrail that corrected the model, and a warning (photos not read, a tool error). The rows
+   are found by the marker's data-kind, so the highlight never rests on colour alone: these rows
+   also carry their own icon and the words "Guardrail" or "Warning" in the meta line. */
+.host li:has([data-kind="guardrail"]) {
+  border-radius: var(--radius-control);
+  background: color-mix(in oklab, var(--warning) 7%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+
+.host li:has([data-kind="warning"]) {
+  border-radius: var(--radius-control);
+  background: color-mix(in oklab, var(--danger) 6%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+/* The day heading stays on the card's surface and a long step title wraps instead of overflowing. */
+.host {
+  --timeline-surface: var(--surface);
+  min-width: 0;
+}

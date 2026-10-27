@@ -99,8 +99,8 @@ function checkAgainstExpectation(demo: DemoCase, c: CaseRecord): { ok: boolean; 
 
 async function main(): Promise<void> {
   const now = new Date();
-  console.log("[damage-desk] DEMO MODE: deterministic mock provider (scripted, no image analysed, not Muse).");
-  console.log("[damage-desk] No network call, no key used, nothing is sent to anyone.\n");
+  console.log("[gilmend] DEMO MODE: deterministic mock provider (scripted, no image analysed, not Muse).");
+  console.log("[gilmend] No network call, no key used, nothing is sent to anyone.\n");
 
   const rows: Row[] = [];
   const notes: string[] = [];
@@ -168,6 +168,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error("[damage-desk] demo failed:", error instanceof Error ? error.message : error);
+  console.error("[gilmend] demo failed:", error instanceof Error ? error.message : error);
   process.exitCode = 1;
 });

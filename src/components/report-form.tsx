@@ -3,28 +3,39 @@
 import { AccessCodeField, accessHeaders, useAccessCode } from "./access-code";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ArrowRight, ChevronDown, CircleAlert, KeyRound, LoaderCircle, Lock } from "lucide-react";
+import { useReducedMotion } from "motion/react";
 import type { Engine } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import FileDropzone, { type FileDropzoneItem } from "./arc/file-dropzone/file-dropzone";
+import SegmentedControl from "./arc/segmented-control/segmented-control";
 import { DEMO_SCENARIOS, type DemoScenario } from "./demo-scenarios";
 import { effectiveEngine, type EngineAvailability } from "./engine-choice";
 import { EngineSwitch } from "./engine-switch";
 import { prepareImage } from "./image-prep";
+import { AgentWorking } from "./report/agent-working";
+import { Field, FieldError, INPUT_CLASS, Section } from "./report/form-primitives";
+import { ScenarioCard } from "./report/scenario-card";
 import { VoiceRecorder, type VoiceResult } from "./voice-recorder";
+import { BorderBeam } from "./ui/border-beam";
+import { ShimmerButton } from "./ui/shimmer-button";
 import {
   ACCEPTED_PHOTO_TYPES,
   MAX_PHOTOS,
+  MAX_PHOTO_BYTES,
   validatePhotos,
   validateReport,
   type FieldErrors,
 } from "./report-validation";
 
-interface PhotoItem {
-  key: string;
-  file: File;
-  url: string;
-}
-
 type LanguageChoice = "auto" | "en" | "fr";
+
+const LANGUAGE_OPTIONS = [
+  { value: "auto", label: "Auto-detect" },
+  { value: "en", label: "English" },
+  { value: "fr", label: "French" },
+];
 
 const PRIVATE_DICTATION_ERROR =
   "This message was dictated with the Meta API, so it cannot run privately. Clear it and type it, or pick another engine.";
@@ -32,65 +43,36 @@ const PRIVATE_DICTATION_ERROR =
 const ACCESS_CODE_NEEDED =
   "Enter the access code from the submission to send a report. This public demo takes no new report without it.";
 
-const INPUT_CLASS =
-  "w-full rounded-md border border-border bg-surface px-3 py-2 text-sm placeholder:text-muted aria-[invalid=true]:border-danger";
-
-function Field({
-  id,
-  label,
-  error,
-  hint,
-  children,
-}: {
-  id: string;
-  label: string;
-  error?: string;
-  hint?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium">
-        {label}
-      </label>
-      {children}
-      {hint && !error && (
-        <p id={`${id}-hint`} className="text-xs text-muted">
-          {hint}
-        </p>
-      )}
-      {error && (
-        <p id={`${id}-error`} role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function formatSize(bytes: number): string {
-  return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
 /**
  * The "inbox" of the demo: a customer damage report as it would arrive by e-mail or chat.
- * Submitting runs the agent and opens the resulting case. Demo buttons pre-fill the form
- * with one of the six filmable scenarios (fictitious customer, illustration photos).
+ * Submitting runs the agent and opens the resulting case. Demo cards pre-fill the form
+ * with one of the six filmable scenarios (fictitious customer, AI-generated demo images).
+ *
+ * Redesigned 27 Oct 2026 (Gilmend): presentation only. Every rule below (validation, limits,
+ * the access code, the private-run dictation ban, the voice receipts, what is posted) is
+ * unchanged from the first version.
  */
 export function ReportForm({ availability }: { availability: EngineAvailability }) {
   const router = useRouter();
+  const reducedMotion = useReducedMotion();
   const [orderNumber, setOrderNumber] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [language, setLanguage] = useState<LanguageChoice>("auto");
   const [engine, setEngine] = useState<Engine>("muse-spark-1.3");
-  const [photos, setPhotos] = useState<PhotoItem[]>([]);
+  // The photos to send. The Arc dropzone owns the list on screen and reports it here.
+  const [files, setFiles] = useState<File[]>([]);
+  // A demo case replaces the dropzone's rows: it is remounted (new key) with them as its start.
+  const [dropzoneKey, setDropzoneKey] = useState(0);
+  const [seedItems, setSeedItems] = useState<FileDropzoneItem[] | undefined>(undefined);
+  const seedUrls = useRef<string[]>([]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [savedCaseId, setSavedCaseId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [loadedDemo, setLoadedDemo] = useState<string | null>(null);
-  const [loadingDemo, setLoadingDemo] = useState(false);
+  const [loadedDemoId, setLoadedDemoId] = useState<string | null>(null);
+  const [loadingDemo, setLoadingDemo] = useState<string | null>(null);
   // Every voice message transcribed into the message box so far, with the server's receipt for
   // each; sent with the report so the server (not this page) says how the text was written.
   const [voice, setVoice] = useState<VoiceResult[]>([]);
@@ -102,10 +84,18 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
   // Dictation is a call to the Meta Model API, which a private run promises never to make.
   const privateRun = runsAs === "open-weights";
   const dictatedWithMeta = voice.some((clip) => !clip.demo);
-  const fileInput = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const photosRef = useRef<HTMLDivElement>(null);
   const orderRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const messageRef = useRef<HTMLTextAreaElement>(null);
+
+  // Object URLs made for a demo case's rows are released with the page (the dropzone releases
+  // the ones it makes itself).
+  useEffect(() => {
+    const urls = seedUrls;
+    return () => urls.current.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
 
   function onVoiceTranscript(result: VoiceResult): void {
     setVoice((clips) => [...clips, result]);
@@ -115,29 +105,19 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
     messageRef.current?.focus();
   }
 
-  function addFiles(files: File[]): void {
-    const room = MAX_PHOTOS - photos.length;
-    const accepted = files.slice(0, Math.max(0, room));
-    const next = [...photos, ...accepted.map((file) => ({ key: crypto.randomUUID(), file, url: URL.createObjectURL(file) }))];
-    // Check what was picked, not only what fits, so "4 photos" still explains itself.
-    const problem = files.length > room ? `You can attach up to ${MAX_PHOTOS} photos.` : validatePhotos(next.map((p) => p.file));
-    setPhotos(next);
-    setErrors((e) => ({ ...e, photos: problem ?? undefined }));
-  }
-
-  function removePhoto(key: string): void {
-    const target = photos.find((p) => p.key === key);
-    if (target) URL.revokeObjectURL(target.url);
-    setPhotos((list) => list.filter((p) => p.key !== key));
-    setErrors((e) => ({ ...e, photos: undefined }));
+  // The dropzone reports the whole list after every add and remove. Check what is there, so a
+  // wrong type or an oversized file explains itself as soon as it is picked.
+  function onFilesChange(next: File[]): void {
+    setFiles(next);
+    setErrors((e) => ({ ...e, photos: next.length === 0 ? undefined : (validatePhotos(next) ?? undefined) }));
   }
 
   async function loadScenario(s: DemoScenario): Promise<void> {
-    setLoadingDemo(true);
+    setLoadingDemo(s.id);
     setServerError(null);
     setSavedCaseId(null);
     try {
-      const files = await Promise.all(
+      const loaded = await Promise.all(
         s.photos.map(async ({ src, fallback }) => {
           // The demo photo if the server has it, the flat illustration otherwise.
           let url = src;
@@ -154,8 +134,14 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
           return new File([blob], `${stem}.${ext}`, { type });
         }),
       );
-      for (const p of photos) URL.revokeObjectURL(p.url);
-      setPhotos(files.map((file) => ({ key: crypto.randomUUID(), file, url: URL.createObjectURL(file) })));
+      for (const url of seedUrls.current) URL.revokeObjectURL(url);
+      const urls = loaded.map((file) => URL.createObjectURL(file));
+      seedUrls.current = urls;
+      setSeedItems(
+        loaded.map((file, i) => ({ id: `demo-${s.id}-${i}`, name: file.name, size: file.size, file, preview: urls[i] })),
+      );
+      setDropzoneKey((k) => k + 1);
+      setFiles(loaded);
       setOrderNumber(s.orderNumber);
       setEmail(s.email);
       setMessage(s.message);
@@ -163,11 +149,21 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
       setLanguage(s.language);
       setErrors({});
       setLoadedDemo(s.title);
+      setLoadedDemoId(s.id);
+      // On a phone the cards sit under the form: bring the filled form back into view.
+      if (typeof window !== "undefined" && window.matchMedia?.("(max-width: 1023px)").matches) {
+        formRef.current?.scrollIntoView?.({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+      }
     } catch {
       setErrors({ photos: "Could not load the demo photos. Attach your own photo instead." });
     } finally {
-      setLoadingDemo(false);
+      setLoadingDemo(null);
     }
+  }
+
+  function focusField(field: keyof FieldErrors): void {
+    if (field === "photos") photosRef.current?.querySelector("button")?.focus();
+    else ({ orderNumber: orderRef, email: emailRef, message: messageRef })[field].current?.focus();
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -187,16 +183,11 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
       return;
     }
 
-    const found = validateReport({ orderNumber, email, message }, photos.map((p) => p.file));
+    const found = validateReport({ orderNumber, email, message }, files);
     setErrors(found);
-    const firstInvalid = (["orderNumber", "email", "message"] as const).find((f) => found[f]);
+    const firstInvalid = (["orderNumber", "email", "message", "photos"] as const).find((f) => found[f]);
     if (firstInvalid) {
-      const target = { orderNumber: orderRef, email: emailRef, message: messageRef }[firstInvalid];
-      target.current?.focus();
-      return;
-    }
-    if (found.photos) {
-      fileInput.current?.focus();
+      focusField(firstInvalid);
       return;
     }
 
@@ -229,7 +220,7 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
           }),
         );
       }
-      for (const file of await Promise.all(photos.map((p) => prepareImage(p.file)))) body.append("photos", file);
+      for (const file of await Promise.all(files.map((file) => prepareImage(file)))) body.append("photos", file);
 
       const res = await fetch("/api/reports", { method: "POST", body, headers: accessHeaders(accessCode) });
       const data = (await res.json().catch(() => null)) as {
@@ -241,7 +232,11 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
         router.push(`/cases/${encodeURIComponent(data.caseId)}`);
         return;
       }
-      if (data?.fields) setErrors(data.fields);
+      if (data?.fields) {
+        setErrors(data.fields);
+        const first = (["orderNumber", "email", "message", "photos"] as const).find((f) => data.fields?.[f]);
+        if (first) requestAnimationFrame(() => focusField(first));
+      }
       setServerError(data?.message ?? "The report could not be processed.");
       if (data?.caseId) setSavedCaseId(data.caseId);
     } catch {
@@ -251,237 +246,268 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
     }
   }
 
+  const statusLine = submitting
+    ? `The agent is looking up the order and reading the photos (${runsAs === "demo-mock" ? "demo mode" : "this can take a little while"}).`
+    : loadedDemo
+      ? `Demo case loaded: ${loadedDemo}. Review it, then send.`
+      : "";
+
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-6" aria-describedby="form-intro">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Report a damaged parcel</h1>
-          <p id="form-intro" className="mt-2 text-sm text-muted">
-            This simulates the e-mail or chat message a customer sends. The agent looks up the order, reads
-            the photos, decides and prepares the carrier claim. Nothing is sent to anyone.
-          </p>
-        </div>
-
-        {availability.accessCodeRequired && (
-          // On a public deployment the code gates every new report, demo mode included, so a judge
-          // must be told before filling the form (final review of 27 Oct 2026).
-          <div
-            role="note"
-            data-testid="access-code-notice"
-            className="rounded-lg border border-border bg-accent-soft p-3 text-sm"
-          >
-            <p className="font-semibold">Judges: use the access code from the submission to run the real agent.</p>
-            <p className="mt-1 text-muted">
-              Without it this public demo accepts no new report, not even in demo mode. The recorded runs on the{" "}
-              <Link href="/" className="font-medium underline underline-offset-2">
-                Cases page
-              </Link>{" "}
-              are real runs of the agent and need no code.
-            </p>
-          </div>
-        )}
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="orderNumber" label="Order number" error={errors.orderNumber}>
-            <input
-              id="orderNumber"
-              ref={orderRef}
-              value={orderNumber}
-              onChange={(e) => setOrderNumber(e.target.value)}
-              placeholder="#1001"
-              autoComplete="off"
-              aria-invalid={Boolean(errors.orderNumber)}
-              aria-describedby={errors.orderNumber ? "orderNumber-error" : undefined}
-              className={INPUT_CLASS}
-            />
-          </Field>
-          <Field id="email" label="E-mail used for the order" error={errors.email}>
-            <input
-              id="email"
-              type="email"
-              ref={emailRef}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="customer@example.com"
-              autoComplete="off"
-              aria-invalid={Boolean(errors.email)}
-              aria-describedby={errors.email ? "email-error" : undefined}
-              className={INPUT_CLASS}
-            />
-          </Field>
-        </div>
-
-        <Field
-          id="message"
-          label="Message from the customer"
-          error={errors.message}
-          hint="Type it or record it. Any language. The reply is written in the customer's language."
+    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_21.5rem] xl:gap-10">
+      <div className="flex min-w-0 flex-col gap-3">
+        <a
+          href="#demo-cases"
+          className="inline-flex min-h-11 items-center gap-1.5 self-start text-sm font-medium text-accent underline-offset-4 hover:underline lg:hidden"
         >
-          <textarea
-            id="message"
-            ref={messageRef}
-            value={message}
-            onChange={(e) => {
-              setMessage(e.target.value);
-              // Emptied and retyped: it is a typed message now, not a dictated one.
-              if (e.target.value.trim() === "") setVoice([]);
-            }}
-            rows={5}
-            placeholder="My vase arrived broken…"
-            aria-invalid={Boolean(errors.message)}
-            aria-describedby={errors.message ? "message-error" : "message-hint"}
-            className={INPUT_CLASS}
-          />
-          {privateRun ? (
-            <>
-              <p className="text-xs text-muted">Voice input uses the Meta API, which is unavailable in private mode.</p>
-              {dictatedWithMeta && (
-                <p role="alert" className="text-sm text-danger">
-                  {PRIVATE_DICTATION_ERROR}
-                </p>
-              )}
-            </>
-          ) : (
-            <VoiceRecorder
-              language={language}
-              accessCode={accessCode}
-              disabled={submitting}
-              onTranscript={onVoiceTranscript}
-              onBusyChange={setVoiceBusy}
-            />
-          )}
-        </Field>
+          Start from a demo case
+          <ChevronDown aria-hidden="true" className="h-4 w-4" strokeWidth={2} />
+        </a>
 
-        <Field id="language" label="Customer language">
-          <select
-            id="language"
-            value={language}
-            onChange={(e) => setLanguage(e.target.value as LanguageChoice)}
-            className={`${INPUT_CLASS} sm:w-60`}
-          >
-            <option value="auto">Detect from the message</option>
-            <option value="en">English</option>
-            <option value="fr">French</option>
-          </select>
-        </Field>
-
-        <div className="flex flex-col gap-2">
-          <label htmlFor="photos" className="text-sm font-medium">
-            Photos of the damage (1 to {MAX_PHOTOS}, JPEG, PNG or WebP, 8 MB each)
-          </label>
-          <input
-            id="photos"
-            ref={fileInput}
-            type="file"
-            multiple
-            accept={ACCEPTED_PHOTO_TYPES.join(",")}
-            disabled={photos.length >= MAX_PHOTOS}
-            onChange={(e) => {
-              addFiles(Array.from(e.target.files ?? []));
-              e.target.value = "";
-            }}
-            aria-invalid={Boolean(errors.photos)}
-            aria-describedby={errors.photos ? "photos-error" : undefined}
-            className="text-sm file:mr-3 file:cursor-pointer file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium hover:file:bg-background"
-          />
-          {errors.photos && (
-            <p id="photos-error" role="alert" className="text-sm text-danger">
-              {errors.photos}
-            </p>
-          )}
-          {photos.length > 0 && (
-            <ul className="mt-1 grid grid-cols-3 gap-3" aria-label="Attached photos">
-              {photos.map((p, i) => (
-                <li key={p.key} className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview, nothing to optimise */}
-                  <img src={p.url} alt={`Attached photo ${i + 1}: ${p.file.name}`} className="aspect-[4/3] w-full rounded object-cover" />
-                  <span className="truncate text-xs text-muted" title={p.file.name}>
-                    {p.file.name} · {formatSize(p.file.size)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => removePhoto(p.key)}
-                    className="self-start text-xs font-medium text-danger underline underline-offset-2"
-                  >
-                    Remove <span className="sr-only">photo {i + 1}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <EngineSwitch value={engine} onChange={setEngine} availability={availability} hasAccess={hasAccess} />
-        {availability.accessCodeRequired && (
-          <AccessCodeField
-            id="access-code"
-            value={accessCode}
-            onChange={setAccessCode}
-            hint="Needed to send a report or dictate one (the real engines and demo mode alike). Never type real customer data here."
-          />
-        )}
-
-        {serverError && (
-          <div role="alert" className="rounded-lg border border-danger/40 bg-danger-soft p-3 text-sm text-danger">
-            {serverError}
-            {savedCaseId && (
-              <>
-                {" "}
-                <Link href={`/cases/${encodeURIComponent(savedCaseId)}`} className="font-semibold underline">
-                  Open the saved case
-                </Link>
-                .
-              </>
-            )}
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={submitting}
+        {/* The agent's working state: the whole card is ringed by a gold beam while it runs. */}
+        <BorderBeam reveal={submitting} color="var(--gold-bright)" thickness={2} length={18} speed={4} className="rounded-2xl">
+          <form
+            ref={formRef}
+            onSubmit={onSubmit}
+            noValidate
+            aria-label="Damage report"
             aria-busy={submitting}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:cursor-wait disabled:opacity-70"
+            className="relative scroll-mt-6 md:scroll-mt-24 rounded-2xl border border-border bg-surface shadow-card"
           >
-            {submitting && (
-              <span
-                aria-hidden="true"
-                className="motion-safe-spin h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
-              />
+            {availability.accessCodeRequired && (
+              // On a public deployment the code gates every new report, demo mode included, so a judge
+              // must be told before filling the form (final review of 27 Oct 2026).
+              <div
+                role="note"
+                data-testid="access-code-notice"
+                className="flex items-start gap-3 rounded-t-2xl border-b border-border bg-accent-soft px-5 py-4 text-sm sm:px-8"
+              >
+                <KeyRound aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-accent" strokeWidth={2} />
+                <div>
+                  <p className="font-semibold text-foreground">Judges: use the access code from the submission to run the real agent.</p>
+                  <p className="mt-1 leading-6 text-muted">
+                    Without it this public demo accepts no new report, not even in demo mode. The recorded runs on the{" "}
+                    <Link href="/" className="font-medium text-accent underline underline-offset-2">
+                      Cases page
+                    </Link>{" "}
+                    are real runs of the agent and need no code.
+                  </p>
+                </div>
+              </div>
             )}
-            {submitting ? "Investigating…" : "Send report"}
-          </button>
-          <p role="status" className="text-sm text-muted">
-            {submitting
-              ? `The agent is looking up the order and reading the photos (${runsAs === "demo-mock" ? "demo mode" : "this can take a little while"}).`
-              : loadedDemo
-                ? `Demo case loaded: ${loadedDemo}. Review it, then send.`
-                : ""}
-          </p>
-        </div>
-      </form>
 
-      <aside aria-labelledby="demo-title" className="flex flex-col gap-3 lg:sticky lg:top-6 lg:self-start">
+            <div inert={submitting} className="divide-y divide-border">
+              <Section id="order" step={1} title="Order & customer" description="How the agent finds the order. Fictitious data only.">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field id="orderNumber" label="Order number" error={errors.orderNumber}>
+                    <input
+                      id="orderNumber"
+                      ref={orderRef}
+                      value={orderNumber}
+                      onChange={(e) => setOrderNumber(e.target.value)}
+                      placeholder="#1001"
+                      autoComplete="off"
+                      aria-invalid={Boolean(errors.orderNumber)}
+                      aria-describedby={errors.orderNumber ? "orderNumber-error" : undefined}
+                      className={INPUT_CLASS}
+                    />
+                  </Field>
+                  <Field id="email" label="E-mail used for the order" error={errors.email}>
+                    <input
+                      id="email"
+                      type="email"
+                      ref={emailRef}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="customer@example.com"
+                      autoComplete="off"
+                      aria-invalid={Boolean(errors.email)}
+                      aria-describedby={errors.email ? "email-error" : undefined}
+                      className={INPUT_CLASS}
+                    />
+                  </Field>
+                </div>
+              </Section>
+
+              <Section id="message-section" step={2} title="Message" description="What the customer wrote, or said out loud.">
+                <Field
+                  id="message"
+                  label="Message from the customer"
+                  error={errors.message}
+                  hint="Type it or record it. Any language. The reply is written in the customer's language."
+                >
+                  <div
+                    className={cn(
+                      "overflow-hidden rounded-xl border bg-surface transition-[border-color,box-shadow] duration-150 focus-within:border-ink focus-within:ring-2 focus-within:ring-ink/15",
+                      errors.message ? "border-danger" : "border-border-strong/70 hover:border-border-strong",
+                    )}
+                  >
+                    <textarea
+                      id="message"
+                      ref={messageRef}
+                      value={message}
+                      onChange={(e) => {
+                        setMessage(e.target.value);
+                        // Emptied and retyped: it is a typed message now, not a dictated one.
+                        if (e.target.value.trim() === "") setVoice([]);
+                      }}
+                      rows={5}
+                      placeholder="My vase arrived broken…"
+                      aria-invalid={Boolean(errors.message)}
+                      aria-describedby={errors.message ? "message-error" : "message-hint"}
+                      className="block min-h-32 w-full resize-y bg-transparent px-3.5 py-3 text-[0.9375rem] leading-6 text-foreground placeholder:text-muted focus-visible:outline-none"
+                    />
+                    <div className="border-t border-border bg-surface-muted px-3 py-2.5">
+                      {privateRun ? (
+                        <div className="flex flex-col gap-2">
+                          <p className="flex items-start gap-2 text-xs leading-5 text-muted">
+                            <Lock aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+                            Voice input uses the Meta API, which is unavailable in private mode.
+                          </p>
+                          {dictatedWithMeta && <FieldError id="voice-private-error">{PRIVATE_DICTATION_ERROR}</FieldError>}
+                        </div>
+                      ) : (
+                        <VoiceRecorder
+                          language={language}
+                          accessCode={accessCode}
+                          disabled={submitting}
+                          onTranscript={onVoiceTranscript}
+                          onBusyChange={setVoiceBusy}
+                        />
+                      )}
+                    </div>
+                  </div>
+                </Field>
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-foreground">Customer language</span>
+                  <SegmentedControl
+                    label="Customer language"
+                    options={LANGUAGE_OPTIONS}
+                    value={language}
+                    onValueChange={(value) => setLanguage(value as LanguageChoice)}
+                    className="w-full sm:w-auto [&>div]:flex-1 [&_button]:min-h-11 [&_button]:flex-1 sm:[&_button]:min-w-28"
+                  />
+                </div>
+              </Section>
+
+              <Section
+                id="photos-section"
+                step={3}
+                title="Photos of the damage"
+                description={`1 to ${MAX_PHOTOS} photos, JPEG, PNG or WebP, ${MAX_PHOTO_BYTES / (1024 * 1024)} MB each. Resized in your browser before upload.`}
+              >
+                <div ref={photosRef} className="flex flex-col gap-2.5">
+                  <FileDropzone
+                    key={dropzoneKey}
+                    accept={ACCEPTED_PHOTO_TYPES.join(",")}
+                    maxFiles={MAX_PHOTOS}
+                    maxSize={MAX_PHOTO_BYTES}
+                    defaultItems={seedItems}
+                    onFilesChange={onFilesChange}
+                    compactAt={1}
+                    label="Add photos of the damage"
+                    description="Drop them here, paste, or choose from your device"
+                    note={`JPEG, PNG or WebP · up to ${MAX_PHOTOS} photos · ${MAX_PHOTO_BYTES / (1024 * 1024)} MB each`}
+                    dropLabel="Drop to add photos"
+                  />
+                  {errors.photos && <FieldError id="photos-error">{errors.photos}</FieldError>}
+                </div>
+              </Section>
+
+              <Section
+                id="engine"
+                step={4}
+                title="Engine"
+                description="Which model reads the report. The line below says what it will really run as."
+              >
+                <EngineSwitch value={engine} onChange={setEngine} availability={availability} hasAccess={hasAccess} />
+              </Section>
+
+              {availability.accessCodeRequired && (
+                <Section id="access" step={5} title="Judges' access" description="This public demo asks for the code from the submission.">
+                  <AccessCodeField
+                    id="access-code"
+                    value={accessCode}
+                    onChange={setAccessCode}
+                    hint="Needed to send a report or dictate one (the real engines and demo mode alike). Never type real customer data here."
+                  />
+                </Section>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-4 rounded-b-2xl border-t border-border bg-surface-muted px-5 py-5 sm:px-8">
+              {serverError && (
+                <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">
+                  <CircleAlert aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2} />
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <p className="font-medium">{serverError}</p>
+                    <p className="text-xs leading-5">Your answers and photos are still here. Fix what is flagged, then press Send report again.</p>
+                    {savedCaseId && (
+                      <p>
+                        <Link href={`/cases/${encodeURIComponent(savedCaseId)}`} className="font-semibold underline underline-offset-2">
+                          Open the saved case
+                        </Link>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <p role="status" className="text-sm text-foreground">
+                    {statusLine}
+                  </p>
+                  <p className="text-xs leading-5 text-muted">
+                    Nothing is sent to a customer or a carrier. You review the case, then approve it.
+                  </p>
+                </div>
+                <ShimmerButton
+                  type="submit"
+                  disabled={submitting}
+                  aria-busy={submitting}
+                  shimmerColor="var(--gold-bright)"
+                  shimmerDuration="3.2s"
+                  background="var(--ink)"
+                  borderRadius="0.75rem"
+                  className={cn(
+                    "min-h-12 gap-2 px-7 text-[0.9375rem] font-semibold tracking-tight shadow-raised",
+                    "enabled:hover:-translate-y-px disabled:cursor-wait disabled:opacity-80",
+                    "motion-reduce:[&>div:first-of-type]:hidden",
+                  )}
+                >
+                  {submitting ? (
+                    <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" strokeWidth={2} />
+                  ) : null}
+                  {submitting ? "Investigating…" : "Send report"}
+                  {!submitting && <ArrowRight aria-hidden="true" className="h-4 w-4" strokeWidth={2} />}
+                </ShimmerButton>
+              </div>
+            </div>
+
+            {submitting && <AgentWorking engine={runsAs} />}
+          </form>
+        </BorderBeam>
+      </div>
+
+      <aside id="demo-cases" aria-labelledby="demo-title" className="flex scroll-mt-6 md:scroll-mt-24 flex-col gap-4">
         <div>
-          <h2 id="demo-title" className="text-base font-semibold">
+          <h2 id="demo-title" className="font-display text-2xl tracking-tight text-foreground">
             Demo cases
           </h2>
-          <p className="mt-1 text-sm text-muted">
-            One click fills the form with a fictitious customer and illustration photos. Then press Send report.
+          <p className="mt-1.5 text-sm leading-6 text-muted">
+            One click fills the form with a fictitious customer and an AI-generated demo image. Then press Send report.
           </p>
         </div>
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-3">
           {DEMO_SCENARIOS.map((s) => (
             <li key={s.id}>
-              <button
-                type="button"
-                onClick={() => void loadScenario(s)}
-                disabled={loadingDemo || submitting}
-                className="w-full rounded-lg border border-border bg-surface p-3 text-left hover:border-accent disabled:opacity-60"
-              >
-                <span className="block text-sm font-medium">{s.title}</span>
-                <span className="block text-xs text-muted">{s.shows}</span>
-              </button>
+              <ScenarioCard
+                scenario={s}
+                selected={loadedDemoId === s.id}
+                loading={loadingDemo === s.id}
+                disabled={loadingDemo !== null || submitting}
+                onSelect={() => void loadScenario(s)}
+              />
             </li>
           ))}
         </ul>

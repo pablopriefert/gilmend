@@ -133,7 +133,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch (err) {
     if (err instanceof TranscribeError) {
       // The log gets the kind of failure and the status, never the key or the body.
-      console.error(`[damage-desk] transcription failed: ${err.code}${err.status ? ` (${err.status})` : ""}`);
+      console.error(`[gilmend] transcription failed: ${err.code}${err.status ? ` (${err.status})` : ""}`);
       switch (err.code) {
         case "empty":
           return errorResponse(422, "no_speech", "We could not hear any speech. Record again, closer to the microphone, or type the message.");
@@ -149,7 +149,7 @@ export async function POST(request: Request): Promise<Response> {
           return errorResponse(502, "transcription_failed", "The transcription service is not available right now. Type the message instead.");
       }
     }
-    console.error("[damage-desk] transcription failed:", err instanceof Error ? err.name : "unknown error");
+    console.error("[gilmend] transcription failed:", err instanceof Error ? err.name : "unknown error");
     return errorResponse(502, "transcription_failed", "The transcription service is not available right now. Type the message instead.");
   }
 }

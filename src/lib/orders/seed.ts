@@ -54,7 +54,7 @@ export function buildDraftOrderInput(order: Order, shippingEur: number) {
   const { firstName, lastName } = splitName(order.name);
   return {
     email: order.email,
-    note: "Fictitious order created by scripts/seed-shopify-dev-store.ts for the Damage Desk demo. Not a real customer.",
+    note: "Fictitious order created by scripts/seed-shopify-dev-store.ts for the Gilmend demo. Not a real customer.",
     tags: [FIXTURE_TAG, fixtureTag(order.id), `${CARRIER_TAG_PREFIX}${order.carrier}`],
     lineItems: order.lineItems.map((li) => ({
       title: li.title,

@@ -40,7 +40,7 @@ async function main(): Promise<void> {
     const found = resolveDemoPhoto(photo, ROOT);
     if (found) photos.push(path.relative(ROOT, found));
   }
-  console.log(`[damage-desk] REAL RUN on ${describeEngine(requested).label} — case ${demo.id}, ${photos.length} photo(s)`);
+  console.log(`[gilmend] REAL RUN on ${describeEngine(requested).label} — case ${demo.id}, ${photos.length} photo(s)`);
 
   const started = Date.now();
   const result = await runAgent({ ...demo.report, photos }, {

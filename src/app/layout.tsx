@@ -1,10 +1,23 @@
 import type { Metadata } from "next";
+import { Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
 import { AppHeader } from "@/components/app-header";
+import { SiteFooter } from "@/components/shell/site-footer";
 import { hasOpenRouterKey, openRouterModel, resolveOpenWeights } from "@/lib/config";
 import "./globals.css";
 
+// Self-hosted by next/font at build time (no request to Google from the visitor's browser).
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-instrument-serif",
+  display: "swap",
+});
+const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains-mono", display: "swap" });
+
 export const metadata: Metadata = {
-  title: { default: "Damage Desk", template: "%s · Damage Desk" },
+  title: { default: "Gilmend · Broken parcels, mended in gold", template: "%s · Gilmend" },
   description:
     "The agent that prepares the claim to recover the money from damaged parcels: investigates, decides, prepares the carrier claim, and waits for one click.",
 };
@@ -13,8 +26,6 @@ export const metadata: Metadata = {
 // would be prerendered at build time and the label would freeze at whatever the build saw.
 export const dynamic = "force-dynamic";
 
-// System font stack on purpose: no build-time font download, so `npm run build` works
-// offline and in CI.
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   // The Muse Model License asks every product that uses Muse Spark Open to say so in its UI.
   // The OpenRouter test engine can serve it too (OPENROUTER_MODEL=meta/muse-spark-open).
@@ -22,25 +33,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     /muse-spark-open/i.test(resolveOpenWeights()?.model ?? "") ||
     (hasOpenRouterKey() && /muse-spark-open/i.test(openRouterModel()));
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="flex min-h-full flex-col">
+    <html
+      lang="en"
+      className={`h-full antialiased ${inter.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
+    >
+      <body className="paper flex min-h-full flex-col">
         <a
           href="#main"
-          className="sr-only rounded-md bg-accent px-3 py-2 text-white focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
+          className="sr-only rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-raised focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50"
         >
           Skip to content
         </a>
         <AppHeader />
-        <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
+        <main id="main" className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
           {children}
         </main>
-        <footer className="border-t border-border bg-surface">
-          <p className="mx-auto w-full max-w-6xl px-4 py-4 text-xs text-muted sm:px-6">
-            Fictitious orders and customers only. Damage Desk never sends anything to a carrier or a
-            customer: every message waits for a human click, and even then it is only marked ready to send.
-            {builtWithSparkOpen && " Built with Muse Spark Open."}
-          </p>
-        </footer>
+        <SiteFooter builtWithSparkOpen={builtWithSparkOpen} />
       </body>
     </html>
   );

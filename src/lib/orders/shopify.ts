@@ -128,7 +128,7 @@ export async function shopifyGraphQL<T>(
 // --- Order lookup -----------------------------------------------------------------
 
 export const ORDER_LOOKUP_QUERY = /* GraphQL */ `
-  query DamageDeskOrderLookup($query: String!) {
+  query GilmendOrderLookup($query: String!) {
     orders(first: 5, query: $query) {
       nodes {
         name

@@ -9,6 +9,11 @@ const getCase = vi.fn();
 const getCarrierRules = vi.fn();
 vi.mock("@/lib/store/cases", () => ({ listCases: () => listCases(), getCase: (id: string) => getCase(id) }));
 vi.mock("@/lib/rules/carriers", () => ({ getCarrierRules: (c: string) => getCarrierRules(c) }));
+// next/font/google only exists inside the Next build; the layout test below needs stand-ins.
+vi.mock("next/font/google", () => {
+  const font = () => ({ variable: "", className: "", style: {} });
+  return { Inter: font, Instrument_Serif: font, JetBrains_Mono: font };
+});
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   usePathname: () => "/",

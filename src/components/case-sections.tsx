@@ -1,17 +1,56 @@
-import type { ReactNode } from "react";
+import {
+  Calculator,
+  Camera,
+  CalendarClock,
+  Check,
+  CircleAlert,
+  CircleCheck,
+  CircleX,
+  Clock,
+  Download,
+  ExternalLink,
+  FileCheck2,
+  FileText,
+  FileX2,
+  History,
+  ImageOff,
+  Maximize2,
+  Mail,
+  Mic,
+  Package,
+  PackageX,
+  Route,
+  ScanSearch,
+  ShieldCheck,
+  Sparkles,
+  TriangleAlert,
+  UserRoundCheck,
+  ChevronDown,
+  ScanEye,
+  Image as ImageIcon,
+  type LucideIcon,
+} from "lucide-react";
+import { AnimatedCounter } from "@/components/arc/animated-counter/animated-counter";
+import { BorderBeam } from "@/components/ui/border-beam";
 import type {
   CarrierRules,
   CaseRecord,
   ClaimComputation,
   DamageAssessment,
   Decision,
+  DecisionKind,
+  Engine,
   Evidence,
   Order,
   TraceStep,
   VoiceNote,
 } from "@/lib/types";
 import { evidenceForPhotos } from "@/lib/evidence/merge";
-import { isStaleSource, noteVerification, prettyJson, type NoteFlag } from "./display-data";
+import { cn } from "@/lib/utils";
+import { CopyButton } from "./case/copy-button";
+import { TraceTimeline } from "./case/trace-timeline";
+import { BUTTON_QUIET, Eyebrow, Fact, IconTile, Panel, Pill, riseStyle, type Tone } from "./case/ui";
+import { isStaleSource, noteVerification, type NoteFlag } from "./display-data";
 import {
   DAMAGE_TYPE_LABEL,
   DECISION_LABEL,
@@ -24,69 +63,75 @@ import {
 } from "./format";
 import { photoSrc } from "./photo-src";
 
-export function Card({
-  id,
-  title,
-  children,
-  action,
+// The sections of the case page. Left column: the evidence and the numbers. Right column: the
+// decision. Every honesty label of the first version is still here (what is a recording, what is
+// a mock, what the code computed and what the model said), only restyled.
+
+function Photo({
+  src,
+  alt,
+  label,
+  caption,
+  note,
 }: {
-  id: string;
-  title: string;
-  children: ReactNode;
-  action?: ReactNode;
+  src: string;
+  alt: string;
+  /** Short chip over the image: what this picture is. */
+  label: string;
+  caption: string;
+  /** A second, quieter line under the caption. */
+  note?: string;
 }) {
-  return (
-    <section aria-labelledby={id} className="rounded-lg border border-border bg-surface p-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 id={id} className="text-base font-semibold">
-          {title}
-        </h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs font-medium uppercase tracking-wide text-muted">{label}</dt>
-      <dd className="mt-0.5 break-words text-sm">{children}</dd>
-    </div>
-  );
-}
-
-function Flag({ children, tone = "warn" }: { children: ReactNode; tone?: "warn" | "ok" | "neutral" }) {
-  const cls =
-    tone === "warn"
-      ? "bg-amber-100 text-amber-900"
-      : tone === "ok"
-        ? "bg-emerald-100 text-emerald-900"
-        : "bg-slate-100 text-slate-800";
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${cls}`}>{children}</span>;
-}
-
-function Photo({ src, alt, caption }: { src: string; alt: string; caption: string }) {
   const url = photoSrc(src);
   return (
-    <figure className="flex min-w-0 flex-col gap-1">
+    <figure className="flex min-w-0 flex-col gap-2.5">
       {url ? (
-        <a href={url} target="_blank" rel="noopener noreferrer" aria-label={`${alt} (opens full size)`}>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${alt} (opens full size)`}
+          className="group relative block overflow-hidden rounded-xl border border-border bg-surface-muted shadow-card"
+        >
           {/* eslint-disable-next-line @next/next/no-img-element -- served by /api/files, image optimisation is switched off */}
-          <img src={url} alt={alt} className="aspect-[4/3] w-full rounded-md border border-border bg-background object-cover" />
+          <img
+            src={url}
+            alt={alt}
+            className="aspect-[4/3] w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+          />
+          <span
+            aria-hidden="true"
+            className="absolute left-2.5 top-2.5 rounded-full bg-ink/90 px-2.5 py-1 text-[0.6875rem] font-semibold tracking-wide text-white"
+          >
+            {label}
+          </span>
+          <span
+            aria-hidden="true"
+            className="absolute bottom-2.5 right-2.5 grid h-8 w-8 place-items-center rounded-full bg-surface/95 text-ink opacity-0 shadow-card transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 hover-none:opacity-100"
+          >
+            <Maximize2 className="h-4 w-4" strokeWidth={1.75} />
+          </span>
         </a>
       ) : (
-        <div className="grid aspect-[4/3] w-full place-items-center rounded-md border border-dashed border-border bg-background text-xs text-muted">
-          Photo unavailable
+        <div className="grid aspect-[4/3] w-full place-items-center gap-1 rounded-xl border border-dashed border-border-strong bg-surface-muted text-xs text-muted">
+          <span className="flex flex-col items-center gap-1.5">
+            <ImageOff aria-hidden="true" className="h-5 w-5" strokeWidth={1.5} />
+            Photo unavailable
+          </span>
         </div>
       )}
-      <figcaption className="text-xs text-muted">{caption}</figcaption>
+      <figcaption className="text-xs leading-relaxed text-muted">
+        {caption}
+        {note && <span className="mt-0.5 block">{note}</span>}
+      </figcaption>
     </figure>
   );
 }
 
-/** Customer's message and the photos. Annotated evidence (SAM 3.1) sits beside the original. */
+/**
+ * Customer's message and the photos. Each photo is shown as sent, and beside it the version SAM 3.1
+ * outlined when the agent made one. SAM shows what it matched, not a verdict on the damage.
+ */
 export function EvidenceSection({
   message,
   photos,
@@ -103,14 +148,15 @@ export function EvidenceSection({
 }) {
   // Every photo the customer sent, each with its annotated version when the agent made one.
   const items: Evidence[] = evidenceForPhotos(photos, evidence);
+  const anyOutlined = items.some((e) => e.annotatedPhoto);
   return (
-    <Card id="evidence-title" title="Customer report and evidence">
+    <Panel id="evidence-title" title="Customer report and evidence" icon={Camera} index={2}>
       {voiceNote && (
-        <p className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+        <p className="mb-3 flex flex-wrap items-center gap-2 text-sm">
           {voiceNote.demo ? (
-            <Flag>Voice message: DEMO MODE, canned transcript</Flag>
+            <Pill tone="warn" icon={Mic}>Voice message: DEMO MODE, canned transcript</Pill>
           ) : (
-            <Flag tone="ok">Voice message, transcribed by {voiceNote.model}</Flag>
+            <Pill tone="ok" icon={Mic}>Voice message, transcribed by {voiceNote.model}</Pill>
           )}
           <span className="text-muted">
             {Math.max(1, Math.round(voiceNote.durationMs / 1000))} s
@@ -124,93 +170,141 @@ export function EvidenceSection({
           </span>
         </p>
       )}
-      <blockquote className="whitespace-pre-wrap rounded-md border-l-4 border-accent bg-background px-4 py-3 text-sm">
+      <blockquote className="whitespace-pre-wrap border-l-2 border-ink py-1 pl-4 font-display text-[1.375rem] leading-snug text-ink">
         {message}
       </blockquote>
-      {items.length === 0 ? (
-        <p className="mt-4 text-sm text-muted">No photo was attached to this report.</p>
-      ) : (
-        <ul className="mt-4 flex flex-col gap-5">
-          {items.map((e, i) => (
-            <li key={`${e.photo}-${i}`}>
-              <div className={`grid gap-3 ${e.annotatedPhoto ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
-                <Photo src={e.photo} alt={`Customer photo ${i + 1}`} caption={`Photo ${i + 1}, as sent by the customer`} />
-                {e.annotatedPhoto && (
-                  <Photo
-                    src={e.annotatedPhoto}
-                    alt={`Photo ${i + 1} outlined by SAM 3.1`}
-                    caption={`Outlined by SAM 3.1: what it matched (the item, its pieces or the box)${inClaim ? ". This image goes in the claim" : ""}`}
-                  />
-                )}
-              </div>
-              <p className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                {e.method === "sam-3.1" ? (
-                  <Flag tone="ok">Annotated with SAM 3.1</Flag>
-                ) : (
-                  <Flag tone="neutral">Raw photo: not annotated</Flag>
-                )}
-                {e.note && <span className="text-muted">{e.note}</span>}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
 
-export function OrderSection({ order }: { order: Order | null }) {
-  return (
-    <Card id="order-title" title="Order">
-      {!order ? (
-        <p className="text-sm text-muted">
-          <Flag>Not found</Flag> No order matches the number and e-mail the customer gave, so the agent could
-          not check carrier, value or delivery date.
+      {items.length === 0 ? (
+        <p className="mt-5 flex items-center gap-2 rounded-xl border border-dashed border-border-strong bg-surface-muted px-4 py-3 text-sm text-muted">
+          <ImageOff aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+          No photo was attached to this report.
         </p>
       ) : (
         <>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Fact label="Order">{order.id}</Fact>
-            <Fact label="Customer">{order.name}</Fact>
-            <Fact label="Total">{formatEur(order.total)}</Fact>
-            <Fact label="Carrier">{order.service}</Fact>
-            <Fact label="Tracking number">
-              <span className="font-mono text-xs">{order.trackingNumber}</span>
-            </Fact>
-            <Fact label="Weight">{order.weightKg} kg</Fact>
-            <Fact label="Delivered">{order.deliveredAt ? formatDate(order.deliveredAt) : "Not delivered yet"}</Fact>
-            <Fact label="Ship to">
-              {order.shippingAddress.city}, {order.shippingAddress.country}
-            </Fact>
-          </dl>
-          <ul className="mt-4 divide-y divide-border rounded-md border border-border text-sm">
-            {order.lineItems.map((li) => (
-              <li key={li.sku} className="flex justify-between gap-3 px-3 py-2">
-                <span>
-                  {li.quantity} × {li.title}
-                </span>
-                <span className="text-muted">{formatEur(li.unitPrice * li.quantity)}</span>
+          <div className="mt-6 flex items-center gap-2">
+            <Eyebrow>Photos</Eyebrow>
+            <span aria-hidden="true" className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted">{items.length === 1 ? "1 photo" : `${items.length} photos`}</span>
+          </div>
+          {anyOutlined && (
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              The outline is what SAM 3.1 matched on the photo (the item, its pieces or the box), not a verdict on the
+              damage. The damage itself is read in the assessment below.
+            </p>
+          )}
+          <ul className="mt-4 flex flex-col gap-8">
+            {items.map((e, i) => (
+              <li key={`${e.photo}-${i}`}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Photo
+                    src={e.photo}
+                    alt={`Customer photo ${i + 1}`}
+                    label="As sent"
+                    caption={`Photo ${i + 1}, as sent by the customer`}
+                  />
+                  {e.annotatedPhoto ? (
+                    <Photo
+                      src={e.annotatedPhoto}
+                      alt={`Photo ${i + 1} outlined by SAM 3.1`}
+                      label="SAM 3.1 outline"
+                      caption={`Outlined by SAM 3.1: what it matched (the item, its pieces or the box)${inClaim ? ". This image goes in the claim" : ""}`}
+                    />
+                  ) : (
+                    <div className="hidden min-h-32 place-items-center rounded-xl border border-dashed border-border-strong bg-surface-muted p-4 text-center text-xs text-muted sm:grid">
+                      <span className="flex flex-col items-center gap-1.5">
+                        <ScanSearch aria-hidden="true" className="h-5 w-5" strokeWidth={1.5} />
+                        No SAM outline for this photo
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                  {e.method === "sam-3.1" ? (
+                    <Pill tone="ok" icon={ScanSearch}>Annotated with SAM 3.1</Pill>
+                  ) : (
+                    <Pill tone="neutral" icon={ImageIcon}>Raw photo: not annotated</Pill>
+                  )}
+                  {e.note && <span className="text-muted">{e.note}</span>}
+                </p>
               </li>
             ))}
           </ul>
         </>
       )}
-    </Card>
+    </Panel>
+  );
+}
+
+export function OrderSection({ order }: { order: Order | null }) {
+  return (
+    <Panel id="order-title" title="Order" icon={order ? Package : PackageX} index={4}>
+      {!order ? (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-soft">
+          <Pill tone="warn" icon={CircleAlert}>Not found</Pill>
+          <span className="min-w-0 flex-1 basis-64">
+            No order matches the number and e-mail the customer gave, so the agent could not check carrier, value or
+            delivery date.
+          </span>
+        </p>
+      ) : (
+        <>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
+            <Fact label="Order">
+              <span className="font-mono text-[0.8125rem]">{order.id}</span>
+            </Fact>
+            <Fact label="Customer">{order.name}</Fact>
+            <Fact label="Total">
+              <span className="tabular">{formatEur(order.total)}</span>
+            </Fact>
+            <Fact label="Carrier">{order.service}</Fact>
+            <Fact label="Tracking number">
+              <span className="font-mono text-xs">{order.trackingNumber}</span>
+            </Fact>
+            <Fact label="Weight">
+              <span className="tabular">{order.weightKg} kg</span>
+            </Fact>
+            <Fact label="Delivered">{order.deliveredAt ? formatDate(order.deliveredAt) : "Not delivered yet"}</Fact>
+            <Fact label="Ship to">
+              {order.shippingAddress.city}, {order.shippingAddress.country}
+            </Fact>
+          </dl>
+          <ul className="mt-5 divide-y divide-border overflow-hidden rounded-xl border border-border text-sm">
+            {order.lineItems.map((li) => (
+              <li key={li.sku} className="flex items-baseline justify-between gap-3 bg-surface-muted/50 px-4 py-3">
+                <span className="min-w-0">
+                  {li.quantity} × {li.title}
+                </span>
+                <span className="tabular shrink-0 text-muted">{formatEur(li.unitPrice * li.quantity)}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Panel>
   );
 }
 
 export function AssessmentSection({ assessment }: { assessment: DamageAssessment | null }) {
   return (
-    <Card id="assessment-title" title="What the agent saw">
+    <Panel id="assessment-title" title="What the agent saw" icon={ScanEye} index={3}>
       {!assessment ? (
         <p className="text-sm text-muted">The photos were not assessed.</p>
       ) : (
         <>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
             <Fact label="Item">{assessment.item}</Fact>
             <Fact label="Damage">{DAMAGE_TYPE_LABEL[assessment.damageType]}</Fact>
             <Fact label="Severity">{SEVERITY_LABEL[assessment.severity]}</Fact>
-            <Fact label="Carrier likely at fault">{assessment.carrierLikelyAtFault ? "Yes" : "No"}</Fact>
+            <Fact label="Carrier likely at fault">
+              <span className="inline-flex items-center gap-1.5">
+                {assessment.carrierLikelyAtFault ? (
+                  <Check aria-hidden="true" className="h-4 w-4 text-success" strokeWidth={2.25} />
+                ) : (
+                  <CircleX aria-hidden="true" className="h-4 w-4 text-muted" strokeWidth={2} />
+                )}
+                {assessment.carrierLikelyAtFault ? "Yes" : "No"}
+              </span>
+            </Fact>
             <Fact label="Packaging">
               {assessment.packagingAdequate === null
                 ? "Cannot tell from the photos"
@@ -221,15 +315,18 @@ export function AssessmentSection({ assessment }: { assessment: DamageAssessment
             <Fact label="Photo quality">{PHOTO_QUALITY_LABEL[assessment.photoQuality]}</Fact>
           </dl>
           {assessment.evidenceNotes.length > 0 && (
-            <ul className="mt-4 list-disc space-y-1 pl-5 text-sm">
+            <ul className="mt-5 space-y-2 border-t border-border pt-4 text-sm leading-relaxed text-ink-soft">
               {assessment.evidenceNotes.map((n, i) => (
-                <li key={i}>{n}</li>
+                <li key={i} className="flex gap-2.5">
+                  <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-border-strong" />
+                  <span className="min-w-0">{n}</span>
+                </li>
               ))}
             </ul>
           )}
         </>
       )}
-    </Card>
+    </Panel>
   );
 }
 
@@ -248,15 +345,15 @@ export interface RuleFigureView {
 }
 export type RulesView = CarrierRules & { figures?: RuleFigureView[] };
 
-const FIGURE_FLAG: Record<RuleFigureView["status"], { label: string; tone: "ok" | "warn" }> = {
-  verified: { label: "Verified", tone: "ok" },
-  dated_source: { label: "Dated source", tone: "warn" },
-  unverified: { label: "Unverified", tone: "warn" },
+const FIGURE_FLAG: Record<RuleFigureView["status"], { label: string; tone: Tone; icon: LucideIcon }> = {
+  verified: { label: "Verified", tone: "ok", icon: ShieldCheck },
+  dated_source: { label: "Dated source", tone: "warn", icon: History },
+  unverified: { label: "Unverified", tone: "warn", icon: TriangleAlert },
 };
 
-const NOTE_FLAG_LABEL: Record<Exclude<NoteFlag, null>, string> = {
-  unverified: "Unverified",
-  dated_source: "Dated source",
+const NOTE_FLAG: Record<Exclude<NoteFlag, null>, { label: string; icon: LucideIcon }> = {
+  unverified: { label: "Unverified", icon: TriangleAlert },
+  dated_source: { label: "Dated source", icon: History },
 };
 
 function describeCompensation(c: CarrierRules["compensation"]): string {
@@ -270,6 +367,13 @@ function describeCompensation(c: CarrierRules["compensation"]): string {
 function safeHref(url: string): string | null {
   return /^https?:\/\//i.test(url) ? url : null;
 }
+
+const DEADLINE_TONE: Record<"none" | "ok" | "soon" | "overdue", { tone: Tone; icon: LucideIcon }> = {
+  none: { tone: "neutral", icon: Clock },
+  ok: { tone: "neutral", icon: Clock },
+  soon: { tone: "warn", icon: Clock },
+  overdue: { tone: "danger", icon: TriangleAlert },
+};
 
 /**
  * Claim computation. Amounts and deadlines come from dated carrier rules and deterministic
@@ -286,24 +390,30 @@ export function ClaimSection({
 }) {
   const deadline = deadlineInfo(claim, now);
   return (
-    <Card id="claim-title" title="Carrier claim">
+    <Panel id="claim-title" title="Carrier claim" icon={Calculator} index={5}>
       {!claim ? (
         <p className="text-sm text-muted">No claim was computed for this case.</p>
       ) : (
         <>
-          <p className="mb-4 flex flex-wrap items-center gap-2 text-sm">
-            {claim.eligible ? <Flag tone="ok">Eligible</Flag> : <Flag tone="neutral">Not eligible</Flag>}
+          <p className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+            {claim.eligible ? (
+              <Pill tone="ok" icon={CircleCheck}>Eligible</Pill>
+            ) : (
+              <Pill tone="neutral" icon={CircleX}>Not eligible</Pill>
+            )}
             <span className="text-muted">Computed by code from the carrier&apos;s rules, not by the model.</span>
           </p>
-          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
             <Fact label="Max. compensation">
-              <span className="text-lg font-semibold">{formatEur(claim.maxCompensationEur)}</span>
+              <span className="tabular font-display text-3xl leading-none text-gold-ink">
+                {formatEur(claim.maxCompensationEur)}
+              </span>
             </Fact>
             <Fact label="Claim deadline">
               {claim.claimDeadline ? (
                 <>
                   {formatDate(claim.claimDeadline)}
-                  <span className="block text-xs text-muted">{deadline.text}</span>
+                  <span className="mt-0.5 block text-xs text-muted">{deadline.text}</span>
                 </>
               ) : (
                 "None"
@@ -314,39 +424,47 @@ export function ClaimSection({
             </Fact>
           </dl>
           {claim.reasons.length > 0 && (
-            <ul className="mt-4 list-disc space-y-1 pl-5 text-sm">
+            <ul className="mt-5 space-y-2 border-t border-border pt-4 text-sm leading-relaxed text-ink-soft">
               {claim.reasons.map((r, i) => (
-                <li key={i}>{r}</li>
+                <li key={i} className="flex gap-2.5">
+                  <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-border-strong" />
+                  <span className="min-w-0">{r}</span>
+                </li>
               ))}
             </ul>
           )}
         </>
       )}
 
-      <div className="mt-5 border-t border-border pt-4">
-        <h3 className="text-sm font-semibold">Carrier rules used{rules ? `: ${rules.label}` : ""}</h3>
+      <div className="mt-6 rounded-xl border border-border bg-surface-muted/60 p-4 sm:p-5">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
+          <FileText aria-hidden="true" className="h-4 w-4 text-ink-soft" strokeWidth={1.75} />
+          Carrier rules used{rules ? `: ${rules.label}` : ""}
+        </h3>
         {!rules ? (
           <p className="mt-2 text-sm text-muted">The carrier rules could not be loaded for this case.</p>
         ) : (
           <>
-            <dl className="mt-3 grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
               <Fact label="Compensation">{describeCompensation(rules.compensation)}</Fact>
               <Fact label="Reserves within">{rules.reserveDeadlineHours} h of delivery</Fact>
               <Fact label="Claim within">{rules.claimDeadlineDays} days</Fact>
             </dl>
             {rules.requiresRefusal && (
-              <p className="mt-3 text-sm">
-                <Flag>Refusal expected</Flag> The carrier expects the customer to refuse a damaged parcel.
+              <p className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+                <Pill tone="warn" icon={CircleAlert}>Refusal expected</Pill>
+                <span>The carrier expects the customer to refuse a damaged parcel.</span>
               </p>
             )}
             {rules.notes.length > 0 && (
-              <ul className="mt-3 space-y-1.5 text-sm">
+              <ul className="mt-4 space-y-2 text-sm leading-relaxed">
                 {rules.notes.map((raw, i) => {
                   const note = noteVerification(raw);
+                  const flag = note.flag ? NOTE_FLAG[note.flag] : null;
                   return (
-                    <li key={i} className="flex flex-wrap items-baseline gap-2">
-                      {note.flag && <Flag>{NOTE_FLAG_LABEL[note.flag]}</Flag>}
-                      <span>{note.text}</span>
+                    <li key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                      {flag && <Pill tone="warn" icon={flag.icon}>{flag.label}</Pill>}
+                      <span className="min-w-0">{note.text}</span>
                     </li>
                   );
                 })}
@@ -354,41 +472,48 @@ export function ClaimSection({
             )}
             {rules.figures && rules.figures.length > 0 && (
               <>
-                <h4 className="mt-4 text-xs font-medium uppercase tracking-wide text-muted">
-                  Figures and how sure we are
-                </h4>
-                <ul className="mt-1 divide-y divide-border rounded-md border border-border text-sm">
-                  {rules.figures.map((f) => (
-                    <li key={f.key} className="grid gap-1 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-4">
-                      <div className="min-w-0">
-                        <span className="font-medium">{f.label}</span>
-                        <span className="text-muted">: {f.value}</span>
-                        {f.note && <p className="mt-0.5 text-xs text-muted">{f.note}</p>}
-                      </div>
-                      <div className="sm:text-right">
-                        <Flag tone={FIGURE_FLAG[f.status].tone}>{FIGURE_FLAG[f.status].label}</Flag>
-                        <span className="mt-0.5 block text-xs text-muted">checked {formatDate(f.checkedOn)}</span>
-                      </div>
-                    </li>
-                  ))}
+                <Eyebrow className="mt-6">Figures and how sure we are</Eyebrow>
+                <ul className="mt-2 divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface text-sm">
+                  {rules.figures.map((f) => {
+                    const flag = FIGURE_FLAG[f.status];
+                    return (
+                      <li key={f.key} className="grid gap-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-x-4">
+                        <div className="min-w-0">
+                          <span className="font-medium text-ink">{f.label}</span>
+                          <span className="text-muted">: {f.value}</span>
+                          {f.note && <p className="mt-0.5 text-xs text-muted">{f.note}</p>}
+                        </div>
+                        <div className="flex items-center gap-2 sm:flex-col sm:items-end sm:gap-1">
+                          <Pill tone={flag.tone} icon={flag.icon}>{flag.label}</Pill>
+                          <span className="text-xs text-muted">checked {formatDate(f.checkedOn)}</span>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               </>
             )}
-            <h4 className="mt-4 text-xs font-medium uppercase tracking-wide text-muted">Sources</h4>
-            <ul className="mt-1 space-y-1 text-sm">
+            <Eyebrow className="mt-6">Sources</Eyebrow>
+            <ul className="mt-2 space-y-2 text-sm">
               {rules.sources.map((s) => {
                 const href = safeHref(s.url);
                 return (
-                  <li key={s.url} className="flex flex-wrap items-baseline gap-x-2">
+                  <li key={s.url} className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     {href ? (
-                      <a href={href} target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-2">
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 font-medium text-accent underline decoration-accent/30 underline-offset-4 transition-colors hover:decoration-accent"
+                      >
                         {s.title}
+                        <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={1.75} />
                       </a>
                     ) : (
                       <span>{s.title}</span>
                     )}
                     <span className="text-xs text-muted">checked {formatDate(s.checkedOn)}</span>
-                    {isStaleSource(s.checkedOn, now) && <Flag>Not re-checked recently</Flag>}
+                    {isStaleSource(s.checkedOn, now) && <Pill tone="warn" icon={History}>Not re-checked recently</Pill>}
                   </li>
                 );
               })}
@@ -396,58 +521,169 @@ export function ClaimSection({
           </>
         )}
       </div>
-    </Card>
+    </Panel>
   );
 }
 
-/** The agent's decision: what it chose, how sure it is, why, and whether a human must look. */
-export function DecisionSection({ decision }: { decision: Decision | null }) {
+const DECISION_HELP: Record<DecisionKind, string> = {
+  reship: "Send the customer a replacement.",
+  refund: "Refund the customer.",
+  ask_more_photos: "Ask the customer for clearer photos.",
+  no_action: "Nothing to do for this report.",
+};
+
+/**
+ * The agent's decision, the card judges read first: what it chose, the carrier claim, how sure it
+ * is, why, whether a human must look, and the money at stake with its deadline. `now` is the
+ * clock the case is read against (frozen at the recording for a recorded run).
+ */
+export function DecisionSection({
+  decision,
+  claim = null,
+  now,
+  asOfRecording = false,
+}: {
+  decision: Decision | null;
+  claim?: ClaimComputation | null;
+  now: Date;
+  /** The deadline is shown as of a recording, not as of today. */
+  asOfRecording?: boolean;
+}) {
   if (!decision) {
     return (
-      <Card id="decision-title" title="Decision">
-        <p className="text-sm text-muted">The agent did not reach a decision for this case.</p>
-      </Card>
+      <Panel id="decision-title" title="Decision" icon={CircleAlert} className="shadow-raised">
+        <p className="text-sm leading-relaxed text-muted">The agent did not reach a decision for this case.</p>
+      </Panel>
     );
   }
   const pct = Math.round(Math.min(1, Math.max(0, decision.confidence)) * 100);
+  const label = DECISION_LABEL[decision.decision];
+  const deadline = deadlineInfo(claim, now);
+  const deadlineTone = DEADLINE_TONE[deadline.tone];
+  const recoverable = claim?.eligible === true && claim.maxCompensationEur > 0;
+
   return (
-    <Card id="decision-title" title="Decision">
-      {decision.needsHuman && (
-        <p role="note" className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-          <strong>Needs your judgement.</strong> The agent flagged this case: low confidence, high value or
-          signs of fraud.
-        </p>
-      )}
-      <p className="text-2xl font-semibold tracking-tight" data-testid="decision-kind">
-        {DECISION_LABEL[decision.decision]}
-      </p>
-      <p className="mt-1 text-sm text-muted">
-        Carrier claim: <strong className="font-semibold text-foreground">{decision.carrierClaim ? "yes" : "no"}</strong>
-      </p>
-      <div className="mt-3">
-        <div className="flex justify-between text-xs text-muted">
-          <span id="confidence-label">Confidence</span>
-          <span>{pct}%</span>
-        </div>
-        <div
-          role="meter"
-          aria-labelledby="confidence-label"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={pct}
-          className="mt-1 h-2 overflow-hidden rounded-full bg-border"
+    <section
+      aria-labelledby="decision-title"
+      style={riseStyle(0)}
+      className="animate-rise overflow-hidden rounded-2xl border border-border bg-surface shadow-raised"
+    >
+      <div className="p-5 sm:p-6">
+        <h2 id="decision-title" className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+          Decision
+        </h2>
+
+        {decision.needsHuman && (
+          <div role="note" className="mt-4 flex items-start gap-3 rounded-xl border border-warning/30 bg-warning-soft p-3.5">
+            <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface text-warning">
+              <UserRoundCheck className="h-4 w-4" strokeWidth={2} />
+            </span>
+            <p className="min-w-0 pt-1 text-sm leading-relaxed text-ink-soft">
+              <strong className="font-semibold text-ink">Needs your judgement.</strong> The agent flagged this case: low
+              confidence, high value or signs of fraud.
+            </p>
+          </div>
+        )}
+
+        <p
+          data-testid="decision-kind"
+          className={cn(
+            "mt-4 font-display leading-[1.02] tracking-tight text-ink",
+            label.length > 10 ? "text-[2.5rem]" : "text-6xl",
+          )}
         >
-          <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+          {label}
+        </p>
+        <p className="mt-2 text-sm text-muted">{DECISION_HELP[decision.decision]}</p>
+
+        <div className="mt-5 flex items-center gap-3 rounded-xl border border-border bg-surface-muted/70 p-3">
+          <IconTile icon={decision.carrierClaim ? FileCheck2 : FileX2} className={decision.carrierClaim ? "bg-surface text-ink" : "bg-surface text-muted"} />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Carrier claim</p>
+            <p className="text-sm text-ink">
+              <strong className="font-semibold">{decision.carrierClaim ? "yes" : "no"}</strong>
+              <span className="text-muted">
+                {decision.carrierClaim ? " · a claim is prepared for you" : " · nothing to file with the carrier"}
+              </span>
+            </p>
+          </div>
         </div>
+
+        <div className="mt-5">
+          <div className="flex items-baseline justify-between text-xs">
+            <span id="confidence-label" className="font-semibold uppercase tracking-[0.14em] text-muted">
+              Confidence
+            </span>
+            <span className="tabular text-sm font-semibold text-ink">{pct}%</span>
+          </div>
+          <div
+            role="meter"
+            aria-labelledby="confidence-label"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pct}
+            aria-valuetext={`${pct} percent`}
+            className="mt-2 h-1.5 overflow-hidden rounded-full bg-border"
+          >
+            <div className="h-full rounded-full bg-ink transition-[width] duration-500 ease-out" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+
+        {decision.reasons.length > 0 && (
+          <div className="mt-5">
+            <Eyebrow>Why</Eyebrow>
+            <ul className="mt-2 space-y-2 text-sm leading-relaxed text-ink-soft">
+              {decision.reasons.map((r, i) => (
+                <li key={i} className="flex gap-2.5">
+                  <span aria-hidden="true" className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-ink/40" />
+                  <span className="min-w-0">{r}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
-      {decision.reasons.length > 0 && (
-        <ul className="mt-4 list-disc space-y-1 pl-5 text-sm">
-          {decision.reasons.map((r, i) => (
-            <li key={i}>{r}</li>
-          ))}
-        </ul>
+
+      {claim && (
+        <div className="border-t border-border bg-surface-muted/60 p-5 sm:p-6">
+          <BorderBeam color="var(--gold)" length={14} thickness={1.5} speed={7} className="rounded-2xl">
+            <div className="rounded-2xl border border-gold/30 bg-gold-soft px-5 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gold-ink">
+                Maximum compensation
+              </p>
+              {recoverable ? (
+                <div className="mt-2 [--foreground:var(--gold-ink)] [--text-3xl:3.5rem]">
+                  <AnimatedCounter
+                    value={claim.maxCompensationEur}
+                    prefix="€"
+                    decimals={Number.isInteger(claim.maxCompensationEur) ? 0 : 2}
+                  />
+                </div>
+              ) : (
+                <p className="mt-2 font-display text-3xl leading-none text-ink-soft">Not recoverable</p>
+              )}
+              <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+                <Pill tone={deadlineTone.tone} icon={deadlineTone.icon}>{deadline.text}</Pill>
+                {claim.claimDeadline && (
+                  <span className="text-sm text-ink-soft">
+                    <span className="inline-flex items-center gap-1.5">
+                      <CalendarClock aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />
+                      Claim by <span className="tabular font-medium text-ink">{formatDate(claim.claimDeadline)}</span>
+                    </span>
+                  </span>
+                )}
+              </div>
+              {asOfRecording && claim.claimDeadline && (
+                <p className="mt-2 text-xs text-muted">Counted as of the recording, not as of today.</p>
+              )}
+            </div>
+          </BorderBeam>
+          <p className="mt-3 text-xs leading-relaxed text-muted">
+            The most the carrier&apos;s rules allow, worked out by code. Not a promise of payment.
+          </p>
+        </div>
       )}
-    </Card>
+    </section>
   );
 }
 
@@ -455,99 +691,117 @@ export function DecisionSection({ decision }: { decision: Decision | null }) {
 export function DocumentSection({ caseId, document: doc }: { caseId: string; document: CaseRecord["document"] }) {
   if (!doc) {
     return (
-      <Card id="document-title" title="Claim document">
+      <Panel id="document-title" title="Claim document" icon={FileX2} index={6}>
         <p className="text-sm text-muted">No claim document: this case does not need a carrier claim.</p>
-      </Card>
+      </Panel>
     );
   }
   const pdf = `/api/cases/${encodeURIComponent(caseId)}/pdf`;
   return (
-    <Card
+    <Panel
       id="document-title"
       title="Claim document"
+      icon={FileText}
+      index={6}
       action={
-        <a
-          href={`${pdf}?download=1`}
-          className="rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-semibold hover:bg-background"
-        >
+        <a href={`${pdf}?download=1`} className={BUTTON_QUIET}>
+          <Download aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />
           Download PDF
         </a>
       }
     >
-      <iframe title="Carrier claim PDF preview" src={pdf} className="h-[34rem] w-full rounded-md border border-border bg-background" />
-      <h3 className="mt-5 text-sm font-semibold">E-mail to the carrier&apos;s claims department</h3>
-      <p className="mt-1 text-xs text-muted">Ready to send. Damage Desk does not send it.</p>
-      <p className="mt-3 text-sm">
-        <span className="font-medium">Subject: </span>
-        {doc.emailSubject}
-      </p>
-      <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-background p-3 font-sans text-sm">
-        {doc.emailBody}
-      </pre>
-    </Card>
-  );
-}
+      <div className="rounded-xl bg-background-deep p-3 sm:p-4">
+        <iframe
+          title="Carrier claim PDF preview"
+          src={pdf}
+          className="h-[28rem] w-full rounded-lg bg-white shadow-raised sm:h-[34rem]"
+        />
+      </div>
 
-function TraceItem({ step, index }: { step: TraceStep; index: number }) {
-  const hasPayload = step.input !== undefined || step.output !== undefined;
-  const heading = (
-    <>
-      <span className="w-6 shrink-0 text-xs tabular-nums text-muted">{index + 1}.</span>
-      {step.tool && <code className="rounded bg-background px-1.5 py-0.5 font-mono text-xs">{step.tool}</code>}
-      <span className="min-w-0 flex-1 text-sm">{step.step}</span>
-      <time dateTime={step.at} className="hidden shrink-0 text-xs text-muted sm:block">
-        {formatDateTime(step.at)}
-      </time>
-    </>
-  );
-  if (!hasPayload) {
-    return <li className="flex items-center gap-2 px-3 py-2">{heading}</li>;
-  }
-  return (
-    <li>
-      <details className="group">
-        <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 hover:bg-background">{heading}</summary>
-        <div className="grid gap-3 border-t border-border bg-background px-3 py-3">
-          {step.input !== undefined && (
-            <div>
-              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Input</div>
-              <pre className="max-h-64 overflow-auto rounded border border-border bg-surface p-2 font-mono text-xs">{prettyJson(step.input)}</pre>
+      <div className="mt-6 overflow-hidden rounded-xl border border-border">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border bg-surface-muted/70 px-4 py-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <IconTile icon={Mail} className="bg-surface" />
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-ink">E-mail to the carrier&apos;s claims department</h3>
+              <p className="mt-0.5 text-xs text-muted">Ready to send. Gilmend does not send it.</p>
             </div>
-          )}
-          {step.output !== undefined && (
-            <div>
-              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Output</div>
-              <pre className="max-h-64 overflow-auto rounded border border-border bg-surface p-2 font-mono text-xs">{prettyJson(step.output)}</pre>
-            </div>
-          )}
+          </div>
+          <CopyButton
+            text={`Subject: ${doc.emailSubject}\n\n${doc.emailBody}`}
+            label="Copy e-mail"
+            toastTitle="E-mail copied"
+          />
         </div>
-      </details>
-    </li>
+        <dl className="flex items-baseline gap-4 border-b border-border px-4 py-3 text-sm">
+          <dt className="w-[4.5rem] shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-muted">Subject</dt>
+          <dd className="min-w-0 break-words font-medium text-ink">{doc.emailSubject}</dd>
+        </dl>
+        <pre className="max-h-72 overflow-auto whitespace-pre-wrap px-4 py-4 font-sans text-sm leading-relaxed text-ink-soft">
+          {doc.emailBody}
+        </pre>
+      </div>
+    </Panel>
   );
 }
 
-/** The agent's reasoning trace, tool by tool. Collapsed by default: it is for checking, not reading. */
-export function TraceSection({ trace }: { trace: TraceStep[] }) {
+/**
+ * The agent's reasoning trace, step by step, on the Arc timeline: who did each step (model, SAM,
+ * code), the guardrails that corrected the model, and every tool's input and output on demand.
+ */
+export function TraceSection({
+  trace,
+  engine,
+  fallbackAt,
+}: {
+  trace: TraceStep[];
+  engine: Engine;
+  /** Used for a step whose own date cannot be read. */
+  fallbackAt: string;
+}) {
   return (
-    <section aria-labelledby="trace-title" className="rounded-lg border border-border bg-surface">
-      <details>
-        <summary className="flex cursor-pointer items-center justify-between gap-3 px-5 py-4">
-          <h2 id="trace-title" className="text-base font-semibold">
-            Agent reasoning trace
-          </h2>
-          <span className="text-sm text-muted">
+    <section
+      aria-labelledby="trace-title"
+      style={riseStyle(8)}
+      className="animate-rise rounded-2xl border border-border bg-surface shadow-card"
+    >
+      <div className="flex items-center gap-3 px-5 pt-5 sm:px-6 sm:pt-6">
+        <IconTile icon={Route} />
+        <h2 id="trace-title" className="text-base font-semibold tracking-tight text-ink">
+          Agent reasoning trace
+        </h2>
+      </div>
+      <details open className="group">
+        <summary className="flex min-h-11 cursor-pointer list-none flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-2xl px-5 py-2 text-sm text-muted sm:px-6 [&::-webkit-details-marker]:hidden">
+          <span className="tabular">
             {trace.length} {trace.length === 1 ? "step" : "steps"}
           </span>
+          <span className="flex items-center gap-2">
+            <span className="group-open:hidden">Show trace</span>
+            <span className="hidden group-open:inline">Hide trace</span>
+            <ChevronDown
+              aria-hidden="true"
+              className="h-4 w-4 transition-transform duration-200 group-open:rotate-180"
+              strokeWidth={1.75}
+            />
+          </span>
         </summary>
-        {trace.length === 0 ? (
-          <p className="border-t border-border px-5 py-4 text-sm text-muted">No steps were recorded.</p>
-        ) : (
-          <ol className="divide-y divide-border border-t border-border">
-            {trace.map((step, i) => (
-              <TraceItem key={`${step.at}-${i}`} step={step} index={i} />
-            ))}
-          </ol>
-        )}
+        <div className="border-t border-border px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
+          {trace.length === 0 ? (
+            <p className="text-sm text-muted">No steps were recorded.</p>
+          ) : (
+            <>
+              <p className="mb-4 flex items-start gap-2 text-sm leading-relaxed text-muted">
+                <Sparkles aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
+                <span>
+                  Newest step first: the outcome, then how the agent got there. Amounts and deadlines are worked out by
+                  code, never by the model.
+                </span>
+              </p>
+              <TraceTimeline trace={trace} engine={engine} fallbackAt={fallbackAt} />
+            </>
+          )}
+        </div>
       </details>
     </section>
   );

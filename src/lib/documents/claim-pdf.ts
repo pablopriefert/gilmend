@@ -290,8 +290,8 @@ export async function buildClaimDocument(
 
   const doc = await PDFDocument.create();
   doc.setTitle(`Carrier claim file - parcel ${order.trackingNumber}`);
-  doc.setProducer("Damage Desk (pdf-lib)");
-  doc.setCreator("Damage Desk");
+  doc.setProducer("Gilmend (pdf-lib)");
+  doc.setCreator("Gilmend");
   doc.setCreationDate(now);
   const w = new Writer(
     doc,
@@ -459,7 +459,7 @@ export async function buildClaimDocument(
   const pages = doc.getPages();
   pages.forEach((page, index) => {
     const footer = w.clean(
-      `Damage Desk  |  file ${caseRecord.id}  |  engine: ${engineLabel(caseRecord.engine, caseRecord.engineDetail)}  |  page ${index + 1}/${pages.length}`,
+      `Gilmend  |  file ${caseRecord.id}  |  engine: ${engineLabel(caseRecord.engine, caseRecord.engineDetail)}  |  page ${index + 1}/${pages.length}`,
     );
     page.drawText(footer, { x: MARGIN, y: 30, size: 7.5, font: footerFont, color: MUTED });
   });

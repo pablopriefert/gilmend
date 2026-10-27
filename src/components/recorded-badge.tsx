@@ -1,4 +1,6 @@
+import { Clapperboard } from "lucide-react";
 import type { RecordedRun } from "@/lib/types";
+import { Badge } from "./arc/badge/badge";
 import { formatDate } from "./format";
 
 /**
@@ -11,13 +13,15 @@ export function RecordedBadge({ recorded, compact = false }: { recorded: Recorde
   // The generated photos are said here too: a judge who only reads the badge must not take them for customer photos.
   const full = `Recorded run: a real Muse Spark 1.3 run, recorded on ${when}, on photos generated with Muse Image`;
   return (
-    <span
+    <Badge
       data-recorded="true"
+      tone="info"
+      icon={<Clapperboard className="h-3.5 w-3.5" strokeWidth={2} />}
       title={compact ? full : undefined}
+      role={compact ? "img" : undefined}
       aria-label={compact ? full : undefined}
-      className="inline-flex items-center whitespace-nowrap rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-900"
     >
       {compact ? "Recorded" : `Recorded run · ${when}`}
-    </span>
+    </Badge>
   );
 }

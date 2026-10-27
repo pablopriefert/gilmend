@@ -1,6 +1,6 @@
 # Open-weights engine ("Run privately")
 
-Damage Desk's "Run privately" switch runs the same agent, tools and output schema on an
+Gilmend's "Run privately" switch runs the same agent, tools and output schema on an
 open-weights Muse model, and never calls the Meta Model API (SAM included). Two hosts are
 supported, and the case, the trace, the badge and the claim PDF footer say which one actually ran
 ("Muse Spark Open (open weights, served by Baseten)", "Muse Glimmer (open weights, served by Modal)").
@@ -58,14 +58,14 @@ HTTP 404 ("model not found"), which ends the run in a labelled "needs a human" c
   `Authorization: Bearer <key>`. Also an Anthropic-style Messages endpoint (beta), not used.
 - **Images**: yes. `image_url` parts, by HTTPS URL or base64 data URL. Muse Spark Open: at most 8
   images per request, 10 MB per image (URL), 100 MiB request body (base64), JPEG, PNG, WebP, GIF,
-  BMP, TIFF. Damage Desk sends at most 3 photos as data URLs of at most 10 MB each.
+  BMP, TIFF. Gilmend sends at most 3 photos as data URLs of at most 10 MB each.
 - **Tool calling**: supported by every Model API model. The agent uses the standard `tools` field.
 - **Structured output (`response_format`, JSON mode): NOT supported for Muse Spark Open.** Fine:
   the agent never uses `response_format`; the decision comes back through the `finish_case` tool
   call and is validated in code (same as for Glimmer, see below).
 - **Reasoning**: always on, no switch. `reasoning_effort` accepts `low | medium | high | xhigh`
   (default `xhigh`; `none` and `minimal` run at `low`). The reasoning comes back in
-  `message.reasoning_content`, counted in `completion_tokens` and billed. Damage Desk sends
+  `message.reasoning_content`, counted in `completion_tokens` and billed. Gilmend sends
   `medium` by default because `xhigh` over up to eight tool turns with photos may not fit the
   90 s budget of a run: **untested**, raise it with `OPEN_WEIGHTS_REASONING_STRENGTH` if the answers
   are weak and the time allows.
@@ -95,7 +95,7 @@ pretends to have read photos the model did not see.
 Muse Spark Open is under the Muse Model License ("limited commercial terms"). As read on its
 Hugging Face card: the licence text and usage policy travel with copies, the product shows
 "Built with Muse Spark Open" in its UI or documentation, and a model-as-a-service business above 20
-million USD of yearly revenue needs a separate agreement with Meta. Damage Desk shows "Built with
+million USD of yearly revenue needs a separate agreement with Meta. Gilmend shows "Built with
 Muse Spark Open." in the footer whenever the configured open-weights model is Muse Spark Open. Read
 the licence yourself before the submission.
 
@@ -139,7 +139,7 @@ npm run real -- demo-1-vase-broken openrouter               # one whole demo cas
 ## Fallback: Muse Glimmer on Modal
 
 `modal_glimmer.py` serves Meta's open-weights **Muse Glimmer 30B** behind an
-OpenAI-compatible endpoint (vLLM inside a Modal GPU container). Damage Desk's
+OpenAI-compatible endpoint (vLLM inside a Modal GPU container). Gilmend's
 "Run privately" switch then points at it through the generic `OPEN_WEIGHTS_*` variables (leave
 `OPEN_WEIGHTS_PROVIDER` empty).
 
@@ -207,7 +207,7 @@ I could not check these offline. Do them in this order; each one can break the r
    and that the photo was understood.
 6. **Structured output is not enforced.** vLLM issue #53469 reports that
    `response_format` / JSON mode is not enforced for Glimmer when the reasoning parser is
-   on. Damage Desk therefore does not rely on it: the decision comes back through the
+   on. Gilmend therefore does not rely on it: the decision comes back through the
    `finish_case` tool call and is validated in code (`src/lib/agent/tools.ts`,
    `guardrails.ts`). Do not "fix" this by switching the agent to `response_format`.
 7. **Modal API details.** The script uses `@app.cls` + `@modal.web_server` +
@@ -221,7 +221,7 @@ I could not check these offline. Do them in this order; each one can break the r
    publish the port as is, so the script sets `requires_proxy_auth=True`: Modal answers 401
    on EVERY path unless the request carries `Modal-Key` / `Modal-Secret` (the token pair of
    https://modal.com/settings/proxy-auth-tokens, documented at
-   https://modal.com/docs/guide/webhook-proxy-auth). Damage Desk sends the pair from
+   https://modal.com/docs/guide/webhook-proxy-auth). Gilmend sends the pair from
    `OPEN_WEIGHTS_PROXY_KEY` / `OPEN_WEIGHTS_PROXY_SECRET`. Not deployed, so unverified.
    Before sharing the URL, check with curl (replace the host):
    - `POST /invocations` **without** headers must answer **401**;

@@ -101,6 +101,20 @@ describe("VoiceRecorder", () => {
     expect(screen.getByRole("button", { name: "Record a voice message" })).toBeEnabled();
   });
 
+  it("shows a decorative waveform only while recording, hidden from screen readers", async () => {
+    mockTranscribe({ ok: true, body: { transcript: "ok", durationMs: 1, model: "x", demo: false } });
+    const { container } = render(<VoiceRecorder language="auto" accessCode="" onTranscript={vi.fn()} />);
+    expect(container.querySelector("[aria-hidden='true'].flex.h-6")).toBeNull();
+    start();
+    await screen.findByRole("button", { name: "Stop recording" });
+    const wave = container.querySelector("[aria-hidden='true'].flex.h-6");
+    expect(wave).not.toBeNull();
+    expect(wave!.children).toHaveLength(10);
+    // The state is also said in words and by the timer.
+    expect(screen.getByRole("timer")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Recording");
+  });
+
   it("does not send a language when it is on auto", async () => {
     const fetchMock = mockTranscribe({ ok: true, body: { transcript: "Bonjour.", durationMs: 1, model: "x", demo: false } });
     setup();

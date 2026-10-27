@@ -130,7 +130,7 @@ export function damageConceptFor(assessment: DamageAssessment | null): string | 
 
 function none(photo: string, note: string, quiet?: boolean): Evidence {
   // Logs say it plainly: the claim ships with the raw photo, nothing was segmented.
-  if (!quiet) console.warn(`[damage-desk] mark_damage: no SAM annotation (${note})`);
+  if (!quiet) console.warn(`[gilmend] mark_damage: no SAM annotation (${note})`);
   return { photo, annotatedPhoto: null, method: "none", note };
 }
 

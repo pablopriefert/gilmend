@@ -152,7 +152,7 @@ export function getProvider(engine: Engine, env: Env = process.env): Provider {
           // Only route to endpoints that do not store prompts or train on them.
           provider: { data_collection: "deny" },
         },
-        headers: { "X-Title": "Damage Desk (hackathon test engine)" },
+        headers: { "X-Title": "Gilmend (hackathon test engine)" },
       });
     }
   }

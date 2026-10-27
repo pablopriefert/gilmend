@@ -5,6 +5,10 @@ recorded on **27 Oct 2026** (`npm run real`, standard mode, no Contributor model
 with the code. They are why a fresh deployment, or a fresh clone, is not an empty inbox: the app
 lists them next to the cases you file yourself, marked **Recorded run**.
 
+**Name.** The product is now called Gilmend. These runs were recorded under the working name
+**Damage Desk**, so the recorded files (cases, claim PDFs, annotated photos) may still carry that
+name. They are recordings and are not rewritten.
+
 Which run each case is:
 
 - Case 3: the second recording of the afternoon (16:02 UTC), made after SAM was changed to ask

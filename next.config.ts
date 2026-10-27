@@ -51,7 +51,10 @@ const nextConfig: NextConfig = {
     // A stray package-lock.json in a parent directory made Next guess the wrong root.
     root: fileURLToPath(new URL(".", import.meta.url)),
     rules: {
-      "*.css": {
+      // Only the global stylesheet goes through Tailwind. A "*.css" rule also caught the Arc
+      // components' CSS modules and re-typed them as plain CSS: their class names came back
+      // undefined and every Arc component rendered unstyled (seen 27 Oct 2026).
+      "globals.css": {
         loaders: ["@tailwindcss/turbopack"],
         as: "*.css",
       },

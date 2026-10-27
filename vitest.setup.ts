@@ -20,3 +20,31 @@ process.env.DAMAGE_DESK_SHOWCASE_DIR = path.join(runtimeRoot, "no-showcase");
 
 // Unmount components between tests; a no-op in node-environment tests.
 afterEach(() => cleanup());
+
+// jsdom has no IntersectionObserver, and the Arc animated counter (src/components/arc) uses one
+// through motion's useInView. A no-op stand-in is enough: a test that renders a counter reads its
+// text (the counter also writes the value as screen-reader text), never its on-screen animation.
+if (typeof globalThis.IntersectionObserver === "undefined") {
+  globalThis.IntersectionObserver = class {
+    readonly root = null;
+    readonly rootMargin = "";
+    readonly thresholds: ReadonlyArray<number> = [];
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  } as unknown as typeof IntersectionObserver;
+}
+
+// jsdom does not implement Element.prototype.scrollTo; components that scroll a list into view
+// call it, and a missing method would throw in a test. Guarded so a real implementation wins.
+if (typeof Element !== "undefined") {
+  (Element.prototype as { scrollTo?: unknown }).scrollTo ??= () => {};
+}
+// jsdom's window.scrollTo exists but only logs "Not implemented" (64 lines per run, from the Arc
+// timeline in the trace): a silent stand-in keeps real failures visible in the test output.
+if (typeof window !== "undefined") {
+  window.scrollTo = () => {};
+}

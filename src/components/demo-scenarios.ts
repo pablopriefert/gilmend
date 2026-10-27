@@ -17,12 +17,23 @@ export interface DemoPhoto {
   fallback: string;
 }
 
+/** How the card colours the expected outcome (always paired with an icon and the words). */
+export type OutcomeTone = "success" | "neutral" | "info" | "warning";
+
 export interface DemoScenario {
   id: string;
-  /** Button title. */
+  /** Card title. */
   title: string;
   /** What the case demonstrates, shown under the title. */
   shows: string;
+  /**
+   * Presentation only (27 Oct 2026, Gilmend redesign): the carrier of the fictitious order, as
+   * data/fixtures/orders.json has it, and the outcome the case is designed to show
+   * (data/demo-cases.json `expected`). It is what the case is built to demonstrate, never a
+   * promise about a run: the agent still decides for itself.
+   */
+  carrier: string;
+  outcome: { label: string; tone: OutcomeTone };
   orderNumber: string;
   email: string;
   message: string;
@@ -35,6 +46,8 @@ export const DEMO_SCENARIOS: readonly DemoScenario[] = [
     id: "broken-vase",
     title: "Broken vase",
     shows: "Colissimo: reship, plus a carrier claim",
+    carrier: "Colissimo",
+    outcome: { label: "Reship + carrier claim", tone: "success" },
     orderNumber: "#1001",
     email: "camille.laurent@example.com",
     message:
@@ -46,6 +59,8 @@ export const DEMO_SCENARIOS: readonly DemoScenario[] = [
     id: "crushed-carton",
     title: "Crushed carton, product intact",
     shows: "No claim: the box is damaged, the item is not",
+    carrier: "Chronopost",
+    outcome: { label: "No action, no claim", tone: "neutral" },
     orderNumber: "1002",
     email: "Hugo.Bernard@Example.com",
     message:
@@ -57,6 +72,8 @@ export const DEMO_SCENARIOS: readonly DemoScenario[] = [
     id: "blurry-photo",
     title: "Blurry photo",
     shows: "The agent asks for a sharper photo",
+    carrier: "Colissimo",
+    outcome: { label: "Asks for a sharper photo", tone: "info" },
     orderNumber: "#1003",
     email: "ines.moreau@example.org",
     message:
@@ -68,6 +85,8 @@ export const DEMO_SCENARIOS: readonly DemoScenario[] = [
     id: "opened-missing",
     title: "Parcel opened, item missing",
     shows: "Mondial Relay: 72-hour reserve window, reply in French",
+    carrier: "Mondial Relay",
+    outcome: { label: "Reship or refund + claim", tone: "success" },
     orderNumber: "#1004",
     email: "lucas.petit@example.net",
     message:
@@ -79,6 +98,8 @@ export const DEMO_SCENARIOS: readonly DemoScenario[] = [
     id: "expensive-item",
     title: "Expensive item",
     shows: "High value: handed over to a human",
+    carrier: "Chronopost",
+    outcome: { label: "Needs a human", tone: "warning" },
     orderNumber: "#1005",
     email: "sofia.rossi@example.com",
     message:
@@ -90,6 +111,8 @@ export const DEMO_SCENARIOS: readonly DemoScenario[] = [
     id: "late-report",
     title: "Reported too late",
     shows: "Refund, but the carrier claim window has closed",
+    carrier: "Chronopost",
+    outcome: { label: "Refund, claim window closed", tone: "warning" },
     orderNumber: "#1006",
     email: "thomas.garnier@example.org",
     message:

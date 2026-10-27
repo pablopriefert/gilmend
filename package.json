@@ -1,9 +1,9 @@
 {
-  "name": "damage-desk",
+  "name": "gilmend",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "The agent that prepares the claim to recover the money from damaged parcels (Meta Global AI Developer Hackathon, Startups track).",
+  "description": "Gilmend: broken parcels, mended in gold. The agent that prepares the claim to recover the money from damaged parcels (Meta Global AI Developer Hackathon, Startups track).",
   "scripts": {
     "dev": "next dev",
     "dev:demo": "MODEL_API_KEY= OPEN_WEIGHTS_BASE_URL= OPEN_WEIGHTS_MODEL= BASETEN_API_KEY= OPENROUTER_API_KEY= next dev",
@@ -23,12 +23,16 @@
   "dependencies": {
     "@meta-sam/parser": "0.1.0",
     "@vercel/blob": "2.8.1",
+    "clsx": "2.1.1",
+    "lucide-react": "1.55.0",
+    "motion": "14.1.0",
     "next": "16.4.1",
     "openai": "7.32.0",
     "pdf-lib": "1.17.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "tailwind-merge": "3.7.0"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "4.3.3",

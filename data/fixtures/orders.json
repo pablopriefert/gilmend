@@ -1,5 +1,5 @@
 {
-  "_readme": "FICTITIOUS orders for the Damage Desk demo. Every person, e-mail (example.com / .org / .net only), tracking number and address below is invented. Timing is stored as an offset from 'now' (hours ago) and resolved when the file is loaded, so deadlines (Mondial Relay 72 h, Chronopost 3 days...) stay meaningful during the whole demo week. See src/lib/orders/fixtures.ts.",
+  "_readme": "FICTITIOUS orders for the Gilmend demo. Every person, e-mail (example.com / .org / .net only), tracking number and address below is invented. Timing is stored as an offset from 'now' (hours ago) and resolved when the file is loaded, so deadlines (Mondial Relay 72 h, Chronopost 3 days...) stay meaningful during the whole demo week. See src/lib/orders/fixtures.ts.",
   "orders": [
     {
       "id": "#1001",

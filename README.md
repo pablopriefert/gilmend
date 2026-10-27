@@ -1,8 +1,20 @@
-# Damage Desk
+<p align="center">
+  <img src="docs/assets/gilmend-logo.svg" alt="Gilmend logo: a dark tile crossed by a gold seam" width="72" height="72">
+</p>
 
-**The agent that prepares the claim to recover the money from damaged parcels.**
+# Gilmend
 
-A customer writes "my vase arrived broken" and attaches a photo. Damage Desk finds the order,
+**Broken parcels, mended in gold.**
+
+The agent that prepares the claim to recover the money from damaged parcels.
+
+> **Why Gilmend.** Gilmend is *gild* + *mend*. In kintsugi, a broken vase is mended with gold: the
+> crack is not hidden, it is kept and made valuable. A damaged parcel is the same kind of break.
+> The agent turns it into a claim, so the damage becomes money recovered. The logo is a dark tile
+> (the parcel seen from above) crossed by a gold seam. The project was started under the working
+> name Damage Desk; the repository and the live URL below still carry it for now.
+
+A customer writes "my vase arrived broken" and attaches a photo. Gilmend finds the order,
 reads the photo, decides what to do (reship, refund, ask for a better photo, or nothing), builds
 the carrier claim as a PDF plus a ready-to-send e-mail, and drafts the reply in the customer's
 language. The merchant reviews the case and clicks **Approve**, **Edit** or **Reject**.
@@ -225,7 +237,7 @@ npm run dev:demo              # the web app in demo mode, never spends credits
 npm run real -- <case-id>     # one demo case on the real Muse Spark 1.3 + SAM 3.1 (paid, needs a key)
 ```
 
-Environment variables (all listed, empty, in [`.env.example`](.env.example)):
+Environment variables (all listed, empty, in [`.env.example`](.env.example); the `DAMAGE_DESK_*` prefix is the project's working name, kept so the deployed configuration keeps working):
 
 | Variable | Purpose |
 |---|---|
@@ -433,6 +445,13 @@ Storage, the Blob store).
   concurrency.
 
 ## Third-party licences
+
+- **UI components.** `src/components/arc/` comes from [Arc](https://uiarc.dev) (free components:
+  animated counter, metric card, badge, timeline, file dropzone, segmented control, toast);
+  `src/components/ui/border-beam.tsx` from [21st.dev](https://21st.dev/@appica-dev/components/border-beam)
+  (appica-dev) and `src/components/ui/shimmer-button.tsx` from
+  [21st.dev / Magic UI](https://21st.dev/@dillionverma/components/shimmer-button). Fonts: Inter,
+  Instrument Serif and JetBrains Mono (SIL Open Font License), self-hosted by `next/font`.
 
 This repository's own code is MIT-licensed (see [`LICENSE`](LICENSE)). It depends on packages under
 their own licences:

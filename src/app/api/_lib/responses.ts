@@ -19,6 +19,6 @@ export function isValidCaseId(id: string): boolean {
  * go to the server log only (never to the browser).
  */
 export function failureResponse(err: unknown, what: string): Response {
-  console.error(`[damage-desk] ${what} failed:`, err instanceof Error ? err.message : err);
+  console.error(`[gilmend] ${what} failed:`, err instanceof Error ? err.message : err);
   return errorResponse(500, "internal_error", `${what} failed. Check the server log.`);
 }

@@ -168,7 +168,7 @@ export async function POST(request: Request): Promise<Response> {
       }),
     );
   } catch (err) {
-    console.error("[damage-desk] could not store the uploaded photos:", err instanceof Error ? err.message : err);
+    console.error("[gilmend] could not store the uploaded photos:", err instanceof Error ? err.message : err);
     return errorResponse(500, "storage_failed", "Could not store the photos on the server.");
   }
 
@@ -207,7 +207,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     await saveCase(pending);
   } catch (err) {
-    console.error("[damage-desk] could not save the new case:", err instanceof Error ? err.message : err);
+    console.error("[gilmend] could not save the new case:", err instanceof Error ? err.message : err);
     return errorResponse(500, "storage_failed", "Could not store the report on the server.");
   }
 
@@ -217,7 +217,7 @@ export async function POST(request: Request): Promise<Response> {
   } catch (err) {
     // runAgent is meant never to throw; if it does, keep the report as a "new" case a human
     // can open, with the failure on the trace.
-    console.error("[damage-desk] agent run failed:", err instanceof Error ? err.message : err);
+    console.error("[gilmend] agent run failed:", err instanceof Error ? err.message : err);
     const failedAt = new Date().toISOString();
     try {
       await saveCase({
@@ -236,7 +236,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     saved = await saveCase(result);
   } catch (err) {
-    console.error("[damage-desk] could not save the case:", err instanceof Error ? err.message : err);
+    console.error("[gilmend] could not save the case:", err instanceof Error ? err.message : err);
     return errorResponse(500, "storage_failed", "The case was processed but could not be saved.");
   }
 

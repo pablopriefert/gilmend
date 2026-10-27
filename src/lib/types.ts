@@ -1,4 +1,4 @@
-// Shared contracts for every lot of Damage Desk. Lots code against these types and
+// Shared contracts for every lot of Gilmend. Lots code against these types and
 // against the stub signatures in the sibling modules; change a type only through the
 // orchestrator, otherwise parallel lots stop fitting together.
 //

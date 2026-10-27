@@ -8,8 +8,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## Damage Desk working rules (added by the project, outside the Next.js block above)
+## Gilmend working rules (added by the project, outside the Next.js block above)
 
+- **Name.** The product is Gilmend (renamed from the working name Damage Desk on 27 Oct 2026). Identifiers that are deployed or stored keep the old name on purpose: the `DAMAGE_DESK_*` environment variables, the `damage-desk` runtime folder and Vercel project, the `damage_desk` Shopify metafield namespace and the `dd-carrier:` tag. Renaming them is a separate, deliberate change.
 - **Demo mode vs real mode.** Next.js loads `.env.local`, vitest and `tsx` do not. If `.env.local`
   holds a `MODEL_API_KEY`, a plain `npm run dev` or `npm start` calls the real, paid Muse and SAM
   and sends the photos to Meta. To test the UI without spending anything, run `npm run dev:demo`

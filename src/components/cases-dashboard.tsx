@@ -1,11 +1,14 @@
-import Link from "next/link";
+import { TriangleAlert } from "lucide-react";
 import type { CaseRecord } from "@/lib/types";
 import { CaseList } from "./case-list";
 import { CasesHeader } from "./cases-header";
+import { EmptyState } from "./dashboard/empty-state";
+import { HowItWorks } from "./dashboard/how-it-works";
 
 /**
- * The Cases screen. `error` is set when the case store could not be read: the page says so
- * instead of showing an empty list that would look like "no damage reported".
+ * The Cases screen: the hero band, a one-line "how it works", then the list. `error` is set when
+ * the case store could not be read: the page says so instead of showing an empty list that would
+ * look like "no damage reported".
  */
 export function CasesDashboard({
   cases,
@@ -17,26 +20,19 @@ export function CasesDashboard({
   now: Date;
 }) {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-10">
       <CasesHeader cases={cases} now={now} />
+      <HowItWorks />
       {error ? (
-        <div role="alert" className="rounded-lg border border-danger/40 bg-danger-soft p-4 text-sm text-danger">
-          {error}
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-2xl border border-danger/40 bg-danger-soft px-5 py-4 text-danger"
+        >
+          <TriangleAlert aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0" strokeWidth={1.75} />
+          <p className="text-sm font-medium leading-relaxed">{error}</p>
         </div>
       ) : cases.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border bg-surface p-10 text-center">
-          <h2 className="text-lg font-semibold">No cases yet</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            A case appears here when a customer reports a damaged parcel. Simulate one, or load a demo case
-            in a single click.
-          </p>
-          <Link
-            href="/report"
-            className="mt-5 inline-block rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-hover"
-          >
-            Report a damaged parcel
-          </Link>
-        </div>
+        <EmptyState />
       ) : (
         <CaseList cases={cases} now={now} />
       )}
