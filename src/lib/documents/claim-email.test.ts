@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildClaimEmail, carrierClaimChannel, getMerchant } from "./claim-email";
-import { formatDateFr, formatMoney } from "./format";
+import { formatDate, formatMoney } from "./format";
 import { sampleCase } from "./test-helpers";
 
 const merchant = getMerchant({});
@@ -8,41 +8,41 @@ const merchant = getMerchant({});
 describe("buildClaimEmail", () => {
   it("carries the tracking number, the order, the amount and the deadline", () => {
     const { subject, body } = buildClaimEmail(sampleCase(), merchant);
-    expect(subject).toBe("Réclamation avarie - colis 6A12345678901 - commande #1042");
-    expect(body).toContain("9,20 €");
-    expect(body).toContain("30 octobre 2026");
+    expect(subject).toBe("Damage claim - parcel 6A12345678901 - order #1042");
+    expect(body).toContain("€9.20");
+    expect(body).toContain("30 October 2026");
     expect(body).toContain("6A12345678901");
-    expect(body).toContain("Madame, Monsieur,");
+    expect(body).toContain("Dear Sir or Madam,");
     expect(body).toContain(merchant.name);
   });
 
   it("mentions the reserve deadline only when the carrier has one", () => {
     const base = sampleCase();
-    expect(buildClaimEmail(base, merchant).body).toContain("Date limite des réserves");
+    expect(buildClaimEmail(base, merchant).body).toContain("Reserve deadline");
     const without = sampleCase({ claim: { ...base.claim!, reserveDeadline: null } });
-    expect(buildClaimEmail(without, merchant).body).not.toContain("réserves");
+    expect(buildClaimEmail(without, merchant).body).not.toContain("Reserve");
   });
 
-  it("describes the damage in French from the structured assessment", () => {
+  it("describes the damage in English from the structured assessment", () => {
     const { body } = buildClaimEmail(sampleCase(), merchant);
-    expect(body).toContain("Ceramic vase (produit cassé ou endommagé, produit irrécupérable)");
+    expect(body).toContain("Ceramic vase (product broken or damaged, product beyond repair)");
   });
 
-  it("words the declaration after what happened, not always 'avarie constatée à la livraison'", () => {
+  it("words the declaration after what happened, not always 'damage found at delivery'", () => {
     const base = sampleCase();
     const text = (damageType: NonNullable<typeof base.assessment>["damageType"]) =>
       buildClaimEmail(sampleCase({ assessment: { ...base.assessment!, damageType } }), merchant);
 
-    // Found on opening a parcel that looked intact (case 1): not "constatée à la livraison".
-    expect(text("broken_product").body).toContain("une avarie constatée à l'ouverture du colis");
-    expect(text("broken_product").body).not.toContain("à la livraison.");
+    // Found on opening a parcel that looked intact (case 1): not "found at delivery".
+    expect(text("broken_product").body).toContain("damage found when the parcel was opened");
+    expect(text("broken_product").body).not.toContain("at delivery.");
     // Delivered open with an article missing (case 4): partial loss, not damage.
     const lost = text("opened_parcel");
-    expect(lost.body).toContain("un colis livré ouvert dont un article manque (perte partielle)");
-    expect(lost.subject).toBe("Réclamation perte partielle (colis livré ouvert) - colis 6A12345678901 - commande #1042");
-    expect(text("missing_item").subject).toMatch(/perte partielle/);
-    expect(text("crushed_packaging").body).toContain("emballage endommagé");
-    expect(buildClaimEmail(sampleCase({ assessment: null }), merchant).body).toContain("signalée par le destinataire");
+    expect(lost.body).toContain("a parcel delivered open with an item missing (partial loss)");
+    expect(lost.subject).toBe("Partial loss claim (parcel delivered open) - parcel 6A12345678901 - order #1042");
+    expect(text("missing_item").subject).toMatch(/Partial loss/);
+    expect(text("crushed_packaging").body).toContain("damaged packaging");
+    expect(buildClaimEmail(sampleCase({ assessment: null }), merchant).body).toContain("reported by the recipient");
   });
 
   it("prints no amount or date that the model wrote in the item name", () => {
@@ -63,15 +63,17 @@ describe("buildClaimEmail", () => {
 });
 
 describe("formatting", () => {
-  it("formats money with a plain space and a decimal comma", () => {
-    expect(formatMoney(1240.5)).toBe("1 240,50 €");
-    expect(formatMoney(9.2)).toBe("9,20 €");
-    expect(formatMoney(25, "USD")).toBe("25,00 USD");
+  it("formats money the English way", () => {
+    expect(formatMoney(1240.5)).toBe("€1,240.50");
+    expect(formatMoney(9.2)).toBe("€9.20");
+    expect(formatMoney(-3)).toBe("-€3.00");
+    expect(formatMoney(25, "USD")).toBe("USD 25.00");
   });
 
   it("formats dates in Paris time without no-break spaces", () => {
-    const text = formatDateFr("2026-10-30T22:59:00.000Z", true);
-    expect(text).toBe("30 octobre 2026 à 23:59");
+    const text = formatDate("2026-10-30T22:59:00.000Z", true);
+    expect(text).toBe("30 October 2026, 23:59 (Paris time)");
+    expect(formatDate("2026-10-30T22:59:00.000Z")).toBe("30 October 2026");
     expect(text).not.toMatch(/[  ]/);
   });
 });

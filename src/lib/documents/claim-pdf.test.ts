@@ -44,13 +44,13 @@ describe("buildClaimDocument", () => {
 
     const text = extractPdfText(bytes);
     expect(text).toContain("6A12345678901");
-    expect(text).toContain("9,20 €");
+    expect(text).toContain("€9.20");
     expect(text).toContain("#1042");
     expect(text).toContain("Ceramic vase");
-    expect(text).toContain("Signature");
+    expect(text).toContain("Merchant's signature and stamp");
   });
 
-  it("writes the basis in French from the applied terms, with no English or merchant-only warning", async () => {
+  it("writes the basis from the applied terms, with no merchant-only warning", async () => {
     const base = sampleCase();
     const text = extractPdfText(
       await readFile(
@@ -81,14 +81,14 @@ describe("buildClaimDocument", () => {
         ),
       ),
     );
-    expect(text).toContain("Conditions appliquées : Colissimo Domicile avec signature.");
+    expect(text).toContain("Terms applied: Colissimo Domicile avec signature.");
     // The applied variant (33 EUR/kg, 990 EUR cap), not the base grid (23 EUR/kg, 690 EUR cap).
-    expect(text).toContain("Barème au poids : 33,00 € par kg x 2,3 kg = 75,90 €.");
-    expect(text).toContain("Plafond : 990,00 € par colis.");
-    expect(text).not.toContain("690,00");
-    expect(text).toContain("plus bas de ces montants");
-    // Nothing that helps the carrier refuse, nothing in English copied from computeClaim.
-    expect(text).not.toMatch(/Warning|Note:|may refuse|confirm this with the customer|may be lower|Maximum compensation/);
+    expect(text).toContain("Weight rate: €33.00 per kg x 2.3 kg = €75.90.");
+    expect(text).toContain("Cap: €990.00 per parcel.");
+    expect(text).not.toContain("690.00");
+    expect(text).toContain("lowest of these amounts");
+    // Nothing that helps the carrier refuse, nothing copied from computeClaim's reasons.
+    expect(text).not.toMatch(/Warning|Note:|may refuse|confirm this with the customer|may be lower|Maximum compensation: min\(/);
   });
 
   it("describes a partial loss as such in the subtitle", async () => {
@@ -100,7 +100,7 @@ describe("buildClaimDocument", () => {
         ),
       ),
     );
-    expect(text).toContain("Perte partielle (colis livré ouvert)");
+    expect(text).toContain("Partial loss (parcel delivered open)");
   });
 
   it("prints no figure the model wrote in the photo reading (item, observations)", async () => {
@@ -134,9 +134,9 @@ describe("buildClaimDocument", () => {
 
   it("prints the deadlines from the claim computation, in Paris time", async () => {
     const text = extractPdfText(await readFile(path.resolve((await build()).pdfPath)));
-    expect(text).toContain("30 octobre 2026");
-    expect(text).toContain("29 octobre 2026");
-    expect(text).toContain("3 jours restants");
+    expect(text).toContain("30 October 2026");
+    expect(text).toContain("29 October 2026");
+    expect(text).toContain("3 days left");
   });
 
   it("uses the merchant identity from the environment, with demo defaults otherwise", async () => {
@@ -176,8 +176,8 @@ describe("buildClaimDocument", () => {
     expect(pdf.getPageCount()).toBeLessThanOrEqual(2);
     expect(Buffer.from(bytes).toString("latin1").match(/\/Subtype\s*\/Image/g)?.length).toBe(2);
     const text = extractPdfText(bytes);
-    expect(text).toContain("zone du dommage entourée (SAM 3.1)");
-    expect(text).toContain("photo d'origine");
+    expect(text).toContain("damaged area outlined (SAM 3.1)");
+    expect(text).toContain("original photo");
   });
 
   it("keeps every photo of the report when only one of them was outlined", async () => {
@@ -195,10 +195,10 @@ describe("buildClaimDocument", () => {
     const bytes = await readFile(path.resolve(result.pdfPath));
     expect(Buffer.from(bytes).toString("latin1").match(/\/Subtype\s*\/Image/g)?.length).toBe(3);
     const text = extractPdfText(bytes);
-    expect(text).toContain("Photo 1 : zone du dommage entourée (SAM 3.1)");
-    expect(text).toContain("Photo 2 : photo d'origine");
-    expect(text).toContain("Photo 3 : photo d'origine");
-    expect(text).toContain("Photos du colis et du produit : 3");
+    expect(text).toContain("Photo 1: damaged area outlined (SAM 3.1)");
+    expect(text).toContain("Photo 2: original photo");
+    expect(text).toContain("Photo 3: original photo");
+    expect(text).toContain("Photos of the parcel and the product: 3");
   });
 
   it("falls back to the report photos when no evidence was produced", async () => {
@@ -219,7 +219,7 @@ describe("buildClaimDocument", () => {
       }),
       { runtimeDir: dir, now: NOW, env: {} },
     );
-    expect(extractPdfText(await readFile(path.resolve(result.pdfPath)))).toContain("image non disponible");
+    expect(extractPdfText(await readFile(path.resolve(result.pdfPath)))).toContain("image not available");
   });
 
   it("survives characters the PDF font cannot draw", async () => {
@@ -236,7 +236,7 @@ describe("buildClaimDocument", () => {
 
   it("builds without an assessment", async () => {
     const result = await build({ id: "case-noassess", assessment: null });
-    expect(extractPdfText(await readFile(path.resolve(result.pdfPath)))).toContain("non disponible");
+    expect(extractPdfText(await readFile(path.resolve(result.pdfPath)))).toContain("No photo assessment is available");
   });
 
   it("keeps a hostile case id inside the claims folder", async () => {
@@ -256,6 +256,6 @@ describe("buildClaimDocument", () => {
   it("returns the e-mail with the document", async () => {
     const result = await build();
     expect(result.emailSubject).toContain("6A12345678901");
-    expect(result.emailBody).toContain("9,20 €");
+    expect(result.emailBody).toContain("€9.20");
   });
 });

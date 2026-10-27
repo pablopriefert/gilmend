@@ -11,12 +11,12 @@ import type { CarrierId, CaseRecord, ClaimBasis, ClaimDocument, Evidence } from 
 import { buildClaimEmail, getMerchant } from "./claim-email";
 import {
   CARRIER_LABELS,
-  DAMAGE_TYPE_FR,
-  SEVERITY_FR,
+  DAMAGE_TYPE_LABEL,
+  SEVERITY_LABEL,
   claimKind,
   declaredValue,
   engineLabel,
-  formatDateFr,
+  formatDate,
   formatKg,
   formatMoney,
 } from "./format";
@@ -183,12 +183,12 @@ function summariseRules(carrier: CarrierId): RulesSummary | null {
     const rules = getCarrierRules(carrier);
     const { perKgEur, flatEur, capEur } = rules.compensation;
     const parts: string[] = [];
-    if (typeof flatEur === "number") parts.push(`forfait de ${formatMoney(flatEur)} par colis`);
-    if (typeof perKgEur === "number") parts.push(`${formatMoney(perKgEur)} par kg`);
-    if (typeof capEur === "number") parts.push(`plafond de ${formatMoney(capEur)} par colis`);
+    if (typeof flatEur === "number") parts.push(`flat rate of ${formatMoney(flatEur)} per parcel`);
+    if (typeof perKgEur === "number") parts.push(`${formatMoney(perKgEur)} per kg`);
+    if (typeof capEur === "number") parts.push(`cap of ${formatMoney(capEur)} per parcel`);
     return {
-      line: `${rules.label} : ${parts.join(", ")}.`,
-      sources: (rules.sources ?? []).map((s) => `${s.title} (${s.url}, vérifié le ${s.checkedOn})`),
+      line: `${rules.label}: ${parts.join(", ")}.`,
+      sources: (rules.sources ?? []).map((s) => `${s.title} (${s.url}, checked on ${s.checkedOn})`),
     };
   } catch {
     return null;
@@ -220,7 +220,7 @@ function photoSources(caseRecord: CaseRecord): Evidence[] {
 }
 
 /**
- * The compensation basis in French, written from the structured figures of computeClaim (the
+ * The compensation basis, written from the structured figures of computeClaim (the
  * terms really applied, the weight, the amounts), not copied from its English `reasons`.
  * Those reasons also hold the merchant-only warnings ("the carrier may refuse...") and must
  * never reach the carrier. The old summary also described the BASE grid: for Colissimo with
@@ -228,24 +228,24 @@ function photoSources(caseRecord: CaseRecord): Evidence[] {
  */
 export function compensationBasisLines(basis: ClaimBasis): string[] {
   const lines = [
-    `Conditions appliquées : ${basis.termsLabel}.`,
-    `Article concerné : ${basis.itemTitle}, valeur ${formatMoney(basis.itemValueEur)}.`,
+    `Terms applied: ${basis.termsLabel}.`,
+    `Item concerned: ${basis.itemTitle}, value ${formatMoney(basis.itemValueEur)}.`,
   ];
-  const caps: string[] = [`valeur de l'article ${formatMoney(basis.itemValueEur)}`];
+  const caps: string[] = [`item value ${formatMoney(basis.itemValueEur)}`];
   if (typeof basis.perKgEur === "number") {
     const byWeight = basis.perKgEur * basis.weightKg;
     lines.push(
-      `Barème au poids : ${formatMoney(basis.perKgEur)} par kg x ${formatKg(basis.weightKg)} = ${formatMoney(byWeight)}.`,
+      `Weight rate: ${formatMoney(basis.perKgEur)} per kg x ${formatKg(basis.weightKg)} = ${formatMoney(byWeight)}.`,
     );
-    caps.push(`barème au poids ${formatMoney(byWeight)}`);
+    caps.push(`weight rate ${formatMoney(byWeight)}`);
   }
   if (typeof basis.flatEur === "number") {
-    lines.push(`Forfait : ${formatMoney(basis.flatEur)} par colis.`);
-    caps.push(`forfait ${formatMoney(basis.flatEur)}`);
+    lines.push(`Flat rate: ${formatMoney(basis.flatEur)} per parcel.`);
+    caps.push(`flat rate ${formatMoney(basis.flatEur)}`);
   }
-  lines.push(`Plafond : ${formatMoney(basis.capEur)} par colis.`);
-  caps.push(`plafond ${formatMoney(basis.capEur)}`);
-  lines.push(`L'indemnité maximale est le plus bas de ces montants : ${caps.join(", ")}.`);
+  lines.push(`Cap: ${formatMoney(basis.capEur)} per parcel.`);
+  caps.push(`cap ${formatMoney(basis.capEur)}`);
+  lines.push(`The maximum compensation is the lowest of these amounts: ${caps.join(", ")}.`);
   return lines;
 }
 
@@ -273,7 +273,7 @@ export async function buildClaimDocument(
   const rules = summariseRules(order.carrier);
 
   const doc = await PDFDocument.create();
-  doc.setTitle(`Dossier de réclamation - colis ${order.trackingNumber}`);
+  doc.setTitle(`Carrier claim file - parcel ${order.trackingNumber}`);
   doc.setProducer("Damage Desk (pdf-lib)");
   doc.setCreator("Damage Desk");
   doc.setCreationDate(now);
@@ -284,63 +284,63 @@ export async function buildClaimDocument(
   );
 
   // Title block
-  w.text("Dossier de réclamation transporteur", { size: 19, bold: true, color: ACCENT });
-  w.text(`${claimKind(assessment).label}  |  Carrier claim file`, { size: 10, color: MUTED });
-  w.text(`Dossier n° ${caseRecord.id}  |  préparé le ${formatDateFr(now.toISOString())}`, {
+  w.text("Carrier claim file", { size: 19, bold: true, color: ACCENT });
+  w.text(claimKind(assessment).label, { size: 10, color: MUTED });
+  w.text(`File ${caseRecord.id}  |  prepared on ${formatDate(now.toISOString())}`, {
     size: 9,
     color: MUTED,
   });
 
-  w.heading("Réclamant (expéditeur)");
-  w.row("Société", merchant.name);
-  w.row("Adresse", merchant.address);
+  w.heading("Claimant (sender)");
+  w.row("Company", merchant.name);
+  w.row("Address", merchant.address);
   w.row("E-mail", merchant.email);
 
-  w.heading("Transporteur et envoi");
-  w.row("Transporteur", CARRIER_LABELS[order.carrier]);
+  w.heading("Carrier and shipment");
+  w.row("Carrier", CARRIER_LABELS[order.carrier]);
   w.row("Service", order.service);
-  w.row("Numéro de suivi", order.trackingNumber);
-  w.row("Commande", order.id);
-  w.row("Date de la commande", formatDateFr(order.createdAt));
-  w.row("Livraison", order.deliveredAt ? formatDateFr(order.deliveredAt) : "non livré");
-  w.row("Destinataire", `${order.name}, ${order.shippingAddress.city} (${order.shippingAddress.country})`);
-  w.row("Poids", formatKg(order.weightKg));
-  w.row("Valeur du contenu", formatMoney(declaredValue(order), order.currency));
+  w.row("Tracking number", order.trackingNumber);
+  w.row("Order", order.id);
+  w.row("Order date", formatDate(order.createdAt));
+  w.row("Delivery", order.deliveredAt ? formatDate(order.deliveredAt) : "not delivered");
+  w.row("Recipient", `${order.name}, ${order.shippingAddress.city} (${order.shippingAddress.country})`);
+  w.row("Weight", formatKg(order.weightKg));
+  w.row("Value of the contents", formatMoney(declaredValue(order), order.currency));
   for (const line of order.lineItems) {
     w.row(
       line.quantity > 1 ? `  ${line.quantity} x ${line.title}` : `  ${line.title}`,
-      `${formatMoney(line.unitPrice * line.quantity, order.currency)}  (réf. ${line.sku})`,
+      `${formatMoney(line.unitPrice * line.quantity, order.currency)}  (SKU ${line.sku})`,
     );
   }
 
-  w.heading("Description du dommage");
-  w.row("Signalé le", formatDateFr(report.receivedAt));
+  w.heading("Description of the damage");
+  w.row("Reported on", formatDate(report.receivedAt));
   if (assessment) {
     // Free text of the model: amounts and dates are removed, they come from computeClaim only.
-    w.row("Article concerné", stripFigures(assessment.item) || "voir la commande");
-    w.row("Nature", DAMAGE_TYPE_FR[assessment.damageType]);
-    w.row("Gravité", SEVERITY_FR[assessment.severity]);
+    w.row("Item concerned", stripFigures(assessment.item) || "see the order");
+    w.row("Type", DAMAGE_TYPE_LABEL[assessment.damageType]);
+    w.row("Severity", SEVERITY_LABEL[assessment.severity]);
     w.row(
-      "Emballage",
+      "Packaging",
       assessment.packagingAdequate === null
-        ? "non évaluable sur les photos"
+        ? "cannot be assessed from the photos"
         : assessment.packagingAdequate
-          ? "adapté au contenu"
-          : "insuffisant (à examiner)",
+          ? "suited to the contents"
+          : "inadequate (to be examined)",
     );
     if (assessment.evidenceNotes.length > 0) {
       w.gap(2);
-      w.text("Observations relevées sur les photos :", { bold: true, color: MUTED });
+      w.text("Observations from the photos:", { bold: true, color: MUTED });
       for (const note of assessment.evidenceNotes) {
         const cleaned = stripFigures(note);
         if (cleaned) w.bullet(cleaned);
       }
     }
   } else {
-    w.text("Analyse des photos non disponible pour ce dossier.", { color: MUTED });
+    w.text("No photo assessment is available for this file.", { color: MUTED });
   }
 
-  w.heading("Base de l'indemnisation");
+  w.heading("Compensation basis");
   if (claim.basis) {
     for (const line of compensationBasisLines(claim.basis)) w.bullet(line);
   } else if (rules) {
@@ -349,38 +349,38 @@ export async function buildClaimDocument(
   }
   w.gap(6);
   w.ensure(30);
-  w.text(`Indemnisation maximale demandée : ${formatMoney(claim.maxCompensationEur)}`, {
+  w.text(`Maximum compensation claimed: ${formatMoney(claim.maxCompensationEur)}`, {
     size: 13,
     bold: true,
     color: ACCENT,
   });
   if (rules && rules.sources.length > 0) {
     w.gap(2);
-    w.text(`Sources : ${rules.sources.join(" ; ")}`, { size: 7, color: MUTED });
+    w.text(`Sources: ${rules.sources.join("; ")}`, { size: 7, color: MUTED });
   }
 
-  w.heading("Délais");
-  if (claim.reserveDeadline) w.row("Date limite des réserves", formatDateFr(claim.reserveDeadline, true));
+  w.heading("Deadlines");
+  if (claim.reserveDeadline) w.row("Reserve deadline", formatDate(claim.reserveDeadline, true));
   if (claim.claimDeadline) {
     w.row(
-      "Date limite de réclamation",
-      `${formatDateFr(claim.claimDeadline, true)}${claim.daysLeft !== null ? `  (${claim.daysLeft} jour${claim.daysLeft > 1 ? "s" : ""} restant${claim.daysLeft > 1 ? "s" : ""})` : ""}`,
+      "Claim deadline",
+      `${formatDate(claim.claimDeadline, true)}${claim.daysLeft !== null ? `  (${claim.daysLeft} day${claim.daysLeft === 1 ? "" : "s"} left)` : ""}`,
     );
   }
 
-  w.heading("Pièces jointes");
+  w.heading("Attachments");
   const sources = photoSources(caseRecord);
-  w.bullet(`Photos du colis et du produit : ${sources.length}`);
-  w.bullet("Facture d'achat du contenu : à joindre par le marchand (non incluse dans ce dossier)");
+  w.bullet(`Photos of the parcel and the product: ${sources.length}`);
+  w.bullet("Purchase invoice of the contents: to be attached by the merchant (not included in this file)");
 
   // The signature block stays in one piece: its heading used to be left alone at the bottom
   // of a page while the line to sign went to the next one.
   w.ensure(150);
   w.heading("Signature");
   w.gap(4);
-  w.text("Fait à ______________________, le ____ / ____ / ________", { size: 10 });
+  w.text("Signed at ______________________, on ____ / ____ / ________", { size: 10 });
   w.gap(12);
-  w.text("Signature et cachet du marchand :", { color: MUTED });
+  w.text("Merchant's signature and stamp:", { color: MUTED });
   w.gap(22);
   w.page.drawLine({
     start: { x: MARGIN, y: w.y },
@@ -393,7 +393,7 @@ export async function buildClaimDocument(
   if (sources.length > 0) {
     w.ensure(260);
     w.gap(10);
-    w.text("Photographies", { size: 13, bold: true, color: ACCENT });
+    w.text("Photographs", { size: 13, bold: true, color: ACCENT });
     w.gap(6);
     const captionFont = await doc.embedFont(StandardFonts.Helvetica);
     const cellWidth = (CONTENT_WIDTH - 20) / 2;
@@ -409,10 +409,10 @@ export async function buildClaimDocument(
       if (column === 0) w.ensure(cellHeight + 40);
       const x = MARGIN + column * (cellWidth + 20);
       const caption = !image
-        ? `Photo ${index + 1} : image non disponible`
+        ? `Photo ${index + 1}: image not available`
         : annotated
-          ? `Photo ${index + 1} : zone du dommage entourée (SAM 3.1)`
-          : `Photo ${index + 1} : photo d'origine`;
+          ? `Photo ${index + 1}: damaged area outlined (SAM 3.1)`
+          : `Photo ${index + 1}: original photo`;
       let drawnHeight = 0;
       if (image) {
         const scale = Math.min(cellWidth / image.width, cellHeight / image.height);
@@ -442,7 +442,7 @@ export async function buildClaimDocument(
   const pages = doc.getPages();
   pages.forEach((page, index) => {
     const footer = w.clean(
-      `Damage Desk  |  dossier ${caseRecord.id}  |  moteur : ${engineLabel(caseRecord.engine)}  |  page ${index + 1}/${pages.length}`,
+      `Damage Desk  |  file ${caseRecord.id}  |  engine: ${engineLabel(caseRecord.engine)}  |  page ${index + 1}/${pages.length}`,
     );
     page.drawText(footer, { x: MARGIN, y: 30, size: 7.5, font: footerFont, color: MUTED });
   });

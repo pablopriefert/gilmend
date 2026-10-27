@@ -95,7 +95,7 @@ prompt-injection attempt counts as a fraud signal.
 | Step | Model | Why this one |
 |---|---|---|
 | Investigation | **Muse Spark 1.3** (Meta Model API, Standard mode, `muse-spark-1.3`) | One model does three jobs in the same loop: **vision** (it reads the photos), **tool calling** (order lookup, damage marking, rules, claim maths) and a **structured decision** returned through the `finish_case` tool call and validated in code. |
-| Evidence | **SAM 3.1** (Meta Model API) | A claim needs proof, not only a verdict. Muse names what to outline (for example "shattered vase" or "torn cardboard flap"), SAM segments it, and the annotated photo goes into the claim PDF. If SAM finds nothing or fails, the claim ships with the raw photo and says so. |
+| Evidence | **SAM 3.1** (Meta Model API) | A claim needs proof, not only a verdict. Muse names the damaged object to outline (for example "broken pottery" or "glass carafe": SAM segments things, not states, so "crack" or "shattered vase" match nothing), SAM segments it, and the annotated photo goes into the claim PDF. If SAM finds nothing or fails, the claim ships with the raw photo and says so. |
 | "Run privately" | **Muse Glimmer** (open weights, Apache 2.0, served with vLLM on Modal, see [`deploy/`](deploy/README.md)) or **Muse Spark Open** through a provider | Parcel photos and customer messages can stay on infrastructure the merchant controls. The same agent, tools and output schema run on open weights. A private run never calls the Model API, SAM included. |
 
 The product is the decision and the dossier, not an image analyzer: the photo is one input among

@@ -1,33 +1,40 @@
 import type { CarrierId, DamageAssessment, DamageSeverity, DamageType, Engine, Order } from "../types";
 
-// French formatting helpers for the claim PDF and e-mail. We format by hand instead of
-// using Intl number formatting: fr-FR puts a narrow no-break space (U+202F) between
-// thousands, and the standard PDF fonts (WinAnsi) cannot draw it.
+// Formatting helpers for the claim PDF and e-mail, in English: the product is judged in
+// English (Meta hackathon, 27 Oct 2026 decision). We format by hand instead of relying on
+// every Intl option: ICU may insert (narrow) no-break spaces, and the standard PDF fonts
+// (WinAnsi) cannot draw U+202F.
 
 export function formatMoney(amount: number, currency = "EUR"): string {
   const [integer, decimals] = Math.abs(amount).toFixed(2).split(".");
-  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
-  const symbol = currency === "EUR" ? "€" : currency;
-  return `${amount < 0 ? "-" : ""}${grouped},${decimals} ${symbol}`;
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const sign = amount < 0 ? "-" : "";
+  return currency === "EUR" ? `${sign}€${grouped}.${decimals}` : `${sign}${currency} ${grouped}.${decimals}`;
 }
 
 export function formatKg(weightKg: number): string {
-  return `${weightKg.toString().replace(".", ",")} kg`;
+  return `${weightKg} kg`;
 }
 
-/** Europe/Paris, because the deadlines are French business days. */
-export function formatDateFr(iso: string, withTime = false): string {
+/**
+ * "30 October 2026" or "30 October 2026, 23:59 (Paris time)". Europe/Paris, because the
+ * carriers are French and their deadlines run on French time.
+ */
+export function formatDate(iso: string, withTime = false): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  const text = new Intl.DateTimeFormat("fr-FR", {
+  const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Europe/Paris",
     day: "numeric",
     month: "long",
     year: "numeric",
-    ...(withTime ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" } : {}),
-  }).format(date);
-  // ICU may use (narrow) no-break spaces; the PDF fonts cannot draw them.
-  return text.replace(/[  ]/g, " ");
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((x) => x.type === type)?.value ?? "";
+  const day = `${get("day")} ${get("month")} ${get("year")}`;
+  return withTime ? `${day}, ${get("hour")}:${get("minute")} (Paris time)` : day;
 }
 
 /** Value of the goods in the parcel (without shipping), in the order's currency. */
@@ -42,19 +49,19 @@ export const CARRIER_LABELS: Record<CarrierId, string> = {
   chronopost: "Chronopost",
 };
 
-export const DAMAGE_TYPE_FR: Record<DamageType, string> = {
-  broken_product: "produit cassé ou endommagé",
-  crushed_packaging: "emballage écrasé",
-  opened_parcel: "colis ouvert ou éventré",
-  missing_item: "article manquant",
-  unclear: "dommage à préciser",
+export const DAMAGE_TYPE_LABEL: Record<DamageType, string> = {
+  broken_product: "product broken or damaged",
+  crushed_packaging: "packaging crushed",
+  opened_parcel: "parcel opened or torn",
+  missing_item: "item missing",
+  unclear: "damage to be specified",
 };
 
-export const SEVERITY_FR: Record<DamageSeverity, string> = {
-  none: "aucun dommage visible sur le produit",
-  minor: "dommage léger",
-  major: "dommage important",
-  total: "produit irrécupérable",
+export const SEVERITY_LABEL: Record<DamageSeverity, string> = {
+  none: "no visible damage to the product",
+  minor: "minor damage",
+  major: "major damage",
+  total: "product beyond repair",
 };
 
 export function engineLabel(engine: Engine): string {
@@ -71,8 +78,8 @@ export function engineLabel(engine: Engine): string {
 
 /**
  * What the claim is about, as the carrier's claims desk would classify it. The e-mail used to
- * say "avarie constatée à la livraison" for every case: wrong when the damage was found on
- * opening a parcel that looked intact, and wrong for a parcel delivered open with an article
+ * say "damage found at delivery" for every case: wrong when the damage was found on opening
+ * a parcel that looked intact, and wrong for a parcel delivered open with an article
  * missing, which is a partial loss (spoliation) and not damage.
  */
 export interface ClaimKind {
@@ -80,7 +87,7 @@ export interface ClaimKind {
   subjectPrefix: string;
   /** Short label printed under the PDF title. */
   label: string;
-  /** Completes "pour vous déclarer ..." in the e-mail. */
+  /** Completes "to report ..." in the e-mail. */
   declaration: string;
 }
 
@@ -89,27 +96,27 @@ export function claimKind(assessment: DamageAssessment | null): ClaimKind {
     case "opened_parcel":
     case "missing_item":
       return {
-        subjectPrefix: "Réclamation perte partielle (colis livré ouvert)",
-        label: "Perte partielle (colis livré ouvert)",
-        declaration: "un colis livré ouvert dont un article manque (perte partielle)",
+        subjectPrefix: "Partial loss claim (parcel delivered open)",
+        label: "Partial loss (parcel delivered open)",
+        declaration: "a parcel delivered open with an item missing (partial loss)",
       };
     case "crushed_packaging":
       return {
-        subjectPrefix: "Réclamation avarie",
-        label: "Avarie de colis",
-        declaration: "une avarie : le colis a été livré avec un emballage endommagé",
+        subjectPrefix: "Damage claim",
+        label: "Parcel damage",
+        declaration: "damage: the parcel was delivered with damaged packaging",
       };
     case "broken_product":
       return {
-        subjectPrefix: "Réclamation avarie",
-        label: "Avarie de colis",
-        declaration: "une avarie constatée à l'ouverture du colis",
+        subjectPrefix: "Damage claim",
+        label: "Parcel damage",
+        declaration: "damage found when the parcel was opened",
       };
     default:
       return {
-        subjectPrefix: "Réclamation avarie",
-        label: "Avarie de colis",
-        declaration: "une avarie signalée par le destinataire",
+        subjectPrefix: "Damage claim",
+        label: "Parcel damage",
+        declaration: "damage reported by the recipient",
       };
   }
 }
