@@ -36,6 +36,11 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   orders, `example.*` e-mails, and files without keys or local paths. Approving a recorded case stores
   a copy; it never writes to the folder. Tests see no showcase (`vitest.setup.ts` points
   `DAMAGE_DESK_SHOWCASE_DIR` at a folder that does not exist).
+- **`data/eval/` is committed, measured results** (`npm run eval`, shown on `/eval`). Do not edit them by
+  hand and do not add a file that did not come from a real run: the page presents it as measured, and
+  `src/lib/eval/committed.test.ts` re-scores every run and refuses a mock engine, a secret or a file
+  scored against expectations that `data/demo-cases.json` no longer states (re-run it then). A run spends
+  real credits (about $1.20 for 18 runs on Muse Spark 1.3): ask Pablo first.
 - Storage on a public deployment is explained in `docs/storage.md` (what is public, and how the shared
   Vercel Blob backend is switched on with `DAMAGE_DESK_STORAGE=blob`; the adapter,
   `src/lib/storage/blob-object-store.ts`, has been tested against a fake SDK only).

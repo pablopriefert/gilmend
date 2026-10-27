@@ -246,7 +246,7 @@ export function EvalReport({ results, file }: { results: EvalResults; file: stri
             figure={costKnown ? `$${results.estimatedCostUsd!.toFixed(2)}` : "unknown"}
             caption={
               costKnown
-                ? `for all ${runs} runs, an upper bound: ${summary.totalTokens === null ? "no" : compact.format(summary.totalTokens)} tokens and ${summary.samRequests} SAM requests`
+                ? `for all ${runs} runs, an upper bound that bills every token at the full price: ${summary.totalTokens === null ? "no" : compact.format(summary.totalTokens)} tokens${summary.cachedTokens > 0 ? ` (${compact.format(summary.cachedTokens)} served from the provider's cache)` : ""} and ${summary.samRequests} SAM requests`
                 : "the provider returned no token usage, so no cost is claimed"
             }
           />

@@ -353,6 +353,39 @@ recordings of those three said "marks where the damage appears to be" and "damag
 > fictitious parcels only (see [`data/photos/README.md`](data/photos/README.md)). Dropping
 > `<name>.jpg` next to one replaces it with a real photo.
 
+### Evaluation: six cases, three runs each (27 Oct 2026)
+
+`npm run eval -- --runs 3` runs the six cases N times each on the real **Muse Spark 1.3** and SAM 3.1,
+sequentially, and scores every run against the outcome in `data/demo-cases.json` (decision, carrier
+claim, human review, claim eligibility). It refuses the demo mock, projects its cost from the first run
+and stops above $5 without `--yes`, and writes [`data/eval/`](data/eval) (counts, decisions, timings:
+no customer text). The app shows the latest file on its `/eval` page, linked from the footer.
+
+The 18 runs of 27 Oct 2026 (17:43 UTC, commit `0eab783`):
+
+| # | Expected | Observed (3 runs) | Every expectation met | Carrier claim kept | Median |
+|---|---|---|---|---|---|
+| 1 | reship + claim | reship x3 (52.90 EUR each time) | 3 of 3 | 3 of 3 | 29.7 s |
+| 2 | no action | no action x3 | 3 of 3 | 0 of 3 | 28.8 s |
+| 3 | ask for photos, no human | ask for photos x3 | **2 of 3** | 0 of 3 | 23.3 s |
+| 4 | reship (or refund) + claim | reship x3 (25.00 EUR) | 3 of 3 | 3 of 3 | 27.8 s |
+| 5 | refund (or reship) + claim + human | reship x3 (250.00 EUR), human x3 | 3 of 3 | 3 of 3 | 30.5 s |
+| 6 | refund (or reship), no claim | refund x3 | 3 of 3 | 0 of 3 | 24.9 s |
+
+**17 of 18 runs met every expectation, and 5 of 6 cases gave the same answer in all three runs.** The
+one miss is the blurry lamp (case 3): in run 1 Muse asked for more photos, as expected, but also handed
+the case to a human (confidence 0.90, "heavily motion-blurred"); the other two runs did not. That is the
+variance the section above already saw on 27 Oct, now counted. In case 5 the case file's first choice is
+a refund and the agent chose to reship every time; both are listed as acceptable there, so it counts as a
+match, and the page shows it as "Refund or Reship" against "Reship x3". Median 28.2 s a run, 767,000
+tokens and 22 SAM requests in all, about $1.18 at the published Standard prices (an upper bound: it
+bills every token at the full input price, although the API reported 425,000 of them as served from its cache).
+
+This is **six cases times three runs, not a benchmark**: too few runs to put a rate on, on the same six
+cases the agent was tuned on, against expectations we wrote ourselves, on AI-generated photos. It shows
+repeatability on the demo, not accuracy on parcels it has never seen. The SAM column counts regions,
+it does not judge the outlines.
+
 ### Recorded runs (the showcase)
 
 [`data/showcase/`](data/showcase/README.md) holds those six real runs, with their photos, the

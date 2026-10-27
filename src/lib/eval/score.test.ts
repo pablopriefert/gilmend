@@ -193,6 +193,7 @@ describe("summarizeResults", () => {
     expect(s.medianDurationMs).toBe(40_000);
     expect(s.totalTokens).toBe(72_000);
     expect(s.samRequests).toBe(12);
+    expect(s.cachedTokens).toBe(0);
     expect(s.runsWithoutUsage).toBe(0);
   });
 });

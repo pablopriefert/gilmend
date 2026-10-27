@@ -60,6 +60,13 @@ describe("EvalReport", () => {
     expect(screen.getByText(/refuses the demo mock/)).toBeInTheDocument();
   });
 
+  it("says how many tokens the provider served from its cache, since the estimate ignores the discount", () => {
+    const results = makeResults();
+    results.cases[0].runs[0].usage!.cachedTokens = 4000;
+    render(<EvalReport results={results} file="x.json" />);
+    expect(screen.getByText(/4k served from the provider's cache/)).toBeInTheDocument();
+  });
+
   it("claims no cost when the provider returned no token usage", () => {
     const results = makeResults({ pricing: null, estimatedCostUsd: null });
     for (const c of results.cases) for (const r of c.runs) r.usage = null;

@@ -241,6 +241,8 @@ export interface EvalSummary {
   casesStable: number;
   medianDurationMs: number | null;
   totalTokens: number | null;
+  /** Prompt tokens the provider says were served from its cache (already inside totalTokens). */
+  cachedTokens: number;
   /** Runs that came back with no token usage at all (the totals then undercount). */
   runsWithoutUsage: number;
   samRequests: number;
@@ -266,6 +268,7 @@ export function summarizeResults(results: Pick<EvalResults, "cases">): EvalSumma
     casesStable: cases.filter((c) => c.stable).length,
     medianDurationMs: median(runs.map((r) => r.durationMs)),
     totalTokens: tokens.length ? tokens.reduce((a, b) => a + b, 0) : null,
+    cachedTokens: runs.reduce((total, r) => total + (r.usage?.cachedTokens ?? 0), 0),
     runsWithoutUsage: runs.filter((r) => !r.usage).length,
     samRequests: runs.reduce((total, r) => total + r.sam.requests, 0),
   };
