@@ -46,6 +46,9 @@ beforeEach(async () => {
   vi.stubEnv("MODEL_API_KEY", "");
   vi.stubEnv("OPEN_WEIGHTS_BASE_URL", "");
   vi.stubEnv("OPEN_WEIGHTS_MODEL", "");
+  vi.stubEnv("OPEN_WEIGHTS_PROVIDER", "");
+  vi.stubEnv("BASETEN_API_KEY", "");
+  vi.stubEnv("OPENROUTER_API_KEY", "");
   resetRateLimits();
   runAgent.mockReset();
   saveCase.mockReset();
@@ -116,6 +119,34 @@ describe("POST /api/reports", () => {
     const res = await POST(reportRequest({ fields: { engine: "muse-spark-1.3" } }));
     expect(runAgent.mock.calls[0][1].engine).toBe("muse-spark-1.3");
     expect((await res.json()).fellBack).toBe(false);
+  });
+
+  it("runs the private engine on Baseten with only the provider switch and the Baseten key", async () => {
+    vi.stubEnv("OPEN_WEIGHTS_PROVIDER", "baseten");
+    vi.stubEnv("BASETEN_API_KEY", "fake-key-for-test");
+    const res = await POST(reportRequest({ fields: { engine: "open-weights" } }));
+    expect(runAgent.mock.calls[0][1].engine).toBe("open-weights");
+    expect((await res.json()).fellBack).toBe(false);
+  });
+
+  it("falls back to labelled demo mode when the Baseten switch is set but its key is not", async () => {
+    vi.stubEnv("OPEN_WEIGHTS_PROVIDER", "baseten");
+    const res = await POST(reportRequest({ fields: { engine: "open-weights" } }));
+    expect(runAgent.mock.calls[0][1].engine).toBe("demo-mock");
+    expect(await res.json()).toMatchObject({ requestedEngine: "open-weights", fellBack: true });
+  });
+
+  it("runs the OpenRouter test engine only when it is asked for and its key is set", async () => {
+    await POST(reportRequest({ fields: { engine: "openrouter" } }));
+    expect(runAgent.mock.calls[0][1].engine).toBe("demo-mock");
+    runAgent.mockClear();
+    vi.stubEnv("OPENROUTER_API_KEY", "fake-key-for-test");
+    await POST(reportRequest({ fields: { engine: "openrouter" } }));
+    expect(runAgent.mock.calls[0][1].engine).toBe("openrouter");
+    runAgent.mockClear();
+    // An unspecified engine is never the test one, whatever keys exist.
+    await POST(reportRequest({ fields: {} }));
+    expect(runAgent.mock.calls[0][1].engine).toBe("demo-mock");
   });
 
   it("ignores an unknown engine value", async () => {

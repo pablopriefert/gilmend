@@ -6,7 +6,7 @@
   "description": "The agent that recovers the money from damaged parcels (Meta Global AI Developer Hackathon, Startups track).",
   "scripts": {
     "dev": "next dev",
-    "dev:demo": "MODEL_API_KEY= OPEN_WEIGHTS_BASE_URL= OPEN_WEIGHTS_MODEL= next dev",
+    "dev:demo": "MODEL_API_KEY= OPEN_WEIGHTS_BASE_URL= OPEN_WEIGHTS_MODEL= BASETEN_API_KEY= OPENROUTER_API_KEY= next dev",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
@@ -14,8 +14,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "demo": "tsx scripts/demo.ts",
-    "start:demo": "MODEL_API_KEY= OPEN_WEIGHTS_BASE_URL= OPEN_WEIGHTS_MODEL= next start",
+    "start:demo": "MODEL_API_KEY= OPEN_WEIGHTS_BASE_URL= OPEN_WEIGHTS_MODEL= BASETEN_API_KEY= OPENROUTER_API_KEY= next start",
     "real": "tsx --env-file=.env.local scripts/run-real.ts",
+    "probe": "tsx --env-file=.env.local scripts/probe-engine.ts",
     "sam-probe": "tsx --env-file=.env.local scripts/sam-probe.ts"
   },
   "dependencies": {

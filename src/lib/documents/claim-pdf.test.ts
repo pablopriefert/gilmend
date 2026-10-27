@@ -160,6 +160,21 @@ describe("buildClaimDocument", () => {
     expect(muse).not.toContain("DEMO MODE");
   });
 
+  it("names the model and host of an open-weights run in the footer, and never a hostname", async () => {
+    const detail = {
+      model: "meta-models/muse-spark-open-1026",
+      host: "baseten" as const,
+      label: "Muse Spark Open (open weights, served by Baseten)",
+      short: "Muse Spark Open on Baseten",
+    };
+    const text = extractPdfText(await readFile(path.resolve((await build({ engine: "open-weights", engineDetail: detail })).pdfPath)));
+    expect(text).toContain("Muse Spark Open (open weights, served by Baseten)");
+    expect(text).not.toContain("DEMO MODE");
+    // A case saved before engineDetail existed keeps the vague label rather than guessing.
+    const old = extractPdfText(await readFile(path.resolve((await build({ engine: "open-weights" })).pdfPath)));
+    expect(old).toContain("open-weights model");
+  });
+
   it("embeds the annotated photo when there is one and the raw photo otherwise", async () => {
     const base = sampleCase();
     const withPhotos = sampleCase({

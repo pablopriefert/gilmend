@@ -221,3 +221,17 @@ describe("stripFigures", () => {
     expect(stripFigures("Vase in three pieces")).toBe("Vase in three pieces");
   });
 });
+
+describe("applyGuardrails: photos the model never saw", () => {
+  it("drops an otherwise valid carrier claim and forces a human", () => {
+    const r = applyGuardrails(raw(), ctx({ photosNotRead: true }));
+    expect(r.decision).toMatchObject({ carrierClaim: false, needsHuman: true });
+    expect(r.adjustments).toContain("carrierClaim dropped: the photos were not read by the model");
+    expect(r.decision.reasons.join(" ")).toMatch(/model did not read the photos/);
+  });
+
+  it("changes nothing when the photos were read", () => {
+    const r = applyGuardrails(raw(), ctx());
+    expect(r.decision).toMatchObject({ carrierClaim: true, needsHuman: false });
+  });
+});

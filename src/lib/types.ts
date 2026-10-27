@@ -11,8 +11,31 @@
 
 export type CarrierId = "colissimo" | "mondial_relay" | "chronopost";
 
-/** Which engine produced a case. 'demo-mock' is the deterministic mock provider (no key). */
-export type Engine = "muse-spark-1.3" | "open-weights" | "demo-mock";
+/**
+ * Which engine produced a case. 'demo-mock' is the deterministic mock provider (no key).
+ * 'open-weights' is the "Run privately" engine: an open-weights Muse model, hosted by Baseten
+ * or served on Modal or elsewhere (see EngineDetail for which). 'openrouter' is a test engine
+ * for cheap bulk runs: never private, never the default.
+ */
+export type Engine = "muse-spark-1.3" | "open-weights" | "openrouter" | "demo-mock";
+
+/** Where the model of a run is served. */
+export type EngineHost = "meta" | "baseten" | "modal" | "openrouter" | "custom" | "mock";
+
+/**
+ * Which model and host really ran a case, stored with it. `engine` alone cannot say it for
+ * open weights (Muse Spark Open on Baseten, Muse Glimmer on Modal...), and the claim PDF, which
+ * goes to a carrier, must not call an open-weights run by a vaguer name than the truth.
+ */
+export interface EngineDetail {
+  /** Model id sent to the server (an id, never a key). */
+  model: string;
+  host: EngineHost;
+  /** Full sentence-case name for documents, e.g. "Muse Spark Open (open weights, served by Baseten)". */
+  label: string;
+  /** Short name for badges and lists, e.g. "Muse Spark Open on Baseten". */
+  short: string;
+}
 
 export interface OrderLineItem {
   sku: string;
@@ -206,6 +229,8 @@ export interface CaseRecord {
   document: ClaimDocument | null;
   status: CaseStatus;
   engine: Engine;
+  /** Model and host that ran the case. Absent on cases saved before it existed. */
+  engineDetail?: EngineDetail;
   trace: TraceStep[];
   createdAt: string;
   updatedAt: string;

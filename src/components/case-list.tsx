@@ -53,7 +53,7 @@ function CaseRow({ c, now }: { c: CaseRecord; now: Date }) {
           )}
         </div>
         <div>
-          <EngineBadge engine={c.engine} compact />
+          <EngineBadge engine={c.engine} detail={c.engineDetail} compact />
         </div>
       </Link>
     </li>

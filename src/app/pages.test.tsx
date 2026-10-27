@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeCase, makeRules } from "@/components/fixtures";
 
@@ -98,5 +99,44 @@ describe("Report page", () => {
     vi.stubEnv("MODEL_API_KEY", "fake-key-for-test");
     render(<ReportPage />);
     expect(screen.getByText(/This report will run as/).textContent).toMatch(/Muse Spark 1\.3/);
+  });
+
+  it("says the private engine runs Muse Spark Open on Baseten when that preset is configured", () => {
+    vi.stubEnv("MODEL_API_KEY", "");
+    vi.stubEnv("OPEN_WEIGHTS_BASE_URL", "");
+    vi.stubEnv("OPEN_WEIGHTS_MODEL", "");
+    vi.stubEnv("OPEN_WEIGHTS_PROVIDER", "baseten");
+    vi.stubEnv("BASETEN_API_KEY", "fake-key-for-test");
+    vi.stubEnv("OPENROUTER_API_KEY", "");
+    render(<ReportPage />);
+    const option = screen.getByRole("radio", { name: /Run privately/ });
+    fireEvent.click(option);
+    expect(screen.getByText(/This report will run as/).textContent).toMatch(/Muse Spark Open \(open weights, served by Baseten\)/);
+    expect(screen.queryByRole("radio", { name: /OpenRouter/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Layout and the Muse Model License", () => {
+  // The license asks every product that uses Muse Spark Open to say so in its UI.
+  const footer = async () => {
+    const { default: RootLayout } = await import("./layout");
+    const html = renderToStaticMarkup(RootLayout({ children: <p>content</p> }));
+    return html.slice(html.indexOf("<footer"));
+  };
+
+  it("says 'Built with Muse Spark Open' when the configured open-weights model is Muse Spark Open", async () => {
+    vi.stubEnv("OPEN_WEIGHTS_PROVIDER", "baseten");
+    vi.stubEnv("BASETEN_API_KEY", "fake-key-for-test");
+    expect(await footer()).toContain("Built with Muse Spark Open.");
+  });
+
+  it("does not claim it for another model or when nothing is configured", async () => {
+    vi.stubEnv("OPEN_WEIGHTS_PROVIDER", "");
+    vi.stubEnv("OPEN_WEIGHTS_BASE_URL", "https://w--g.modal.run/v1");
+    vi.stubEnv("OPEN_WEIGHTS_MODEL", "muse-glimmer");
+    expect(await footer()).not.toContain("Built with Muse Spark Open");
+    vi.stubEnv("OPEN_WEIGHTS_BASE_URL", "");
+    vi.stubEnv("OPEN_WEIGHTS_MODEL", "");
+    expect(await footer()).not.toContain("Built with Muse Spark Open");
   });
 });

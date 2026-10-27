@@ -1,4 +1,4 @@
-import type { CarrierId, DamageAssessment, DamageSeverity, DamageType, Engine, Order } from "../types";
+import type { CarrierId, DamageAssessment, DamageSeverity, DamageType, Engine, EngineDetail, Order } from "../types";
 
 // Formatting helpers for the claim PDF and e-mail, in English: the product is judged in
 // English (Meta hackathon, 27 Oct 2026 decision). We format by hand instead of relying on
@@ -64,12 +64,20 @@ export const SEVERITY_LABEL: Record<DamageSeverity, string> = {
   total: "product beyond repair",
 };
 
-export function engineLabel(engine: Engine): string {
+/**
+ * What the PDF footer says ran the case. The footer goes to a carrier, so an open-weights run
+ * names its model and host when the case carries them (`detail`), not a vaguer "open-weights
+ * model" that would also fit a run we cannot name.
+ */
+export function engineLabel(engine: Engine, detail?: EngineDetail): string {
+  if (detail && engine !== "demo-mock") return detail.label;
   switch (engine) {
     case "muse-spark-1.3":
       return "Muse Spark 1.3 (Meta Model API)";
     case "open-weights":
       return "open-weights model";
+    case "openrouter":
+      return "Muse model via OpenRouter (test engine)";
     case "demo-mock":
       // Never let a mock run pass for a Muse run, not even in a footer.
       return "demo-mock (DEMO MODE, not Muse)";

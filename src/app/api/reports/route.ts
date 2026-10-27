@@ -28,7 +28,7 @@ export const runtime = "nodejs";
 // default on new projects); a plan without it caps at 60 s and the build says so.
 export const maxDuration = 120;
 
-const ENGINES: readonly Engine[] = ["muse-spark-1.3", "open-weights", "demo-mock"];
+const ENGINES: readonly Engine[] = ["muse-spark-1.3", "open-weights", "openrouter", "demo-mock"];
 // Each accepted report can spend model credits, so the public demo URL gets a modest cap per
 // client; takeRealRun adds a global daily ceiling on real runs. Local development is not
 // limited: all local requests share one bucket and rehearsing the video would hit it.

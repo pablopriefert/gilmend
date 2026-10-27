@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describeEngine } from "@/lib/config";
 import { DEMO_SCENARIOS } from "./demo-scenarios";
 import { ReportForm } from "./report-form";
 
@@ -88,6 +89,29 @@ describe("report form validation", () => {
     expect(screen.getByText(/This report will run as/).textContent).toMatch(/Open weights \(private run\)/);
     fireEvent.click(screen.getByRole("radio", { name: /Demo mode/ }));
     expect(screen.getByText(/This report will run as/).textContent).toMatch(/DEMO MODE/);
+  });
+});
+
+describe("report form: Baseten and the test engine", () => {
+  it("names the model and host that the private run will really use", () => {
+    const detail = describeEngine("open-weights", { OPEN_WEIGHTS_PROVIDER: "baseten", BASETEN_API_KEY: "placeholder" });
+    render(<ReportForm availability={{ museKey: true, openWeights: true, openWeightsDetail: detail }} />);
+    fireEvent.click(screen.getByRole("radio", { name: /Run privately \(open weights\)/ }));
+    expect(screen.getByText(/This report will run as/).textContent).toMatch(/Muse Spark Open \(open weights, served by Baseten\)/);
+  });
+
+  it("shows the OpenRouter test engine only when the server has its key", () => {
+    const { unmount } = render(<ReportForm availability={{ museKey: true, openWeights: false }} />);
+    expect(screen.queryByRole("radio", { name: /OpenRouter/ })).not.toBeInTheDocument();
+    unmount();
+    render(
+      <ReportForm
+        availability={{ museKey: true, openWeights: false, openRouter: true, openRouterDetail: describeEngine("openrouter", {}) }}
+      />,
+    );
+    expect(screen.getByRole("radio", { name: /Muse Spark 1\.3 \(Model API\)/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: /OpenRouter/ }));
+    expect(screen.getByText(/This report will run as/).textContent).toMatch(/via OpenRouter \(test engine, not private\)/);
   });
 });
 

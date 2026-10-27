@@ -4,7 +4,7 @@ import type {
   ChatCompletionMessageFunctionToolCall,
   ChatCompletionMessageParam,
 } from "openai/resources/chat/completions";
-import { resolveEngine, type Env } from "../config";
+import { describeEngine, resolveEngine, type Env } from "../config";
 import { buildClaimDocument } from "../documents/claim-pdf";
 import { DEFAULT_DAMAGE_CONCEPTS, damageConceptFor, markDamage } from "../evidence/mark-damage";
 import { getOrder } from "../orders";
@@ -124,7 +124,8 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
       `DEMO MODE: scripted mock provider${why}. This answer does NOT come from Muse and no image was analysed.`,
     );
   } else {
-    log(`Engine: ${engine}`);
+    // For open weights `engine` alone does not say which model and host run: the detail does.
+    log(`Engine: ${engine} (${(provider?.detail ?? describeEngine(engine, env)).label})`);
   }
 
   // State of the investigation, filled by the tools.
@@ -141,6 +142,9 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
   const toolErrors: string[] = [];
   const toolOutputs: unknown[] = [];
   let failure: string | null = null;
+  // True when the model was not shown the photos (its server cannot read images, or refused
+  // them). Then nothing it says about damage comes from the photos, and the case goes to a human.
+  let photosNotRead = false;
 
   const snapshot = (): CaseRecord => ({
     id: caseId,
@@ -153,6 +157,7 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
     document,
     status: "needs_review",
     engine,
+    engineDetail: provider?.detail ?? describeEngine(engine, env),
     trace: [...trace],
     createdAt,
     updatedAt: new Date().toISOString(),
@@ -192,6 +197,14 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
       }
 
       case "assess_photos": {
+        if (photosNotRead) {
+          // Not recorded: a reading written without seeing the photos would end up, as evidence,
+          // in the PDF that goes to the carrier.
+          return {
+            error:
+              "You were not shown the photos, so there is no reading to record. Do not guess: call finish_case with needsHuman=true.",
+          };
+        }
         const a = parseAssessment(args);
         if (!a.ok) return { error: a.error };
         assessment = a.value;
@@ -294,6 +307,7 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
           toolErrors,
           toolOutputs,
           reportReceivedAt: report.receivedAt,
+          photosNotRead,
         });
         decision = result.decision;
         for (const adj of result.adjustments) log(`Guardrail: ${adj}`);
@@ -337,30 +351,6 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
     }
   }
 
-  // ---- opening message (text + photos) ---------------------------------------------
-
-  const content: ChatCompletionContentPart[] = [];
-  const attached: number[] = [];
-  const imageParts: ChatCompletionContentPart[] = [];
-  for (let i = 0; i < report.photos.length; i++) {
-    try {
-      const url = await photoToImageUrl(report.photos[i]);
-      imageParts.push({ type: "image_url", image_url: { url } });
-      attached.push(i);
-    } catch (e) {
-      log(`Photo ${i} could not be read and was not sent to the model: ${errMessage(e)}`);
-    }
-  }
-  content.push({ type: "text", text: formatReportMessage(report, attached) }, ...imageParts);
-  log(`Report received (${attached.length} photo(s) attached)`, {
-    input: { orderNumber: report.orderNumber, language: report.language },
-  });
-
-  const messages: ChatCompletionMessageParam[] = [
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content },
-  ];
-
   // ---- provider ---------------------------------------------------------------------
 
   if (!provider) {
@@ -370,6 +360,57 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
       failure = `provider unavailable: ${errMessage(e)}`;
     }
   }
+
+  // ---- opening message (text + photos) ---------------------------------------------
+
+  const content: ChatCompletionContentPart[] = [];
+  const attached: number[] = [];
+  const imageParts: ChatCompletionContentPart[] = [];
+
+  /**
+   * Tell the model, and the trace, that it will not see the photos. Used when the engine's model
+   * cannot read images and when its server refused them: in both cases the run goes on (the report
+   * text, the order and the carrier rules are still useful) but never pretends to have read them.
+   */
+  const withholdPhotos = (why: string) => {
+    photosNotRead = true;
+    attached.length = 0;
+    content.splice(
+      0,
+      content.length,
+      { type: "text", text: formatReportMessage(report, []) },
+      {
+        type: "text",
+        text: `System note: the customer's photos were NOT shown to you (${why}). You cannot judge the damage from them. Do not guess what they show, do not call assess_photos or compute_claim: call finish_case with needsHuman=true and say in the reasons that the photos were not read by the model.`,
+      },
+    );
+    log(
+      `The photos were NOT read by the model (${why}). Nothing in this case comes from looking at them: it goes to a human.`,
+    );
+  };
+
+  if (provider && provider.supportsImages === false && report.photos.length > 0) {
+    withholdPhotos(`${provider.model} is configured without image input`);
+  } else {
+    for (let i = 0; i < report.photos.length; i++) {
+      try {
+        const url = await photoToImageUrl(report.photos[i]);
+        imageParts.push({ type: "image_url", image_url: { url } });
+        attached.push(i);
+      } catch (e) {
+        log(`Photo ${i} could not be read and was not sent to the model: ${errMessage(e)}`);
+      }
+    }
+    content.push({ type: "text", text: formatReportMessage(report, attached) }, ...imageParts);
+  }
+  log(`Report received (${attached.length} photo(s) attached)`, {
+    input: { orderNumber: report.orderNumber, language: report.language },
+  });
+
+  const messages: ChatCompletionMessageParam[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+    { role: "user", content },
+  ];
 
   // ---- the loop ---------------------------------------------------------------------
 
@@ -382,16 +423,32 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
       break;
     }
     let completion;
-    try {
-      completion = await provider.chat(
+    const callModel = () =>
+      provider!.chat(
         { messages, tools: AGENT_TOOLS },
         {
           timeoutMs: Math.max(MIN_MODEL_CALL_TIMEOUT_MS, Math.min(MODEL_CALL_TIMEOUT_MS, remainingMs)),
         },
       );
+    try {
+      completion = await callModel();
     } catch (e) {
-      failure = `model call failed at step ${step}: ${errMessage(e)}`;
-      break;
+      // A server that rejects the very first request while photos are attached may simply not
+      // take images (a text-only deployment, a size limit). Retry once without them, out loud;
+      // if it still fails, the failure below is the real one.
+      const status = (e as { status?: unknown })?.status;
+      if (step === 1 && attached.length > 0 && (status === 400 || status === 413 || status === 415 || status === 422)) {
+        withholdPhotos(`the server answered HTTP ${status} to the request with photos: ${errMessage(e)}`);
+        try {
+          completion = await callModel();
+        } catch (e2) {
+          failure = `model call failed at step ${step}: ${errMessage(e2)}`;
+          break;
+        }
+      } else {
+        failure = `model call failed at step ${step}: ${errMessage(e)}`;
+        break;
+      }
     }
     const message = completion.choices?.[0]?.message;
     if (!message) {
