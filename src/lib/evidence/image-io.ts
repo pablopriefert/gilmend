@@ -1,6 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { restoreRuntimeFile } from "../storage/runtime-files";
 
 // Photos reach us as a file path or a data URL (see DamageReport.photos). This module is
 // the single place that turns such a reference into bytes, so the SAM call and the PDF
@@ -56,6 +57,9 @@ export async function loadImage(ref: string, options: LoadImageOptions = {}): Pr
   for (const candidate of candidates) {
     if (!roots.some((root) => isInside(root, candidate))) continue;
     try {
+      // A photo another serverless instance stored (shared store configured) is downloaded
+      // into the runtime folder first; without a shared store this is a plain stat.
+      await restoreRuntimeFile(candidate);
       const info = await stat(candidate);
       if (!info.isFile()) continue;
       if (info.size > MAX_PHOTO_BYTES) throw new Error("photo too large (over 20 MB)");

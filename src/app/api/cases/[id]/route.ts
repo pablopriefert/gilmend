@@ -1,5 +1,5 @@
 import { getCase, updateCase } from "@/lib/store/cases";
-import type { CaseRecord, CaseStatus } from "@/lib/types";
+import type { CaseRecord, CaseStatus, TraceStep } from "@/lib/types";
 import { accessCodeRequired, hasValidAccessCode } from "../../_lib/access";
 import { errorResponse, failureResponse, isValidCaseId } from "../../_lib/responses";
 
@@ -85,16 +85,18 @@ export async function PATCH(request: Request, { params }: RouteContext): Promise
     }
 
     const now = new Date().toISOString();
-    const trace = [...current.trace];
+    // Only the lines this request adds: the store appends them to the trace it reads under
+    // its lock, so a concurrent change from another tab keeps its own line.
+    const added: TraceStep[] = [];
     const patch: Partial<Omit<CaseRecord, "id">> = {};
 
     if (current.decision && reply !== undefined && reply !== current.decision.customerReply) {
       patch.decision = { ...current.decision, customerReply: reply };
-      trace.push({ step: "Merchant edited the customer reply.", at: now });
+      added.push({ step: "Merchant edited the customer reply.", at: now });
     }
     if (status !== undefined && status !== current.status) {
       patch.status = status as CaseStatus;
-      trace.push({
+      added.push({
         step:
           status === "approved"
             ? "Merchant approved the case. Ready to send; nothing was sent."
@@ -107,8 +109,7 @@ export async function PATCH(request: Request, { params }: RouteContext): Promise
     if (Object.keys(patch).length === 0) {
       return Response.json({ case: current }, { headers: NOCACHE });
     }
-    patch.trace = trace;
-    const updated = await updateCase(id, patch);
+    const updated = await updateCase(id, patch, { appendTrace: added });
     return Response.json({ case: updated }, { headers: NOCACHE });
   } catch (err) {
     return failureResponse(err, "Updating the case");

@@ -1,0 +1,326 @@
+{
+  "id": "real_demo-6-late-report",
+  "report": {
+    "id": "demo-6-late-report",
+    "receivedAt": "2026-10-27T13:07:43.874Z",
+    "customerEmail": "thomas.garnier@example.org",
+    "orderNumber": "#1006",
+    "message": "I only unpacked the carafe today and found it cracked along the neck. It was delivered over a week ago, sorry for the delay. Order #1006.",
+    "photos": [
+      "data/showcase/photos/carafe-cracked.webp"
+    ],
+    "language": "en"
+  },
+  "order": {
+    "id": "#1006",
+    "name": "Thomas Garnier",
+    "email": "thomas.garnier@example.org",
+    "carrier": "chronopost",
+    "service": "Chronopost Chrono 13",
+    "trackingNumber": "XW990010061TS",
+    "weightKg": 1.2,
+    "currency": "EUR",
+    "lineItems": [
+      {
+        "sku": "CARAFE-CUT-1L",
+        "title": "Cut-glass water carafe, 1 L",
+        "quantity": 1,
+        "unitPrice": 38
+      }
+    ],
+    "shippingAddress": {
+      "city": "Toulouse",
+      "country": "FR"
+    },
+    "createdAt": "2026-10-15T13:07:46.863Z",
+    "deliveredAt": "2026-10-18T15:07:46.863Z",
+    "total": 44.9
+  },
+  "assessment": {
+    "item": "glass water carafe",
+    "damageType": "broken_product",
+    "severity": "major",
+    "carrierLikelyAtFault": true,
+    "packagingAdequate": null,
+    "evidenceNotes": [
+      "clear glass carafe with long crack from rim down neck to body",
+      "crack branching in middle of neck"
+    ],
+    "photoQuality": "ok"
+  },
+  "claim": {
+    "eligible": false,
+    "reasons": [
+      "The claim deadline of Chronopost (professional terms) passed on 2026-10-21T15:07Z (3 days after delivery), so a claim can no longer be filed.",
+      "The customer reported the damage 214.0 h after delivery, after the 72 h reserve window of Chronopost (professional terms) closed on 2026-10-21T15:07Z. The carrier rejects such claims.",
+      "Warning: the photos do not show whether the packaging was adequate; the carrier may refuse compensation if it was not."
+    ],
+    "maxCompensationEur": 0,
+    "claimDeadline": null,
+    "reserveDeadline": "2026-10-21T15:07:46.863Z",
+    "daysLeft": null
+  },
+  "decision": {
+    "decision": "refund",
+    "carrierClaim": false,
+    "confidence": 0.88,
+    "reasons": [
+      "Order #1006 found for Thomas Garnier, carrier chronopost",
+      "Photo shows glass water carafe with major crack from rim down neck, photoQuality ok",
+      "compute_claim returned eligible=false: claim deadline passed on 2026-10-21T15:07:46.863Z, reported 214h after delivery, so no carrier claim is possible"
+    ],
+    "needsHuman": false,
+    "customerReply": "Hello, thank you for your message and for the photo. I'm sorry your carafe arrived cracked. We will proceed with a refund for your order. Thank you for your understanding."
+  },
+  "evidence": [
+    {
+      "photo": "data/showcase/photos/carafe-cracked.webp",
+      "annotatedPhoto": "data/showcase/evidence/ff54b37e8b0478ff-annotated.jpg",
+      "method": "sam-3.1",
+      "note": "SAM 3.1 outlined 1 region matching \"glass carafe\" (confidence 0.62). The outline marks where the damage appears to be; it is not a damage verdict."
+    }
+  ],
+  "document": null,
+  "status": "needs_review",
+  "engine": "muse-spark-1.3",
+  "trace": [
+    {
+      "step": "Engine: muse-spark-1.3",
+      "at": "2026-10-27T15:07:43.875Z"
+    },
+    {
+      "step": "Report received (1 photo(s) attached)",
+      "input": {
+        "orderNumber": "#1006",
+        "language": "en"
+      },
+      "at": "2026-10-27T15:07:43.878Z"
+    },
+    {
+      "step": "Model note (step 1)",
+      "output": "Your late carafe report is in — I'll pull your order and assess the damage.",
+      "at": "2026-10-27T15:07:46.862Z"
+    },
+    {
+      "step": "Tool: get_order",
+      "tool": "get_order",
+      "input": "{\"orderNumber\":\"#1006\"}",
+      "output": {
+        "found": true,
+        "order": {
+          "id": "#1006",
+          "name": "Thomas Garnier",
+          "email": "thomas.garnier@example.org",
+          "carrier": "chronopost",
+          "service": "Chronopost Chrono 13",
+          "trackingNumber": "XW990010061TS",
+          "weightKg": 1.2,
+          "currency": "EUR",
+          "lineItems": [
+            {
+              "sku": "CARAFE-CUT-1L",
+              "title": "Cut-glass water carafe, 1 L",
+              "quantity": 1,
+              "unitPrice": 38
+            }
+          ],
+          "shippingAddress": {
+            "city": "Toulouse",
+            "country": "FR"
+          },
+          "createdAt": "2026-10-15T13:07:46.863Z",
+          "deliveredAt": "2026-10-18T15:07:46.863Z",
+          "total": 44.9
+        }
+      },
+      "at": "2026-10-27T15:07:46.863Z"
+    },
+    {
+      "step": "Tool: assess_photos",
+      "tool": "assess_photos",
+      "input": "{\"carrierLikelyAtFault\":true,\"damageType\":\"broken_product\",\"evidenceNotes\":[\"clear glass carafe with long crack from rim down neck to body\",\"crack branching in middle of neck\"],\"item\":\"glass water carafe\",\"packagingAdequate\":null,\"photoQuality\":\"ok\",\"severity\":\"major\"}",
+      "output": {
+        "recorded": true,
+        "assessment": {
+          "item": "glass water carafe",
+          "damageType": "broken_product",
+          "severity": "major",
+          "carrierLikelyAtFault": true,
+          "packagingAdequate": null,
+          "evidenceNotes": [
+            "clear glass carafe with long crack from rim down neck to body",
+            "crack branching in middle of neck"
+          ],
+          "photoQuality": "ok"
+        }
+      },
+      "at": "2026-10-27T15:07:48.538Z"
+    },
+    {
+      "step": "Model note (step 3)",
+      "output": "I've confirmed your carafe is cracked — now I'll document the evidence and verify the claim deadline.",
+      "at": "2026-10-27T15:07:51.047Z"
+    },
+    {
+      "step": "Tool: mark_damage",
+      "tool": "mark_damage",
+      "input": "{\"concept\":\"glass carafe\",\"photoIndex\":0}",
+      "output": {
+        "photoIndex": 0,
+        "annotated": true,
+        "method": "sam-3.1",
+        "note": "SAM 3.1 outlined 1 region matching \"glass carafe\" (confidence 0.62). The outline marks where the damage appears to be; it is not a damage verdict."
+      },
+      "at": "2026-10-27T15:07:53.187Z"
+    },
+    {
+      "step": "Tool: get_carrier_rules",
+      "tool": "carrier_rules",
+      "input": "{\"carrier\":\"chronopost\"}",
+      "output": {
+        "carrier": "chronopost",
+        "label": "Chronopost (professional terms)",
+        "sources": [
+          {
+            "title": "Chronopost general terms of sale, professionals (online page, undated; limits and 3-day claim deadline read)",
+            "url": "https://www.chronopost.fr/fr/conditions-generales-de-vente-professionnels",
+            "checkedOn": "2026-10-27"
+          },
+          {
+            "title": "French Commercial Code, art. L133-3 (3-day protest after receipt, carrier liability)",
+            "url": "https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000021486442",
+            "checkedOn": "2026-10-27"
+          }
+        ],
+        "reserveDeadlineHours": 72,
+        "claimDeadlineDays": 3,
+        "compensation": {
+          "flatEur": 250,
+          "capEur": 250
+        },
+        "requiresRefusal": false,
+        "claimDeadlineFrom": "delivery",
+        "reserveDeadlineBinding": true,
+        "compensationVariants": [
+          {
+            "id": "chronopost-per-kg",
+            "label": "Chrono 18, Chrono Classic, Chrono Relais Europe, or a parcel with mobile phone items",
+            "when": {
+              "serviceIncludes": [
+                "chrono 18",
+                "chrono classic",
+                "relais europe"
+              ],
+              "itemPattern": "\\b(smartphone|iphone|phone|telephone|t\\u00e9l\\u00e9phone)s?\\b"
+            },
+            "compensation": {
+              "perKgEur": 23,
+              "capEur": 690
+            }
+          }
+        ],
+        "figures": [
+          {
+            "key": "compensation.flatEur",
+            "label": "Default limit per parcel",
+            "value": "250 EUR per parcel",
+            "status": "verified",
+            "sourceUrl": "https://www.chronopost.fr/fr/conditions-generales-de-vente-professionnels",
+            "checkedOn": "2026-10-27",
+            "note": "The terms page shows no edition date. Needs supporting documents (invoice, photos)."
+          },
+          {
+            "key": "variant.chronopost-per-kg",
+            "label": "Chrono 18 / Classic / Relais Europe and mobile phone items: 23 EUR/kg, max 690 EUR",
+            "value": "23 EUR/kg, 690 EUR",
+            "status": "verified",
+            "sourceUrl": "https://www.chronopost.fr/fr/conditions-generales-de-vente-professionnels",
+            "checkedOn": "2026-10-27",
+            "note": "Mobile phone items are detected by a keyword match on item titles (phone, smartphone, iphone, telephone); this heuristic is not an official list."
+          },
+          {
+            "key": "claimDeadlineDays",
+            "label": "Time limit to claim (professional shipper, France)",
+            "value": "3 days after delivery",
+            "status": "verified",
+            "sourceUrl": "https://www.chronopost.fr/fr/conditions-generales-de-vente-professionnels",
+            "checkedOn": "2026-10-27",
+            "note": "14 days apply to consumer shippers, which is not our case. Counted in calendar days, which is never later than the real deadline."
+          },
+          {
+            "key": "reserveDeadlineHours",
+            "label": "Reserve window after delivery",
+            "value": "72 hours",
+            "status": "verified",
+            "sourceUrl": "https://www.chronopost.fr/fr/conditions-generales-de-vente-professionnels",
+            "checkedOn": "2026-10-27",
+            "note": "Same 3-day window as the claim. The clause asking for written reserves on the delivery slip comes from the research notes of 2026-10-22 and was not re-read."
+          }
+        ],
+        "notes": [
+          "Figures are for the public professional terms; a negotiated contract may differ (not public). UNVERIFIED for those merchants.",
+          "Without detailed written reserves on the delivery slip, the claimant must prove that the damage comes from transport; photos taken at delivery matter.",
+          "Insufficient packaging and the shipper's own fault are excluded; the optional insurance (up to 5000 EUR) is not modelled and the order does not say whether it was bought.",
+          "Claims are filed by the merchant through the online customer service form or live chat; no claim API was found. The shipping fee must have been paid."
+        ],
+        "compensationCaveat": "Chronopost pays on supporting documents (purchase invoice dated no later than the shipping day, photos of the damage)."
+      },
+      "at": "2026-10-27T15:07:53.914Z"
+    },
+    {
+      "step": "Model note (step 5)",
+      "output": "The shipping deadline appears to have passed — I'll run the final check to confirm your options.",
+      "at": "2026-10-27T15:07:57.065Z"
+    },
+    {
+      "step": "Tool: compute_claim",
+      "tool": "compute_claim",
+      "input": "{\"parcelRefusedAtDelivery\":null}",
+      "output": {
+        "eligible": false,
+        "reasons": [
+          "The claim deadline of Chronopost (professional terms) passed on 2026-10-21T15:07Z (3 days after delivery), so a claim can no longer be filed.",
+          "The customer reported the damage 214.0 h after delivery, after the 72 h reserve window of Chronopost (professional terms) closed on 2026-10-21T15:07Z. The carrier rejects such claims.",
+          "Warning: the photos do not show whether the packaging was adequate; the carrier may refuse compensation if it was not."
+        ],
+        "maxCompensationEur": 0,
+        "claimDeadline": null,
+        "reserveDeadline": "2026-10-21T15:07:46.863Z",
+        "daysLeft": null
+      },
+      "at": "2026-10-27T15:07:57.066Z"
+    },
+    {
+      "step": "Tool: finish_case",
+      "tool": "draft_reply",
+      "input": "{\"carrierClaim\":false,\"confidence\":0.88,\"customerReply\":\"Hello, thank you for your message and for the photo. I'm sorry your carafe arrived cracked. We will proceed with a refund for your order. Thank you for your understanding.\",\"decision\":\"refund\",\"fraudSuspected\":false,\"needsHuman\":false,\"reasons\":[\"Order #1006 found for Thomas Garnier, carrier chronopost\",\"Photo shows glass water carafe with major crack from rim down neck, photoQuality ok\",\"compute_claim returned eligible=false: claim deadline passed on 2026-10-21T15:07:46.863Z, reported 214h after delivery, so no carrier claim is possible\"]}",
+      "output": {
+        "accepted": true,
+        "decision": {
+          "decision": "refund",
+          "carrierClaim": false,
+          "confidence": 0.88,
+          "reasons": [
+            "Order #1006 found for Thomas Garnier, carrier chronopost",
+            "Photo shows glass water carafe with major crack from rim down neck, photoQuality ok",
+            "compute_claim returned eligible=false: claim deadline passed on 2026-10-21T15:07:46.863Z, reported 214h after delivery, so no carrier claim is possible"
+          ],
+          "needsHuman": false,
+          "customerReply": "Hello, thank you for your message and for the photo. I'm sorry your carafe arrived cracked. We will proceed with a refund for your order. Thank you for your understanding."
+        },
+        "guardrailAdjustments": [],
+        "next": "Done. Stop calling tools."
+      },
+      "at": "2026-10-27T15:08:02.303Z"
+    },
+    {
+      "step": "Case ready for review: refund",
+      "at": "2026-10-27T15:08:02.303Z"
+    }
+  ],
+  "createdAt": "2026-10-27T15:07:43.875Z",
+  "updatedAt": "2026-10-27T15:08:02.303Z",
+  "recorded": {
+    "recordedOn": "2026-10-27"
+  }
+}

@@ -17,7 +17,8 @@
     "start:demo": "MODEL_API_KEY= OPEN_WEIGHTS_BASE_URL= OPEN_WEIGHTS_MODEL= BASETEN_API_KEY= OPENROUTER_API_KEY= next start",
     "real": "tsx --env-file=.env.local scripts/run-real.ts",
     "probe": "tsx --env-file=.env.local scripts/probe-engine.ts",
-    "sam-probe": "tsx --env-file=.env.local scripts/sam-probe.ts"
+    "sam-probe": "tsx --env-file=.env.local scripts/sam-probe.ts",
+    "showcase:build": "tsx scripts/build-showcase.ts"
   },
   "dependencies": {
     "@meta-sam/parser": "0.1.0",

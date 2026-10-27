@@ -6,7 +6,7 @@ const getCase = vi.fn();
 const updateCase = vi.fn();
 vi.mock("@/lib/store/cases", () => ({
   getCase: (id: string) => getCase(id),
-  updateCase: (id: string, patch: unknown) => updateCase(id, patch),
+  updateCase: (id: string, patch: unknown, options: unknown) => updateCase(id, patch, options),
 }));
 
 import { GET, PATCH } from "./route";
@@ -24,7 +24,11 @@ const patch = (body: unknown, id = "case-1") =>
 
 beforeEach(() => {
   getCase.mockResolvedValue(makeCase());
-  updateCase.mockImplementation(async (_id: string, p: Partial<CaseRecord>) => ({ ...makeCase(), ...p }));
+  updateCase.mockImplementation(async (_id: string, p: Partial<CaseRecord>, o?: { appendTrace?: CaseRecord["trace"] }) => ({
+    ...makeCase(),
+    ...p,
+    trace: [...makeCase().trace, ...(o?.appendTrace ?? [])],
+  }));
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 afterEach(() => {
@@ -65,10 +69,12 @@ describe("PATCH /api/cases/[id]", () => {
   it("approves the case and records it in the trace, without sending anything", async () => {
     const res = await patch({ status: "approved" });
     expect(res.status).toBe(200);
-    const [, applied] = updateCase.mock.calls[0];
+    const [, applied, options] = updateCase.mock.calls[0];
     expect(applied.status).toBe("approved");
-    expect(applied.trace.at(-1).step).toMatch(/nothing was sent/i);
-    expect(applied.trace).toHaveLength(makeCase().trace.length + 1);
+    // Only the new line is sent: the store appends it to the trace it reads under its lock.
+    expect(applied.trace).toBeUndefined();
+    expect(options.appendTrace).toHaveLength(1);
+    expect(options.appendTrace[0].step).toMatch(/nothing was sent/i);
     expect((await res.json()).case.status).toBe("approved");
   });
 
@@ -78,7 +84,7 @@ describe("PATCH /api/cases/[id]", () => {
     getCase.mockResolvedValue(makeCase({ status: "rejected" }));
     await patch({ status: "needs_review" });
     expect(updateCase.mock.calls[1][1].status).toBe("needs_review");
-    expect(updateCase.mock.calls[1][1].trace.at(-1).step).toMatch(/reopened/i);
+    expect(updateCase.mock.calls[1][2].appendTrace.at(-1).step).toMatch(/reopened/i);
   });
 
   it("never lets anyone mark a case as sent", async () => {
@@ -92,19 +98,19 @@ describe("PATCH /api/cases/[id]", () => {
   it("edits the customer reply and keeps the rest of the decision", async () => {
     const res = await patch({ customerReply: "  Hello, a new vase is on its way.  " });
     expect(res.status).toBe(200);
-    const [, applied] = updateCase.mock.calls[0];
+    const [, applied, options] = updateCase.mock.calls[0];
     expect(applied.decision.customerReply).toBe("Hello, a new vase is on its way.");
     expect(applied.decision.decision).toBe("reship");
     expect(applied.status).toBeUndefined();
-    expect(applied.trace.at(-1).step).toMatch(/edited/i);
+    expect(options.appendTrace.at(-1).step).toMatch(/edited/i);
   });
 
   it("approves and edits in one call", async () => {
     await patch({ status: "approved", customerReply: "New text" });
-    const [, applied] = updateCase.mock.calls[0];
+    const [, applied, options] = updateCase.mock.calls[0];
     expect(applied.status).toBe("approved");
     expect(applied.decision.customerReply).toBe("New text");
-    expect(applied.trace).toHaveLength(makeCase().trace.length + 2);
+    expect(options.appendTrace).toHaveLength(2);
   });
 
   it("does not write when nothing changes", async () => {

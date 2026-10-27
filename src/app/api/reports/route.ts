@@ -4,6 +4,7 @@ import path from "node:path";
 import { runAgent } from "@/lib/agent/run-agent";
 import { resolveEngine } from "@/lib/config";
 import { parseVoiceNote } from "@/lib/voice/note";
+import { persistRuntimeFile } from "@/lib/storage/runtime-files";
 import { saveCase } from "@/lib/store/cases";
 import type { CaseRecord, DamageReport, Engine } from "@/lib/types";
 import {
@@ -155,6 +156,9 @@ export async function POST(request: Request): Promise<Response> {
       buffers.map(async ({ bytes, kind }, i) => {
         const target = path.join(uploadDir, `photo-${i + 1}.${IMAGE_EXTENSION[kind]}`);
         await fs.writeFile(target, bytes);
+        // With a shared store configured the photo must outlive this instance (the case page
+        // may be served by another one). Without one this does nothing.
+        await persistRuntimeFile(target);
         return toStoredPath(target);
       }),
     );

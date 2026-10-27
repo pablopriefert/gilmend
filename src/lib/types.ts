@@ -236,6 +236,17 @@ export interface TraceStep {
   at: string;
 }
 
+/**
+ * Set only on the committed showcase cases (data/showcase/): a REAL run of Muse Spark 1.3 and
+ * SAM 3.1 that was recorded once and shipped with the code, so a fresh deployment is not empty.
+ * The recording is read-only: a merchant action on it is stored as a copy (see
+ * src/lib/store/layered-store.ts) and the committed files never change.
+ */
+export interface RecordedRun {
+  /** Day the run was recorded, ISO date (YYYY-MM-DD). */
+  recordedOn: string;
+}
+
 export interface CaseRecord {
   id: string;
   report: DamageReport;
@@ -252,4 +263,6 @@ export interface CaseRecord {
   trace: TraceStep[];
   createdAt: string;
   updatedAt: string;
+  /** Present on recorded showcase runs only. */
+  recorded?: RecordedRun;
 }

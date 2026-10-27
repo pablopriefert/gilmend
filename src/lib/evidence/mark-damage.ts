@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseConcept } from "../agent/tools";
 import { hasModelKey, type Env } from "../config";
+import { persistRuntimeFile } from "../storage/runtime-files";
 import type { DamageAssessment, Engine, Evidence } from "../types";
 import { annotateImage } from "./annotate";
 import { loadImage, normaliseImage, type LoadImageOptions } from "./image-io";
@@ -141,11 +142,15 @@ export async function markDamage(photo: string, options: MarkDamageOptions = {})
     }
 
     const annotated = await annotateImage(image.jpeg, regions);
-    const dir = path.join(runtimeDir(options.runtimeDir), "evidence");
+    const root = runtimeDir(options.runtimeDir);
+    const dir = path.join(root, "evidence");
     await mkdir(dir, { recursive: true });
     const stem = createHash("sha256").update(image.jpeg).update(matched).digest("hex").slice(0, 16);
     const file = path.join(dir, `${stem}-annotated.jpg`);
     await writeFile(file, annotated);
+    // Copy to the shared store when one is configured (no-op otherwise), so the claim page
+    // served by another instance can show the annotated photo.
+    await persistRuntimeFile(file, root);
 
     const scores = regions
       .map((r) => r.confidence)

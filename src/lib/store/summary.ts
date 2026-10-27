@@ -75,7 +75,10 @@ export interface CasesSummary {
   dueCaseIds: string[];
 }
 
-export function summarizeCases(cases: CaseRecord[], now: Date = new Date()): CasesSummary {
+export function summarizeCases(all: CaseRecord[], now: Date = new Date()): CasesSummary {
+  // Recorded showcase runs are frozen snapshots of a run made on 27 Oct 2026, not money the
+  // merchant can still chase today: the counter is about the live cases only.
+  const cases = all.filter((c) => !c.recorded);
   const due = claimsDueThisWeek(cases, now);
   const thisMonth = monthKey(now);
   return {

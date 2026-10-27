@@ -6,6 +6,7 @@ import { formatEur } from "./format";
 /** Page title plus the counter: "€1,240 recoverable this month · 3 claims due this week". */
 export function CasesHeader({ cases, now }: { cases: CaseRecord[]; now: Date }) {
   const { recoverableThisMonthEur: recoverableEur, claimsDueThisWeek, demoModeCases } = summarizeCases(cases, now);
+  const recordedCases = cases.filter((c) => c.recorded).length;
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div>
@@ -23,6 +24,12 @@ export function CasesHeader({ cases, now }: { cases: CaseRecord[]; now: Date }) 
           Maximum compensation under each carrier&apos;s rules, for claims the agent found eligible and you
           have not rejected. Not a promise of payment.
         </p>
+        {recordedCases > 0 && (
+          <p className="mt-1 text-sm text-muted" data-testid="recorded-note">
+            {recordedCases} recorded {recordedCases === 1 ? "run" : "runs"} (real Muse runs saved with the code)
+            {recordedCases === 1 ? " is" : " are"} listed below but not counted.
+          </p>
+        )}
         {demoModeCases > 0 && (
           <p className="mt-1 text-sm text-muted" data-testid="demo-mode-note">
             Includes {demoModeCases} demo-mode {demoModeCases === 1 ? "case" : "cases"}: scripted decisions,

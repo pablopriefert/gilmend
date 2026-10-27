@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { CaseRecord } from "@/lib/types";
 import { EngineBadge } from "./engine-badge";
-import { CARRIER_LABEL, deadlineInfo, formatDate, formatEur } from "./format";
+import { RecordedBadge } from "./recorded-badge";
+import { CARRIER_LABEL, caseClock, deadlineInfo, formatDate, formatEur } from "./format";
 import { StatusPill } from "./status-pill";
 
 const TONE_CLASS = {
@@ -17,7 +18,7 @@ function itemTitle(c: CaseRecord): string {
 
 function CaseRow({ c, now }: { c: CaseRecord; now: Date }) {
   const claimable = Boolean(c.decision?.carrierClaim && c.claim?.eligible);
-  const deadline = deadlineInfo(claimable ? c.claim : null, now);
+  const deadline = deadlineInfo(claimable ? c.claim : null, caseClock(c, now));
   const carrier = c.order ? CARRIER_LABEL[c.order.carrier] : "Unknown carrier";
   return (
     <li>
@@ -31,6 +32,11 @@ function CaseRow({ c, now }: { c: CaseRecord; now: Date }) {
             <span className="font-normal text-muted"> · {c.order?.name ?? c.report.customerEmail}</span>
           </div>
           <div className="truncate text-sm text-muted">{itemTitle(c)}</div>
+          {c.recorded && (
+            <div className="mt-1">
+              <RecordedBadge recorded={c.recorded} compact />
+            </div>
+          )}
         </div>
         <div>
           <StatusPill status={c.status} />

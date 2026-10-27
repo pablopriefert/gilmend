@@ -4,6 +4,11 @@ import path from "node:path";
 import type { Env } from "../config";
 import { runtimeDir } from "../runtime-dir";
 import type { CaseRecord } from "../types";
+import { newestFirst } from "./case-order";
+import { createKeyedLock } from "./keyed-lock";
+import { mergeCaseUpdate, type CasePatch, type UpdateOptions } from "./merge-update";
+
+export type { CasePatch, UpdateOptions };
 
 // One JSON file per case under <runtime dir>/cases/. No database to administer during the
 // hackathon week; the files are git-ignored (data/runtime/) and readable by hand.
@@ -27,8 +32,11 @@ export interface CaseStore {
   get(id: string): Promise<CaseRecord | null>;
   /** Insert or replace. Atomic: readers never see a half-written file. */
   save(record: CaseRecord): Promise<CaseRecord>;
-  /** Merge `patch` into the case and bump updatedAt. Throws if the id is unknown. */
-  update(id: string, patch: Partial<Omit<CaseRecord, "id">>): Promise<CaseRecord>;
+  /**
+   * Merge `patch` into the case and bump updatedAt. Throws if the id is unknown.
+   * `options.appendTrace` adds trace lines to the trace read inside the lock (see UpdateOptions).
+   */
+  update(id: string, patch: CasePatch, options?: UpdateOptions): Promise<CaseRecord>;
 }
 
 export interface CaseStoreOptions {
@@ -48,17 +56,7 @@ function isCaseRecord(value: unknown, expectedId: string): value is CaseRecord {
 export function createCaseStore({ dir, now = () => new Date() }: CaseStoreOptions): CaseStore {
   // Serialise read-modify-write per case inside this process: two concurrent updates (the
   // agent finishing while the merchant clicks Approve) must not overwrite each other.
-  const queues = new Map<string, Promise<unknown>>();
-  function withLock<T>(id: string, task: () => Promise<T>): Promise<T> {
-    const previous = queues.get(id) ?? Promise.resolve();
-    const run = previous.then(task, task);
-    const tail = run.catch(() => undefined);
-    queues.set(id, tail);
-    void tail.then(() => {
-      if (queues.get(id) === tail) queues.delete(id);
-    });
-    return run;
-  }
+  const withLock = createKeyedLock();
 
   const fileOf = (id: string) => path.join(dir, `${id}.json`);
 
@@ -116,9 +114,7 @@ export function createCaseStore({ dir, now = () => new Date() }: CaseStoreOption
           console.warn(`[store] skipping unreadable case file ${name}`);
         }
       }
-      return records.sort(
-        (a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),
-      );
+      return records.sort(newestFirst);
     },
 
     async get(id) {
@@ -134,20 +130,12 @@ export function createCaseStore({ dir, now = () => new Date() }: CaseStoreOption
       });
     },
 
-    async update(id, patch) {
+    async update(id, patch, options) {
       if (!isSafeCaseId(id)) throw new Error(`Unknown case "${id}"`);
       return withLock(id, async () => {
         const existing = await read(id);
         if (!existing) throw new Error(`Unknown case "${id}"`);
-        const defined = Object.fromEntries(
-          Object.entries(patch).filter(([, v]) => v !== undefined),
-        );
-        const merged: CaseRecord = {
-          ...existing,
-          ...defined,
-          id: existing.id,
-          updatedAt: now().toISOString(),
-        };
+        const merged = mergeCaseUpdate(existing, patch, options, now().toISOString());
         await write(merged);
         return merged;
       });
