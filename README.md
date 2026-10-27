@@ -18,6 +18,35 @@ Built for the Meta Global AI Developer Hackathon, Startups track, theme "Build f
 >
 > All orders, customers and e-mail addresses in this repository are fictitious.
 
+## What was built during the hackathon
+
+Everything: this is a new repository, and the commit history starts on 27 Oct 2026. In order:
+
+- **The agent**: a tool-calling loop on Muse Spark 1.3 (7 tools, at most 8 turns), a structured
+  decision, and guardrails in code that can only make it stricter.
+- **Deterministic carrier rules and claim maths** from dated, sourced public terms, so the model
+  never writes an amount or a deadline.
+- **Evidence**: SAM 3.1 outlines the damage and the annotated photo goes into the claim.
+- **The dossier**: a claim PDF and an e-mail to the carrier in English, and a reply in the
+  customer's language. Nothing is sent: the merchant clicks Approve, Edit or Reject.
+- **Voice reports**: the customer can dictate the report (Muse Voice Transcribe).
+- **A "Run privately" engine** on open weights (Muse Spark Open on Baseten, or Muse Glimmer on
+  Modal), and a clearly labelled OpenRouter test engine.
+- **Six recorded real runs** (Muse Spark 1.3 + SAM 3.1) committed as a read-only showcase, and a
+  shared-storage backend (Vercel Blob) for a public deployment.
+- **Six demo photos generated with Muse Image**, declared as AI-generated.
+
+What has been run live, and what has not (details in [Limitations](#limitations)):
+
+| Live on the real service | Written and tested, not run live yet |
+|---|---|
+| Muse Spark 1.3 and SAM 3.1: all six demo cases end to end, 27 Oct 2026 | Muse Spark Open on Baseten and Muse Glimmer on Modal ("Run privately") |
+| Muse Voice Transcribe: real API calls (not yet with a browser microphone) | Vercel Blob storage (tested against a fake SDK only) |
+| Muse Image: the six demo photos | Public deployment: not deployed yet |
+| OpenRouter test engine: one real photo call | |
+
+719 tests, `tsc` and `eslint` pass, and `next build` passes.
+
 ## The problem
 
 When a parcel arrives broken, a small merchant does two jobs by hand: make the customer whole
@@ -49,8 +78,8 @@ Caveats that matter:
 
 ## How it works
 
-1. **Report.** A customer message, one to three photos and an order number arrive (in the demo, a
-   form that stands in for the inbox).
+1. **Report.** A customer message (typed or dictated), one to three photos and an order number
+   arrive (in the demo, a form that stands in for the inbox).
 2. **Investigation.** An agent calls tools in a loop: it fetches the order, reads the photos,
    outlines the damage, looks up the carrier's rules and computes the claim.
 3. **Decision.** A structured answer: `reship | refund | ask_more_photos | no_action`, whether to
@@ -61,10 +90,11 @@ Caveats that matter:
 
 ```mermaid
 flowchart TD
+    V["Optional voice: Muse Voice Transcribe fills the message"] -.-> A
     A["Customer report: message, 1-3 photos, order number"] --> B["POST /api/reports"]
     B --> C{"Engine"}
     C -->|"Muse Spark 1.3, Model API"| D["Agent loop, max 8 turns"]
-    C -->|"Run privately: open weights"| D
+    C -->|"Run privately: Muse Spark Open or Glimmer"| D
     C -->|"No key: DEMO MODE mock"| D
     D --> T1["get_order"]
     D --> T2["assess_photos: Muse reads the photos"]
@@ -92,11 +122,14 @@ prompt-injection attempt counts as a fraud signal.
 
 ## Which Meta models, and why
 
+Five Meta models, each with its own job:
+
 | Step | Model | Why this one |
 |---|---|---|
 | Investigation | **Muse Spark 1.3** (Meta Model API, Standard mode, `muse-spark-1.3`) | One model does three jobs in the same loop: **vision** (it reads the photos), **tool calling** (order lookup, damage marking, rules, claim maths) and a **structured decision** returned through the `finish_case` tool call and validated in code. |
 | Evidence | **SAM 3.1** (Meta Model API) | A claim needs proof, not only a verdict. Muse names the damaged object to outline (for example "broken pottery" or "glass carafe": SAM segments things, not states, so "crack" or "shattered vase" match nothing), SAM segments it, and the annotated photo goes into the claim PDF. If SAM finds nothing or fails, the claim ships with the raw photo and says so. |
-| "Run privately" | **Muse Glimmer** (open weights, Apache 2.0, served with vLLM on Modal, see [`deploy/`](deploy/README.md)) or **Muse Spark Open** through a provider | Parcel photos and customer messages can stay on infrastructure the merchant controls. The same agent, tools and output schema run on open weights. A private run never calls the Model API, SAM included. |
+| Voice report | **Muse Voice Transcribe 1.0** (Meta Model API, `muse-voice-transcribe-1.0`) | A customer with a broken parcel in their hands talks faster than they type. They dictate the report, the transcript fills the message box (still editable), and the case records that it was dictated, by which model, for how long, and whether it was edited. Audio is processed in memory and never stored. |
+| "Run privately" | **Muse Spark Open** (open weights, 816B total / 42B active, natively multimodal) on **Baseten Model APIs**, or **Muse Glimmer** (open weights, Apache 2.0) on **Modal** (see [`deploy/`](deploy/README.md)) | The same agent, tools and output schema on open weights, so a merchant who does not want customer photos on Meta's API has a route. A private run never calls the Meta Model API: SAM and voice are off too. "Private" means no Meta Model API and no Meta training traffic, **not** "on your hardware": on Baseten the photos and the message go to Baseten, which states that it stores neither inputs nor outputs of synchronous Model API requests. |
 | Demo data | **Muse Image** (`muse-image-1.0`, Meta Model API) | The six demo photos are generated, not taken: no real customer, label or address can leak into a public repository. [`scripts/generate-demo-photo.mjs`](scripts/generate-demo-photo.mjs) remakes one. |
 
 The product is the decision and the dossier, not an image analyzer: the photo is one input among
@@ -106,24 +139,66 @@ filled-in claim).
 Standard mode only: a model id containing `contributor` (Meta trains on that traffic) is refused in
 code (`assertStandardModel`), and a test scans the repository for such ids.
 
+### Voice reports
+
+The browser records the clip and converts it to a 16 kHz mono WAV (the endpoint only takes WAV),
+`POST /api/transcribe` sends it to Muse Voice Transcribe (`POST {MODEL_BASE_URL}/asr/transcribe`,
+multipart), and the transcript lands in the message box. Details that matter:
+
+- A clip is capped at 90 s, and several clips can be added to one message.
+- The real transcription returns a signed receipt (HMAC derived from `MODEL_API_KEY`, valid 30
+  minutes). The case says "Voice message, transcribed by muse-voice-transcribe-1.0" only when every
+  clip has a valid receipt. Without a key, or on a public deployment without the access code, the
+  endpoint returns a labelled canned transcript and the case says "DEMO MODE, canned transcript":
+  it is never attributed to Muse.
+- Spoken digits can come back as words ("Order one thousand one"), so the agent is told that a
+  verified dictation may contain misheard names and numbers.
+- Voice is off in "Run privately" mode (the audio would go to Meta), and a dictated message cannot
+  be filed as a private run.
+- Recording needs HTTPS or localhost and a browser with `MediaRecorder`; otherwise the form says so
+  and the customer types.
+- Cost per Meta's pricing pages: $0.18 per hour of audio.
+
+### Open weights
+
+"Run privately" picks the engine by configuration. The case, the trace, the badge, the case list
+and the claim PDF footer name the model and the host that actually ran ("Muse Spark Open (open
+weights, served by Baseten)", "Muse Glimmer (open weights, served by Modal)"), never a hostname.
+If the model cannot read the photos (`OPEN_WEIGHTS_VISION=0`, or the server refuses them), the agent
+does not pretend: the trace says "The photos were NOT read by the model", the damage reading and
+the claim are refused, the carrier claim is dropped, and a human takes the case. When Muse Spark
+Open is the configured model, the footer shows "Built with Muse Spark Open." (Muse Model License).
+
+### OpenRouter test engine
+
+Optional, and only listed on the report screen when `OPENROUTER_API_KEY` is set: `meta/muse-spark-1.3`
+through OpenRouter, for cheap bulk runs. It is labelled "test engine, not private", is never the
+default, sends the photos to OpenRouter and to the model's provider, and does not call SAM.
+
 ## Architecture
 
-A single Next.js (TypeScript) app, no database: cases are JSON files, claim PDFs are built with
-`pdf-lib`.
+A single Next.js (TypeScript) app, no database: cases are JSON files (or objects in a private
+Vercel Blob store on a public deployment), claim PDFs are built with `pdf-lib`.
 
 - `src/lib/agent/`: the loop (`run-agent.ts`, at most 8 model turns), the tool schemas
-  (`tools.ts`), the system prompt, and the guardrails (`guardrails.ts`).
-- `src/lib/providers/`: an OpenAI-compatible client for Muse Spark 1.3 and for open weights, and
-  the deterministic demo mock.
+  (`tools.ts`, 7 tools), the system prompt, and the guardrails (`guardrails.ts`).
+- `src/lib/providers/`: an OpenAI-compatible client for Muse Spark 1.3, for open weights (Baseten,
+  Modal, custom endpoint) and for the OpenRouter test engine, plus the deterministic demo mock.
 - `src/lib/rules/` and `data/carriers.json`: carrier rules and the claim maths (maximum
   compensation, deadline, warnings).
 - `src/lib/evidence/`: the SAM 3.1 call and the annotation of the photo.
+- `src/lib/voice/` and `src/app/api/transcribe/`: the Muse Voice Transcribe client, WAV header
+  validation, limits and the signed receipt.
 - `src/lib/documents/`: the claim PDF and the e-mail to the carrier.
 - `src/lib/orders/`: fictitious orders (`data/fixtures/orders.json`) and an optional read-only
   Shopify connection (`read_orders` only).
-- `src/lib/store/`: case files, the header counter, the demo cases.
-- `src/app/`, `src/components/`: the UI (Cases list, new report, case review) and the API routes.
-- `deploy/`: Muse Glimmer on Modal.
+- `src/lib/store/`, `src/lib/storage/`: case files, the header counter, the demo cases; an
+  `ObjectStore` seam with a local-file backend (default) and a Vercel Blob backend
+  ([`docs/storage.md`](docs/storage.md)).
+- `src/lib/showcase/` and `data/showcase/`: the six recorded real runs, read-only.
+- `src/app/`, `src/components/`: the UI (Cases list, new report with voice recorder, case review)
+  and the API routes.
+- `deploy/`: Muse Spark Open on Baseten and Muse Glimmer on Modal ([`deploy/README.md`](deploy/README.md)).
 
 ## Run it locally
 
@@ -132,20 +207,25 @@ npm install
 cp .env.example .env.local    # optional; leave MODEL_API_KEY empty for demo mode
 npm run demo                  # the six demo cases end to end: no key, no network
 npm run dev:demo              # the web app in demo mode, never spends credits
+npm run real -- <case-id>     # one demo case on the real Muse Spark 1.3 + SAM 3.1 (paid, needs a key)
 ```
 
 Environment variables (all listed, empty, in [`.env.example`](.env.example)):
 
 | Variable | Purpose |
 |---|---|
-| `MODEL_API_KEY` | Meta Model API key. Empty means **demo mode**. |
+| `MODEL_API_KEY` | Meta Model API key (Muse Spark, SAM, Muse Voice Transcribe). Empty means **demo mode**. |
 | `MODEL_BASE_URL` | Defaults to `https://api.meta.ai/v1`. |
 | `MODEL_REASONING_EFFORT` | Optional reasoning effort for Muse Spark. |
-| `OPEN_WEIGHTS_BASE_URL`, `OPEN_WEIGHTS_MODEL`, `OPEN_WEIGHTS_API_KEY`, `OPEN_WEIGHTS_PROXY_KEY`, `OPEN_WEIGHTS_PROXY_SECRET`, `OPEN_WEIGHTS_REASONING_STRENGTH` | The "Run privately" engine (Glimmer on Modal, or Muse Spark Open). |
+| `OPEN_WEIGHTS_PROVIDER` (`baseten` or empty), `BASETEN_API_KEY`, `BASETEN_MODEL` | "Run privately" on Muse Spark Open through Baseten Model APIs. |
+| `OPEN_WEIGHTS_BASE_URL`, `OPEN_WEIGHTS_MODEL`, `OPEN_WEIGHTS_API_KEY`, `OPEN_WEIGHTS_PROXY_KEY`, `OPEN_WEIGHTS_PROXY_SECRET` | "Run privately" on any other OpenAI-compatible server (Muse Glimmer on Modal, or Muse Spark Open elsewhere). |
+| `OPEN_WEIGHTS_REASONING_STRENGTH`, `OPEN_WEIGHTS_VISION` | Reasoning depth (the `reasoning_effort` field on Baseten, a system-prompt line on Glimmer); `0` declares a model that cannot read images. |
+| `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | Optional OpenRouter test engine (default `meta/muse-spark-1.3`). |
 | `SAM_BASE_URL` | SAM 3.1 endpoint if different from `MODEL_BASE_URL`. |
 | `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_ADMIN_ACCESS_TOKEN` | Optional read-only dev store. Empty means fictitious orders. |
 | `MERCHANT_NAME`, `MERCHANT_ADDRESS`, `MERCHANT_EMAIL` | Merchant identity printed on the claim. |
-| `DAMAGE_DESK_ACCESS_CODE`, `DAMAGE_DESK_REAL_RUNS_PER_DAY` | For a public deployment: a shared code for real engines and for approve/edit/reject, and a daily cap of real runs. |
+| `DAMAGE_DESK_ACCESS_CODE`, `DAMAGE_DESK_REAL_RUNS_PER_DAY` | For a public deployment: a shared code for real engines, voice transcription and approve/edit/reject, and a daily cap of real runs (default 100, counted per instance in memory). |
+| `DAMAGE_DESK_STORAGE` (empty, `file` or `blob`), `BLOB_READ_WRITE_TOKEN` | Case storage: local files (default) or a private Vercel Blob store ([`docs/storage.md`](docs/storage.md)). |
 
 **Demo mode.** Without `MODEL_API_KEY` the app uses a deterministic mock provider and labels every
 result "DEMO MODE": the case, the trace, the badge, the PDF footer and the logs. The mock follows a
@@ -154,10 +234,13 @@ A mock answer is never presented as coming from Muse.
 
 **Real mode.** Set `MODEL_API_KEY`. Careful: Next.js loads `.env.local`, so a key there makes a
 plain `npm run dev` call the real, paid models and send the photos to Meta. `npm run dev:demo`
-empties the variables for that process.
+(and `npm run start:demo`) empty `MODEL_API_KEY`, the open-weights variables, `BASETEN_API_KEY` and
+`OPENROUTER_API_KEY` for that process.
 
-**Open weights.** Follow [`deploy/README.md`](deploy/README.md) to serve Muse Glimmer on Modal, set
-the `OPEN_WEIGHTS_*` variables, then pick "Run privately" on the new-report screen.
+**Open weights.** Quickest path: set `OPEN_WEIGHTS_PROVIDER=baseten` and `BASETEN_API_KEY`, check it
+with `npm run probe -- open-weights --models --chat`, then run
+`npm run real -- demo-1-vase-broken open-weights` or pick "Run privately" on the new-report screen.
+Muse Glimmer on Modal: follow [`deploy/README.md`](deploy/README.md).
 
 Checks: `npx vitest run`, `npx tsc --noEmit`, `npm run lint`. Tests use no network and no key, and
 write to a throwaway folder, never to `data/runtime/`.
@@ -202,12 +285,62 @@ the code falls back to the item of the assessment, then to the parcel itself.
 > fictitious parcels only (see [`data/photos/README.md`](data/photos/README.md)). Dropping
 > `<name>.jpg` next to one replaces it with a real photo.
 
+### Recorded runs (the showcase)
+
+[`data/showcase/`](data/showcase/README.md) holds those six real runs, with their photos, the
+SAM-annotated evidence and the claim PDFs, committed as they came out of `npm run real` (nothing
+edited, nothing re-run to look better). The app lists them next to the cases you file, marked
+**Recorded run**, so a fresh clone or deployment is never an empty inbox and a judge sees real
+model output, not the scripted mode. They are read-only: Approve, Edit or Reject on one stores a
+copy and the recording never changes. Their deadlines are shown as of the recording and they are
+left out of the "recoverable this month" counter. Everything in them is fictitious, and a test
+(`src/lib/showcase/audit.ts`) refuses anything else.
+
+## Deploy to Vercel
+
+**Not deployed yet.** The checklist, in this order:
+
+1. Upgrade `next` and `eslint-config-next` together to 16.4.1 or later (allowed by the project's
+   14-day dependency rule from 28 Oct 2026 17:44 UTC; `next@16.4.0` has critical advisories), then
+   re-run tests and `npm run build`. Do not expose a URL before that.
+2. Leave Fluid Compute on (the default): `POST /api/reports` declares `maxDuration = 120` itself.
+3. Environment variables (Production): `MODEL_API_KEY` (Standard model only),
+   `DAMAGE_DESK_ACCESS_CODE` (give it to the judges), `DAMAGE_DESK_REAL_RUNS_PER_DAY`; optionally
+   `MERCHANT_*`, the open-weights variables and `OPENROUTER_API_KEY`.
+4. Storage: either keep the default (temporary, per serverless instance: a case a visitor files can
+   answer "not on this server" from another instance; the recorded runs are unaffected) or create a
+   **private** Vercel Blob store and set `DAMAGE_DESK_STORAGE=blob` ([`docs/storage.md`](docs/storage.md)).
+   The Blob backend has only been tested against a fake SDK.
+5. Deploy, open `/`: the six recorded runs must be listed with photos, outlined evidence and PDF.
+   File one report to check the whole flow, and from a second browser open its case.
+
+Do **not** put real customer data on the public URL: the case list, every case page, the photos
+and the claim PDFs are open to anyone with the link. Real runs, voice transcription and
+approve/edit/reject need the access code.
+
 ## Limitations
 
-- **Verified live on Muse Spark 1.3 and SAM 3.1, not on open weights yet.** The six demo cases ran
-  end to end on the Meta Model API on 27 Oct 2026 (table above). The open-weights engine has not
-  run against a live endpoint yet. Six cases are a smoke test, not an accuracy benchmark.
+- **Verified live on Muse Spark 1.3, SAM 3.1 and the voice API; not on open weights.** The six demo
+  cases ran end to end on the Meta Model API on 27 Oct 2026 (table above), and Muse Voice
+  Transcribe answered real calls ("My vase arrived broken. Order 1001." in about 2 s). Six cases
+  are a smoke test, not an accuracy benchmark.
+- **Voice has not been tried with a real microphone in a real browser.** The recorder and the WAV
+  conversion are tested with a fake `MediaRecorder` only. Accents and background noise were not tested,
+  and digits may come back as words.
+- **Open weights are not run live yet.** Muse Spark Open on Baseten and Muse Glimmer on Modal are
+  written and tested against fakes; no Baseten credits were available and nothing has called
+  Baseten or Modal. The Baseten slug differs between the hackathon guide
+  (`meta-models/muse-spark-open-1026`, the default here) and Baseten's docs
+  (`meta-models/muse-spark-open`): `npm run probe -- open-weights --models` settles it. Whether the
+  model reads the photos and how long a run takes (`reasoning_effort` defaults to `medium` to stay
+  inside a run's time budget) are untested. The Modal deploy script has only been syntax-checked.
+  "Verified by the partner" for the open-weights prize is not something this repository can
+  provide on its own.
+- **The OpenRouter engine** was called once with a real photo (27 Oct 2026). It is a test engine,
+  not private.
 - **Demo mode is scripted.** It shows the product flow, not the quality of Muse's reading of a photo.
+- **The demo photos are AI-generated** (Muse Image), not photographs of damaged parcels. A real
+  photo may read differently.
 - **Carrier figures are the public standard terms**, some from a dated source and one window
   unverified (table above). Not modelled: insurance (ad valorem), negotiated contracts, relay
   lockers, public holidays, the carrier-measured weight.
@@ -215,12 +348,13 @@ the code falls back to the item of the assessment, then to the parcel itself.
   computed maximum may be higher than the real indemnity.
 - **Nothing is filed.** The app files no claim and sends no e-mail; a human does.
 - **Not legal advice.** The rules are our reading of public terms and statutes.
-- **Public deployment is not done.** On Vercel, storage is temporary and per instance, so a case can
-  answer 404 on another instance; rate limits are in memory. Do not put real customer data on a
-  public URL: the case list is open. `next@16.4.0` has open security advisories (16.4.1 passes the
-  project's 14-day dependency rule on 2026-10-28), so upgrade before exposing it.
-- The open-weights deploy script has only been syntax-checked; `deploy/README.md` lists what to
-  verify first.
+- **Public deployment is not done.** The app has not been deployed. `next@16.4.0` has critical
+  security advisories and must be upgraded to 16.4.1 (allowed from 28 Oct 2026 17:44 UTC), and
+  `undici` 6.29.1 is due from 29 Oct, before any public URL. Vercel Blob storage has not run
+  against a real store. Without it, cases filed by visitors are temporary and per instance; rate
+  limits and the daily cap of real runs are in memory, per instance. The merchant actions are
+  serialised inside one instance; across instances they rely on conditional writes, which the Blob
+  backend uses but has not been exercised on.
 
 ## Third-party licences
 
@@ -231,8 +365,10 @@ their own licences:
   License (`node_modules/@meta-sam/parser/LICENSE`). It is installed as a dependency, not
   redistributed or modified here.
 - Muse Glimmer (`meta-models/Muse-Glimmer-30B`) is Apache 2.0.
-- `next`, `react` and `pdf-lib` are MIT; `openai` and `sharp` are Apache 2.0. Run `npm ls` for the
-  full tree.
+- Muse Spark Open is under the **Muse Model License**. The app footer shows "Built with Muse Spark
+  Open." whenever it is the configured model (see [`deploy/README.md`](deploy/README.md)).
+- `next`, `react` and `pdf-lib` are MIT; `openai`, `sharp` and `@vercel/blob` are Apache 2.0. Run
+  `npm ls` for the full tree.
 
 ## License
 
