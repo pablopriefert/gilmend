@@ -229,6 +229,10 @@ describe("markDamage merges the concepts of the damaged item", () => {
     expect(evidence.note).toContain("outlined 5 regions");
     expect(evidence.note).toContain('from 2 concepts: "ceramic vase" 1, "broken pottery" 4');
     expect(evidence.note).toContain("confidence 0.85, 0.84, 0.83, 0.82, 0.68");
+    // Recorded 27 Oct 2026: the outlines covered ear cushions and a whole carafe, not the cracks.
+    expect(evidence.note).toContain(
+      "The outline shows what SAM matched for these concepts, not the damage itself; it is not a damage verdict.",
+    );
   });
 
   it("keeps at most 5 regions, the most confident", async () => {

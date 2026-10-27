@@ -159,7 +159,7 @@ export const AGENT_TOOLS: ChatCompletionFunctionTool[] = [
   ),
   fn(
     "mark_damage",
-    "Outline the damaged area on one photo with a segmentation model (evidence for the claim). Photos are referenced by index. Give `concept`: a short, concrete name of the damaged object or its pieces, as visible on that photo. The model segments objects, not damage states.",
+    "Outline the damaged object or its pieces on one photo with a segmentation model (evidence for the claim). The outline shows the object, not the damage. Photos are referenced by index. Give `concept`: a short, concrete name of the damaged object or its pieces, as visible on that photo. The model segments objects, not damage states.",
     {
       type: "object",
       additionalProperties: false,
@@ -247,7 +247,7 @@ export function parseToolArguments(raw: unknown): Parsed<Record<string, unknown>
 
 /**
  * The SAM concept the model chose: 1 to 4 lowercase words. Anything else (a sentence, a
- * command, an injection attempt) is dropped and the default vocabulary is used instead; a
+ * command, an injection attempt) is dropped and the concepts from the recorded assessment (and the packaging as a last resort) are used instead; a
  * bad concept must not cost the model a retry, it only costs a less targeted outline.
  */
 export function parseConcept(v: unknown): string | null {

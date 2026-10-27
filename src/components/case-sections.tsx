@@ -92,11 +92,14 @@ export function EvidenceSection({
   photos,
   evidence,
   voiceNote,
+  inClaim = false,
 }: {
   message: string;
   photos: string[];
   evidence: Evidence[];
   voiceNote?: VoiceNote;
+  /** The case carries a carrier claim, so the outlined image really goes into its PDF. */
+  inClaim?: boolean;
 }) {
   // Every photo the customer sent, each with its annotated version when the agent made one.
   const items: Evidence[] = evidenceForPhotos(photos, evidence);
@@ -135,8 +138,8 @@ export function EvidenceSection({
                 {e.annotatedPhoto && (
                   <Photo
                     src={e.annotatedPhoto}
-                    alt={`Photo ${i + 1} with the damaged area outlined`}
-                    caption="Damage outlined by SAM 3.1: this image goes in the claim"
+                    alt={`Photo ${i + 1} outlined by SAM 3.1`}
+                    caption={`Outlined by SAM 3.1: what it matched (the item, its pieces or the box)${inClaim ? ". This image goes in the claim" : ""}`}
                   />
                 )}
               </div>

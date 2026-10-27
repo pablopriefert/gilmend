@@ -245,7 +245,7 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
           method: ev.method,
           note: ev.note,
           ...(args.concept !== undefined && concept === null
-            ? { conceptIgnored: "concept must be 1 to 4 lowercase words (a noun phrase); the default vocabulary was used" }
+            ? { conceptIgnored: "concept must be 1 to 4 lowercase words (a noun phrase); the concepts from the recorded assessment (and the packaging as a last resort) were used" }
             : {}),
         };
       }

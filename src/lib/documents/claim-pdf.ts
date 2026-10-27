@@ -413,7 +413,7 @@ export async function buildClaimDocument(
       const caption = !image
         ? `Photo ${index + 1}: image not available`
         : annotated
-          ? `Photo ${index + 1}: damaged area outlined (SAM 3.1)`
+          ? `Photo ${index + 1}: outlined by SAM 3.1 (the item or its pieces, not a damage verdict)`
           : `Photo ${index + 1}: original photo`;
       let drawnHeight = 0;
       if (image) {

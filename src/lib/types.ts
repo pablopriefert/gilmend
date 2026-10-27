@@ -195,7 +195,7 @@ export interface Decision {
 export interface Evidence {
   /** Original photo (path or data URL). */
   photo: string;
-  /** Photo with the damaged area outlined; null when the SAM call failed or was skipped. */
+  /** Photo with what SAM matched outlined (the item, its pieces or the box, not the damage itself); null when the SAM call failed or was skipped. */
   annotatedPhoto: string | null;
   /** 'none' means the claim ships with the raw photo. */
   method: "sam-3.1" | "none";

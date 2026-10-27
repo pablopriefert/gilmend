@@ -210,7 +210,7 @@ describe("buildClaimDocument", () => {
     expect(pdf.getPageCount()).toBeLessThanOrEqual(2);
     expect(Buffer.from(bytes).toString("latin1").match(/\/Subtype\s*\/Image/g)?.length).toBe(2);
     const text = extractPdfText(bytes);
-    expect(text).toContain("damaged area outlined (SAM 3.1)");
+    expect(text).toContain("outlined by SAM 3.1 (the item or its pieces, not a damage verdict)");
     expect(text).toContain("original photo");
   });
 
@@ -229,7 +229,7 @@ describe("buildClaimDocument", () => {
     const bytes = await readFile(path.resolve(result.pdfPath));
     expect(Buffer.from(bytes).toString("latin1").match(/\/Subtype\s*\/Image/g)?.length).toBe(3);
     const text = extractPdfText(bytes);
-    expect(text).toContain("Photo 1: damaged area outlined (SAM 3.1)");
+    expect(text).toContain("Photo 1: outlined by SAM 3.1 (the item or its pieces, not a damage verdict)");
     expect(text).toContain("Photo 2: original photo");
     expect(text).toContain("Photo 3: original photo");
     expect(text).toContain("Photos of the parcel and the product: 3");

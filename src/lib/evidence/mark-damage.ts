@@ -263,7 +263,7 @@ export async function markDamage(photo: string, options: MarkDamageOptions = {})
         (absorbed.length ? ` Also matched ${absorbed.join(", ")}, with regions already kept or less confident.` : "") +
         (unmatched.length ? ` No region for ${unmatched.join(", ")}.` : "") +
         (state.failure ? ` A later SAM call failed (${state.failure}), so the outline may be incomplete.` : "") +
-        " The outline marks where the damage appears to be; it is not a damage verdict.",
+        " The outline shows what SAM matched for these concepts, not the damage itself; it is not a damage verdict.",
     };
   } catch (error) {
     // Message only, never the request (it holds the photo and the key header).

@@ -75,7 +75,7 @@ describe("case page: a needs_review case", () => {
     // Evidence: original and SAM-annotated photo, served through /api/files
     const original = screen.getByAltText("Customer photo 1");
     expect(original).toHaveAttribute("src", "/api/files?p=uploads%2Frpt-1%2Fphoto-1.jpg");
-    const annotated = screen.getByAltText("Photo 1 with the damaged area outlined");
+    const annotated = screen.getByAltText("Photo 1 outlined by SAM 3.1");
     expect(annotated).toHaveAttribute("src", "/api/files?p=evidence%2Frpt-1%2Fphoto-1-annotated.png");
     expect(screen.getByText("Annotated with SAM 3.1")).toBeInTheDocument();
 
@@ -138,6 +138,21 @@ describe("case page: a needs_review case", () => {
     const step = within(trace).getByText("Looked up order #1001").closest("details");
     expect(step).not.toHaveAttribute("open");
     expect(within(step as HTMLElement).getByText(/"orderNumber": "#1001"/)).toBeInTheDocument();
+  });
+
+  it("says what the SAM outline is, and that it goes in the claim only when there is a claim", () => {
+    const { unmount } = render(<CaseView caseRecord={makeCase()} rules={makeRules()} now={NOW} />);
+    expect(
+      screen.getByText("Outlined by SAM 3.1: what it matched (the item, its pieces or the box). This image goes in the claim"),
+    ).toBeInTheDocument();
+    unmount();
+    const base = makeCase();
+    const noClaim = makeCase({ decision: { ...base.decision!, carrierClaim: false, decision: "refund" } });
+    render(<CaseView caseRecord={noClaim} rules={makeRules()} now={NOW} />);
+    expect(
+      screen.getByText("Outlined by SAM 3.1: what it matched (the item, its pieces or the box)"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/goes in the claim/)).toBeNull();
   });
 
   it("calls out a case that needs a human", () => {
