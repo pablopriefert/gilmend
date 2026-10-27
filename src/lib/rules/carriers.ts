@@ -276,9 +276,10 @@ export function computeClaim(
   }
 
   if (assessment.packagingAdequate === false) {
-    // Not a blocker (27 Oct 2026). Across four real runs of the same broken-vase photos Muse
-    // said "inadequate" twice (crumpled paper and open flaps, on a photo taken AFTER the box
-    // was opened), and each time a 52.90 EUR claim disappeared on one uncertain reading. The
+    // Not a blocker (27 Oct 2026). On the same broken-vase photos Muse said "inadequate" on two of
+    // the three real runs recorded before this change (crumpled paper and open flaps, on a photo
+    // taken AFTER the box was opened; a fourth run, after it, said "adequate"), and each time a
+    // 52.90 EUR claim disappeared on one uncertain reading. The
     // reading is a model's opinion about a box it cannot touch, and whether the packing was
     // suitable is the carrier's call, not ours. So the claim stays computed, carries this
     // merchant-only warning, and the guardrails send the case to a human (guardrails.ts).

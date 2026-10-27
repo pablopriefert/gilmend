@@ -368,8 +368,8 @@ describe("computeClaim: cases with nothing to claim", () => {
   });
 
   it("a reading of inadequate packaging keeps the claim and warns the merchant (27 Oct 2026)", () => {
-    // Muse said "inadequate" on two of four runs of the same broken-vase photos; the claim must
-    // not vanish on that reading. It stays eligible, with the full amount and its deadlines.
+    // Muse said "inadequate" on two of the three first real runs of the same broken-vase photos; the
+    // claim must not vanish on that reading. It stays eligible, with the full amount and its deadlines.
     const adequate = run({ packagingAdequate: true });
     const c = run({ packagingAdequate: false });
     expect(c.eligible).toBe(true);

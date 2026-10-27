@@ -26,7 +26,9 @@ Everything: this is a new repository, and the commit history starts on 27 Oct 20
   decision, and guardrails in code that can only make it stricter.
 - **Deterministic carrier rules and claim maths** from dated, sourced public terms, so the model
   never writes an amount or a deadline.
-- **Evidence**: SAM 3.1 outlines the damage and the annotated photo goes into the claim.
+- **Evidence**: SAM 3.1 outlines what the agent names (the broken item, its pieces or the box:
+  it finds things, not damage) and the annotated photo goes into the claim. If the model skips
+  that step, the code asks SAM once and the trace says so.
 - **The dossier**: a claim PDF and an e-mail to the carrier in English, and a reply in the
   customer's language. Nothing is sent: the merchant clicks Approve, Edit or Reject.
 - **Voice reports**: the customer can dictate the report (Muse Voice Transcribe).
@@ -52,7 +54,7 @@ What has been run live, and what has not (details in [Limitations](#limitations)
 | Muse Image: the six demo photos | Public deployment: not deployed yet |
 | OpenRouter test engine: one real photo call | |
 
-753 tests, `tsc` and `eslint` pass, and `next build` passes.
+793 tests, `tsc` and `eslint` pass, and `next build` passes.
 
 ## The problem
 
@@ -88,7 +90,7 @@ Caveats that matter:
 1. **Report.** A customer message (typed or dictated), one to three photos and an order number
    arrive (in the demo, a form that stands in for the inbox).
 2. **Investigation.** An agent calls tools in a loop: it fetches the order, reads the photos,
-   outlines the damage, looks up the carrier's rules and computes the claim.
+   has SAM outline the item or the box, looks up the carrier's rules and computes the claim.
 3. **Decision.** A structured answer: `reship | refund | ask_more_photos | no_action`, whether to
    claim the carrier, a confidence, reasons, and whether a human must look.
 4. **Drafts.** A claim PDF, an e-mail to the carrier's claims department, and a reply to the customer.
@@ -105,7 +107,7 @@ flowchart TD
     C -->|"No key: DEMO MODE mock"| D
     D --> T1["get_order"]
     D --> T2["assess_photos: Muse reads the photos"]
-    D --> T3["mark_damage: SAM 3.1 outlines the damage"]
+    D --> T3["mark_damage: SAM 3.1 outlines the item, its pieces or the box"]
     D --> T4["get_carrier_rules + compute_claim: deterministic code"]
     D --> T5["finish_case: structured decision"]
     T1 & T2 & T3 & T4 & T5 --> G["Guardrails in code: can only make the decision stricter"]
@@ -136,7 +138,7 @@ Four Meta models used live, each with its own job, plus an open-weights route (M
 | Step | Model | Why this one |
 |---|---|---|
 | Investigation | **Muse Spark 1.3** (Meta Model API, Standard mode, `muse-spark-1.3`) | One model does three jobs in the same loop: **vision** (it reads the photos), **tool calling** (order lookup, damage marking, rules, claim maths) and a **structured decision** returned through the `finish_case` tool call and validated in code. |
-| Evidence | **SAM 3.1** (Meta Model API) | A claim needs proof, not only a verdict. Muse names the damaged object to outline (for example "broken pottery" or "glass carafe": SAM segments things, not states, so "crack" or "shattered vase" match nothing), SAM segments it, and the annotated photo goes into the claim PDF. If SAM finds nothing or fails, the claim ships with the raw photo and says so. |
+| Evidence | **SAM 3.1** (Meta Model API) | A claim needs proof, not only a verdict. Muse names the damaged object to outline (for example "broken pottery" or "glass carafe": SAM segments things, not states, so "crack" or "shattered vase" match nothing), SAM outlines that object or its pieces, and the annotated photo goes into the claim PDF. The outline shows what SAM matched, not the damage itself: on the recorded runs it covers the ear cushions of a headphone whose shell is cracked, and the whole carafe around a crack. It is context for the carrier, not a damage verdict, and the PDF caption and the case page say so. If SAM finds nothing or fails, the claim ships with the raw photo and says so; if Muse skips the step on a case SAM can outline, the code asks SAM once on the first photo and the trace says the code did it. |
 | Voice report | **Muse Voice Transcribe 1.0** (Meta Model API, `muse-voice-transcribe-1.0`) | A customer with a broken parcel in their hands talks faster than they type. They dictate the report, the transcript fills the message box (still editable), and the case records that it was dictated, by which model, for how long, and whether it was edited. Audio is processed in memory and never stored. |
 | "Run privately" | **Muse Spark Open** (open weights, 816B total / 42B active, natively multimodal, per Meta's model card, not verified here) on **Baseten Model APIs**, or **Muse Glimmer** (open weights, Apache 2.0) on **Modal** (see [`deploy/`](deploy/README.md)) | The same agent, tools and output schema on open weights, so a merchant who does not want customer photos on Meta's API has a route. A private run never calls the Meta Model API: SAM and voice are off too. "Private" means no Meta Model API and no Meta training traffic, **not** "on your hardware": on Baseten the photos and the message go to Baseten, which states that it stores neither inputs nor outputs of synchronous Model API requests. |
 | Demo data | **Muse Image** (`muse-image-1.0`, Meta Model API) | The six demo photos are generated, not taken: no real customer, label or address can leak into a public repository. [`scripts/generate-demo-photo.mjs`](scripts/generate-demo-photo.mjs) remakes one. |
@@ -272,21 +274,52 @@ Muse.
 ### Measured on the real models (27 Oct 2026)
 
 All six cases were also run end to end on the real **Muse Spark 1.3** and **SAM 3.1** (Meta Model
-API, Standard mode) with `npm run real -- <case-id>`. Each gave the expected decision:
+API, Standard mode) with `npm run real -- <case-id>`. The table is what the runs in
+[`data/showcase/`](data/showcase/README.md) recorded (`createdAt` between 16:02 and 16:22 UTC):
+one run per case in the table, not an average, and not every case matches the "Expected" column.
 
-| # | Decision (Muse Spark 1.3) | Claim | SAM 3.1 evidence (concept named by Muse) | Time |
+| # | Decision (Muse Spark 1.3) | Claim | SAM 3.1 evidence (concept that matched) | Time |
 |---|---|---|---|---|
-| 1 | reship, claim the carrier, confidence 0.95 | 52.90 EUR | 5 shards outlined ("broken pottery") | 36 s |
-| 2 | no action, no claim | none | 1 region ("torn cardboard") | 25 s |
-| 3 | ask for more photos, handed to a human (confidence 0.35) | none | none: the photo is too blurry to outline | 16 s |
-| 4 | reship, claim the carrier, reply in French | 25.00 EUR | 5 regions ("torn cardboard") | 22 s |
-| 5 | reship, claim the carrier, handed to a human (value above 300 EUR) | 250.00 EUR | 2 ear cups ("ear cup") | 27 s |
-| 6 | refund, no claim (3-day window passed) | none | 1 region ("glass carafe") | 18 s |
+| 1 | reship, claim the carrier, confidence 0.95 | 52.90 EUR | 5 regions ("broken pottery"): five loose shards, not the vase body or the other shards | 32 s |
+| 2 | no action, no claim, confidence 0.95 | none | 1 region ("torn cardboard"): the whole carton, drawn by the code because Muse skipped `mark_damage` | 35 s |
+| 3 | ask for more photos, confidence 0.90, not handed to a human | none | none: the photo is too blurry, `mark_damage` was not called | 16 s |
+| 4 | reship, claim the carrier, confidence 0.92, reply in French | 25.00 EUR | 5 regions from 2 concepts ("open cardboard box" 1, "torn cardboard" 4): the open box, the empty insert tray and three scraps of cardboard, not the missing saucers | 31 s |
+| 5 | reship, claim the carrier, confidence 0.85, handed to a human (value above 300 EUR) | 250.00 EUR | 2 regions ("ear cup"): the two ear cushions, not the cracked shell | 23 s |
+| 6 | refund, confidence 0.85, no claim (3-day window passed) | none | 1 region ("glass carafe"): the whole carafe, the crack lies inside the outline | 17 s |
+
+Times run from the first to the last line of each trace. The six decisions are the expected ones
+(case 1 and case 4 with the claim, case 5 handed to a human, case 3 asking for photos), but only
+as far as one run each shows: **Muse is not stable on these photos**.
+
+- **Case 1 varied across the four real runs of that day.** Muse read the packaging as adequate
+  on two of them (15:05 and 16:21 UTC, both with the 52.90 EUR claim) and as inadequate on the
+  other two (16:01 and 16:06: crumpled paper, open flaps on a photo taken after the box was
+  opened). Under the rule of that time ("inadequate packaging, no claim") the two runs of the
+  those two gave a reship without a claim. That rule was changed the same day: a packaging reading
+  now keeps the claim, warns the merchant and sends the case to a human (see
+  [How it works](#how-it-works)). The recorded run is the last one (16:21), where Muse read the
+  packaging as adequate, so the new rule has been tested in code and **not yet seen on a live
+  run**.
+- **Case 3 varied too.** The first run of the day (15:07 UTC) gave confidence 0.35 and handed the
+  blurry photo to a human; the recorded one (16:02) gave 0.90 and did not.
+- **Case 4's reading moved** from "missing item" (15:07) to "opened parcel" (16:02), with the same
+  decision and the same 25.00 EUR.
+- **Case 2 skipped `mark_damage` in two of its three runs** (16:02 and 16:22 UTC). The recorded run is
+  one of them: its outline comes from the evidence fallback, and its trace line says the code
+  asked SAM, not Muse.
+- Six cases, re-run once or twice, are a smoke test, not an accuracy benchmark.
 
 SAM 3.1 segments **things, not states**: on these photos "crack", "dent" or "shattered vase"
-matched nothing, while "broken pottery", "glass carafe" or "ear cup" did
-(`npm run sam-probe -- <photo> "<concept>" ...`). The prompt asks Muse for the damaged object, and
-the code falls back to the item of the assessment, then to the parcel itself.
+matched nothing, while "broken pottery", "glass carafe", "ear cup" or "torn cardboard" did
+(`npm run sam-probe -- <photo> "<concept>" ...`). So an outline shows **what SAM matched, not the
+damage**: it covers the broken item, its pieces or the box. On the recorded images it follows five
+shards of the vase, the whole crushed carton, the open box and its empty tray, the two ear cushions
+of the headphones (not the cracked shell) and the whole carafe (the crack is inside, not outlined).
+The prompt asks Muse for the damaged object, and the code falls back to the item of the
+assessment, then to the parcel itself. The PDF caption and the case page say "outlined by SAM 3.1"
+and what it matched, never "damage outlined". The four recordings of the afternoon (cases 3 to 6)
+were made before that wording changed: the notes of cases 4 to 6 and the captions in the PDFs of
+cases 4 and 5 still read "damaged area outlined" / "marks where the damage appears to be".
 
 > **About the demo photos.** The images in `data/photos/` were **generated with Meta's Muse Image**
 > (`muse-image-1.0`) for this project; they are not photographs taken by the team, and show
@@ -297,7 +330,9 @@ the code falls back to the item of the assessment, then to the parcel itself.
 
 [`data/showcase/`](data/showcase/README.md) holds those six real runs, with their photos, the
 SAM-annotated evidence and the claim PDFs, committed as they came out of `npm run real` (nothing
-edited, nothing re-run to look better). The app lists them next to the cases you file, marked
+edited by hand). Four are from the afternoon of 27 Oct (cases 3 to 6); cases 1 and 2 were re-run once
+each at 16:21 and 16:22 UTC, after the packaging rule and the evidence fallback changed, and
+the re-run is what is committed, whatever it gave. The app lists them next to the cases you file, marked
 **Recorded run**, so a fresh clone or deployment is never an empty inbox and a judge sees real
 model output, not the scripted mode. They are read-only: Approve, Edit or Reject on one stores a
 copy and the recording never changes. Their deadlines are shown as of the recording and they are
@@ -346,7 +381,8 @@ Storage, the Blob store).
 ## Limitations
 
 - **Verified live on Muse Spark 1.3, SAM 3.1 and the voice API; not on open weights.** The six demo
-  cases ran end to end on the Meta Model API on 27 Oct 2026 (table above), and Muse Voice
+  cases ran end to end on the Meta Model API on 27 Oct 2026 (table above, with the run-to-run
+  variance noted under it), and Muse Voice
   Transcribe answered real calls ("My vase arrived broken. Order 1001." in about 2 s). Six cases
   are a smoke test, not an accuracy benchmark.
 - **Voice has not been tried with a real microphone in a real browser.** The recorder and the WAV

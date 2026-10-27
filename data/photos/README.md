@@ -16,8 +16,10 @@ not strip it.
 
 Say it everywhere they appear: **AI-generated with Muse Image, not photos taken by the team**
 (README, video, submission form). All six demo cases were run end to end on the real Muse Spark
-1.3 and SAM 3.1 with these images on 27 Oct 2026 and gave the expected decisions; a real photo
-may still read differently, so a real shot is worth trying before filming.
+1.3 and SAM 3.1 with these images on 27 Oct 2026. The recorded run of each case reached the decision
+the demo script expects, but Muse is not stable on every photo (the vase was read twice with a claim
+and twice without it, the blurry lamp once handed to a human and once not; README, "Measured on the
+real models"). A real photo may read differently again, so a real shot is worth trying before filming.
 
 ## Optional: switching to a real photo later
 
