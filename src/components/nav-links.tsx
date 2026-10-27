@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const LINKS = [
   { href: "/", label: "Cases" },
   { href: "/report", label: "New report" },
+  { href: "/impact", label: "Impact" },
 ] as const;
 
 /** Top navigation. A client component only to mark the current page (`aria-current`). */

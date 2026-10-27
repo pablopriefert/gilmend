@@ -46,3 +46,26 @@ Everything off under `prefers-reduced-motion`.
 - `src/components/ui/border-beam.tsx` (21st.dev, appica-dev) and `shimmer-button.tsx` (21st.dev,
   Magic UI / dillionverma).
 - Icons: lucide-react only, 16/20 px, stroke 1.75–2. No emoji as icons.
+
+## Data visualisation (27 Oct 2026, Insights band and /impact)
+
+No chart library: bars and strips are HTML/CSS, drawn from the same numbers the text prints.
+
+1. **Gold only for money.** A bar that shows euros (money still claimable per carrier, recovered
+   money on /impact) is `gold` with a `gold-soft` track, and its figure is `gold-ink`. Anything
+   that counts things (decisions, cases) is ink (`ink-soft` on a faint ink track). What a deadline
+   took is hatched with `border-strong`, never a red or a second hue.
+2. **A text alternative that is visible.** A chart is `aria-hidden` only when the same facts sit next
+   to it as text (a row per bar with its label, count and amount; an ordered list under the timeline
+   with every window, its date and its countdown). Nothing exists only in a picture.
+3. **Shape, ring and words before colour.** The timeline marks a claim deadline with a circle and a
+   reserve window with a diamond, a recorded run with a hollow ring, and anything closing within 3
+   days with the `warning` token plus a clock icon and the words "under 3 days".
+4. **Honest scope in the chart.** Recorded runs are counted only when the switch says so, are
+   labelled in the list and the legend, and are read as of their recording day. A chart with nothing
+   to show says so in a sentence instead of drawing empty bars.
+5. **Estimates say they are estimates.** On /impact every input carries a badge: *Your figure* (an
+   example the merchant replaces) or *Assumption*. A number nobody measured never wears a source's
+   authority; the one measured number (the agent's time) comes from the recorded runs and links
+   back to them.
+
