@@ -10,6 +10,9 @@ language. The merchant reviews the case and clicks **Approve**, **Edit** or **Re
 Nothing is sent without a click, and this app sends nothing at all: the claim and the reply are
 drafts that the merchant files or sends.
 
+**Live demo: https://damage-desk-ten.vercel.app** (the six recorded runs are open to everyone;
+filing a new report needs the access code given in the hackathon submission).
+
 Built for the Meta Global AI Developer Hackathon, Startups track, theme "Build for Your World".
 
 > **Built during the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026). Prior work: none —
@@ -50,8 +53,9 @@ What has been run live, and what has not (details in [Limitations](#limitations)
 | Live on the real service | Written and tested, not run live yet |
 |---|---|
 | Muse Spark 1.3 and SAM 3.1: all six demo cases end to end, 27 Oct 2026 | Muse Spark Open on Baseten and Muse Glimmer on Modal ("Run privately") |
-| Muse Voice Transcribe: real API calls (not yet with a browser microphone) | Vercel Blob storage (tested against a fake SDK only) |
-| Muse Image: the six demo photos | Public deployment: not deployed yet |
+| Muse Voice Transcribe: real API calls (not yet with a browser microphone) | |
+| Muse Image: the six demo photos | |
+| Public deployment on Vercel with a private Blob store: a real report filed on the deployed URL on 27 Oct 2026 (Muse Spark 1.3 + SAM 3.1, 54 s), its case, annotated photo and PDF read back on several requests | |
 | OpenRouter test engine: one real photo call | |
 
 798 tests, `tsc` and `eslint` pass, and `next build` passes.
@@ -355,7 +359,8 @@ computed from the recordings. Everything in them is fictitious, and a test
 
 ## Deploy to Vercel
 
-**Not deployed yet.** The checklist, in this order:
+**Deployed on 27 Oct 2026** at https://damage-desk-ten.vercel.app (Vercel project linked to this
+repository: every push to `main` redeploys). The checklist it followed, in this order:
 
 1. Keep `next` at 16.4.1 or later (16.4.0 has critical advisories) and `npm audit` clean; re-run
    tests and `npm run build` before each deploy.
@@ -420,12 +425,12 @@ Storage, the Blob store).
   computed maximum may be higher than the real indemnity.
 - **Nothing is filed.** The app files no claim and sends no e-mail; a human does.
 - **Not legal advice.** The rules are our reading of public terms and statutes.
-- **Public deployment is not done.** The app has not been deployed yet (`next` 16.4.1,
-  `undici` 6.29.1, `npm audit` clean on 27 Oct 2026). Vercel Blob storage has not run
-  against a real store. Without it, cases filed by visitors are temporary and per instance; rate
-  limits and the daily cap of real runs are in memory, per instance. The merchant actions are
-  serialised inside one instance; across instances they rely on conditional writes, which the Blob
-  backend uses but has not been exercised on.
+- **Public deployment** (https://damage-desk-ten.vercel.app, `next` 16.4.1, `undici` 6.29.1,
+  `npm audit` clean on 27 Oct 2026) runs on a private Vercel Blob store: one real report was filed
+  there and read back on several requests. Rate limits and the daily cap of real runs are in
+  memory, per instance. The merchant actions are serialised inside one instance; across instances
+  they rely on the Blob store's conditional writes, which have not been exercised under real
+  concurrency.
 
 ## Third-party licences
 
