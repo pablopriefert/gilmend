@@ -34,12 +34,18 @@ const skipMarkTurns = (assessment: Record<string, unknown>, finish: Record<strin
   },
 ];
 
-const run = (turns: ReturnType<typeof skipMarkTurns>, markDamage = vi.fn(fakeDeps().markDamage), report = makeReport()) =>
+const run = (
+  turns: ReturnType<typeof skipMarkTurns>,
+  markDamage = vi.fn(fakeDeps().markDamage),
+  report = makeReport(),
+  timeBudgetMs?: number,
+) =>
   runAgent(report, {
     engine: "muse-spark-1.3",
     provider: scriptedProvider(turns),
     deps: fakeDeps({ markDamage }),
     now: NOW,
+    ...(timeBudgetMs !== undefined ? { timeBudgetMs } : {}),
   }).then((c) => ({ c, markDamage }));
 
 describe("runAgent: evidence fallback when the model never outlines a photo", () => {
@@ -127,8 +133,35 @@ describe("runAgent: evidence fallback when the model never outlines a photo", ()
     expect((await run(skipMarkTurns(ASSESSMENT_CARTON), undefined, makeReport({ photos: [] }))).markDamage).not.toHaveBeenCalled();
   });
 
+  // Review of 27 Oct 2026: the fallback only checked "some budget is left", so it could start at 89 s of
+  // 90 and make 3 SAM calls of up to 30 s each, past the route's maxDuration of 120 s.
+  it("is skipped when less than 20 s of the budget remains, and the claim keeps the raw photo", async () => {
+    const { c, markDamage } = await run(skipMarkTurns(ASSESSMENT_CARTON), undefined, makeReport(), 19_000);
+    expect(markDamage).not.toHaveBeenCalled();
+    expect(c.evidence).toHaveLength(0);
+    expect(c.trace.some((t) => t.step.startsWith("Evidence fallback"))).toBe(false);
+  });
+
+  it("gives each SAM call a third of what is left of the budget, so three calls fit", async () => {
+    const { markDamage } = await run(skipMarkTurns(ASSESSMENT_CARTON), undefined, makeReport(), 60_000);
+    expect(markDamage).toHaveBeenCalledTimes(1);
+    const { timeoutMs } = (markDamage.mock.calls[0] as unknown as [string, { timeoutMs: number }])[1];
+    // About 60 s / 3 (a few ms of the run itself are already spent), never more than a third.
+    expect(timeoutMs).toBeLessThanOrEqual(20_000);
+    expect(timeoutMs).toBeGreaterThan(19_000);
+  });
+
+  it("never lets three SAM calls overrun the budget, whatever is left above the minimum", async () => {
+    for (const budget of [20_500, 45_000, 90_000]) {
+      const { markDamage } = await run(skipMarkTurns(ASSESSMENT_CARTON), undefined, makeReport(), budget);
+      const { timeoutMs } = (markDamage.mock.calls[0] as unknown as [string, { timeoutMs: number }])[1];
+      expect(timeoutMs).toBeGreaterThanOrEqual(5_000);
+      expect(timeoutMs * 3).toBeLessThanOrEqual(budget);
+    }
+  });
+
   it("never runs for a private, demo or OpenRouter engine", async () => {
-    for (const engine of ["open-weights", "openrouter"] as const) {
+    for (const engine of ["open-weights", "openrouter", "demo-mock"] as const) {
       const markDamage = vi.fn(fakeDeps().markDamage);
       await runAgent(makeReport(), {
         engine,

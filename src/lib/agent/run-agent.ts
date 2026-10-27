@@ -54,6 +54,16 @@ export const DEFAULT_TIME_BUDGET_MS = 90_000;
 /** One model call never waits longer than this, nor longer than what is left of the budget. */
 const MODEL_CALL_TIMEOUT_MS = 45_000;
 const MIN_MODEL_CALL_TIMEOUT_MS = 5_000;
+/**
+ * The evidence fallback needs at least this much of the budget left. It can make up to 3 SAM calls
+ * (markDamage's own cap), and a SAM call waits 30 s by default: started at 89 s of 90 it could run to
+ * about 180 s, past the route's maxDuration of 120 (review of 27 Oct 2026). Below this margin the claim
+ * ships with the raw photo, which is the honest default when SAM finds nothing anyway.
+ */
+const MIN_EVIDENCE_FALLBACK_MS = 20_000;
+/** Number of SAM calls the fallback may make: the remaining time is shared between them. */
+const EVIDENCE_FALLBACK_SAM_CALLS = 3;
+const MIN_SAM_CALL_TIMEOUT_MS = 5_000;
 
 /** The collaborators of the loop. Injectable so tests never touch disk, network or other lots. */
 export interface AgentDeps {
@@ -364,12 +374,17 @@ export async function runAgent(report: DamageReport, opts: RunAgentOptions): Pro
     if (engine !== "muse-spark-1.3" || photosNotRead || !assessment) return;
     if (assessment.photoQuality !== "ok" || !EVIDENCE_DAMAGE_TYPES.includes(assessment.damageType)) return;
     if (report.photos.length === 0 || evidence.some((e) => e.method === "sam-3.1")) return;
-    if (markedWithAssessment.has(0) || Date.now() - startedAt >= budgetMs) return;
+    if (markedWithAssessment.has(0)) return;
+    // Not just "is there budget left": enough of it for the SAM calls, each of which gets an equal
+    // share of what remains (see MIN_EVIDENCE_FALLBACK_MS). Infinity (the mock) never reaches here.
+    const remainingMs = budgetMs - (Date.now() - startedAt);
+    if (remainingMs < MIN_EVIDENCE_FALLBACK_MS) return;
+    const timeoutMs = Math.max(MIN_SAM_CALL_TIMEOUT_MS, Math.floor(remainingMs / EVIDENCE_FALLBACK_SAM_CALLS));
 
     const { concepts, fallbackConcepts } = damageConceptsFor(null, assessment);
     let ev: Evidence;
     try {
-      ev = await deps.markDamage(report.photos[0], { engine, concepts, fallbackConcepts });
+      ev = await deps.markDamage(report.photos[0], { engine, concepts, fallbackConcepts, timeoutMs });
     } catch (e) {
       ev = { photo: report.photos[0], annotatedPhoto: null, method: "none", note: `mark_damage failed: ${errMessage(e)}` };
     }
