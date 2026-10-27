@@ -9,6 +9,7 @@ import { DEMO_SCENARIOS, type DemoScenario } from "./demo-scenarios";
 import { effectiveEngine, type EngineAvailability } from "./engine-choice";
 import { EngineSwitch } from "./engine-switch";
 import { prepareImage } from "./image-prep";
+import { VoiceRecorder, type VoiceResult } from "./voice-recorder";
 import {
   ACCEPTED_PHOTO_TYPES,
   MAX_PHOTOS,
@@ -84,12 +85,23 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
   const [submitting, setSubmitting] = useState(false);
   const [loadedDemo, setLoadedDemo] = useState<string | null>(null);
   const [loadingDemo, setLoadingDemo] = useState(false);
+  // Set once a voice message was transcribed into the message box; sent with the report so
+  // the case can say how the text was written.
+  const [voice, setVoice] = useState<VoiceResult | null>(null);
   const [accessCode, setAccessCode] = useAccessCode();
   const hasAccess = accessCode.trim() !== "";
   const fileInput = useRef<HTMLInputElement>(null);
   const orderRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const messageRef = useRef<HTMLTextAreaElement>(null);
+
+  function onVoiceTranscript(result: VoiceResult): void {
+    setVoice(result);
+    // Never overwrite what the customer already typed: the transcript goes after it.
+    setMessage((current) => (current.trim() ? `${current.trimEnd()}\n\n${result.transcript}` : result.transcript));
+    setErrors((e) => ({ ...e, message: undefined }));
+    messageRef.current?.focus();
+  }
 
   function addFiles(files: File[]): void {
     const room = MAX_PHOTOS - photos.length;
@@ -135,6 +147,7 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
       setOrderNumber(s.orderNumber);
       setEmail(s.email);
       setMessage(s.message);
+      setVoice(null);
       setLanguage(s.language);
       setErrors({});
       setLoadedDemo(s.title);
@@ -172,6 +185,17 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
       body.set("message", message.trim());
       body.set("engine", engine);
       if (language !== "auto") body.set("language", language);
+      if (voice && message.trim()) {
+        body.set(
+          "voiceNote",
+          JSON.stringify({
+            durationMs: voice.durationMs,
+            demo: voice.demo,
+            // Edited when the transcript is no longer in the message as it was dictated.
+            edited: !message.includes(voice.transcript),
+          }),
+        );
+      }
       for (const file of await Promise.all(photos.map((p) => prepareImage(p.file)))) body.append("photos", file);
 
       const res = await fetch("/api/reports", { method: "POST", body, headers: accessHeaders(accessCode) });
@@ -241,18 +265,28 @@ export function ReportForm({ availability }: { availability: EngineAvailability 
           id="message"
           label="Message from the customer"
           error={errors.message}
-          hint="Any language. The reply is written in the customer's language."
+          hint="Type it or record it. Any language. The reply is written in the customer's language."
         >
           <textarea
             id="message"
             ref={messageRef}
             value={message}
-            onChange={(e) => setMessage(e.target.value)}
+            onChange={(e) => {
+              setMessage(e.target.value);
+              // Emptied and retyped: it is a typed message now, not a dictated one.
+              if (e.target.value.trim() === "") setVoice(null);
+            }}
             rows={5}
             placeholder="My vase arrived broken…"
             aria-invalid={Boolean(errors.message)}
             aria-describedby={errors.message ? "message-error" : "message-hint"}
             className={INPUT_CLASS}
+          />
+          <VoiceRecorder
+            language={language}
+            accessCode={accessCode}
+            disabled={submitting}
+            onTranscript={onVoiceTranscript}
           />
         </Field>
 

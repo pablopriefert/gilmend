@@ -298,3 +298,31 @@ describe("POST /api/reports on Vercel (read-only project folder)", () => {
     await rm(path.join(os.tmpdir(), "damage-desk", "uploads", report.id), { recursive: true, force: true });
   });
 });
+
+describe("POST /api/reports, voice note", () => {
+  const note = (over: Record<string, unknown> = {}) => JSON.stringify({ durationMs: 5000, demo: false, edited: false, ...over });
+
+  it("stores the voice note label on the report, as a real transcription when the server has a key", async () => {
+    vi.stubEnv("MODEL_API_KEY", "fake-key-for-test"); // secret-factice
+    await POST(reportRequest({ fields: { voiceNote: note({ edited: true }) } }));
+    expect(runAgent.mock.calls[0][0].voiceNote).toEqual({
+      model: "muse-voice-transcribe-1.0",
+      durationMs: 5000,
+      demo: false,
+      edited: true,
+    });
+  });
+
+  it("cannot claim a real transcription when the server has no key", async () => {
+    await POST(reportRequest({ fields: { voiceNote: note() } }));
+    expect(runAgent.mock.calls[0][0].voiceNote).toMatchObject({ model: "demo-mock", demo: true });
+  });
+
+  it("ignores a malformed label and leaves typed messages without one", async () => {
+    const bad = await POST(reportRequest({ fields: { voiceNote: "{oops" } }));
+    expect(bad.status).toBe(201);
+    expect(runAgent.mock.calls[0][0].voiceNote).toBeUndefined();
+    await POST(reportRequest());
+    expect(runAgent.mock.calls[1][0].voiceNote).toBeUndefined();
+  });
+});

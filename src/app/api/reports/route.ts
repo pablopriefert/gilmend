@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { runAgent } from "@/lib/agent/run-agent";
-import { resolveEngine } from "@/lib/config";
+import { hasModelKey, resolveEngine } from "@/lib/config";
+import { parseVoiceNote } from "@/lib/voice/note";
 import { saveCase } from "@/lib/store/cases";
 import type { CaseRecord, DamageReport, Engine } from "@/lib/types";
 import {
@@ -155,6 +156,8 @@ export async function POST(request: Request): Promise<Response> {
     message: fields.message.trim(),
     photos: photoPaths,
     language,
+    // Present when the message was dictated: labelled on the case and told to the agent.
+    voiceNote: parseVoiceNote(form.get("voiceNote"), hasModelKey()),
   };
 
   // The case exists BEFORE the agent runs, as "new": if the function is cut by the platform

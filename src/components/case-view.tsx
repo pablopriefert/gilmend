@@ -78,7 +78,7 @@ export function CaseView({
           />
         </div>
         <div className="flex min-w-0 flex-col gap-6 lg:order-1">
-          <EvidenceSection message={c.report.message} photos={c.report.photos} evidence={c.evidence} />
+          <EvidenceSection message={c.report.message} photos={c.report.photos} evidence={c.evidence} voiceNote={c.report.voiceNote} />
           <AssessmentSection assessment={c.assessment} />
           <OrderSection order={c.order} />
           <ClaimSection claim={c.claim} rules={rules} now={now} />

@@ -33,3 +33,19 @@ describe("report prompt", () => {
     expect(parseReportMessage("hello")).toBeNull();
   });
 });
+
+describe("report prompt, dictated message", () => {
+  it("tells the agent a dictated message may contain misheard names and numbers, and still round-trips", () => {
+    const report = makeReport({
+      message: "My vase arrived broken, order Milan.",
+      voiceNote: { model: "muse-voice-transcribe-1.0", durationMs: 3000, demo: false, edited: false },
+    });
+    const text = formatReportMessage(report, [0]);
+    expect(text).toMatch(/dictated and transcribed by speech recognition/);
+    expect(parseReportMessage(text)).toMatchObject({ orderNumber: "#1001", message: "My vase arrived broken, order Milan." });
+  });
+
+  it("adds nothing for a typed message", () => {
+    expect(formatReportMessage(makeReport(), [0])).not.toMatch(/dictated/);
+  });
+});

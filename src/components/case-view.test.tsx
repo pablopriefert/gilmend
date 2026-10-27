@@ -259,3 +259,34 @@ describe("case page: approve, edit, reject", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/Could not reach the server/);
   });
 });
+
+describe("case page: voice message", () => {
+  const withNote = (voiceNote: NonNullable<ReturnType<typeof makeCase>["report"]["voiceNote"]>) => {
+    const c = makeCase();
+    return makeCase({ report: { ...c.report, voiceNote } });
+  };
+
+  it("says which model transcribed a dictated message, and whether the customer edited it", () => {
+    const { rerender } = render(
+      <CaseView caseRecord={withNote({ model: "muse-voice-transcribe-1.0", durationMs: 12_400, demo: false, edited: false })} rules={makeRules()} now={NOW} />,
+    );
+    expect(screen.getByText("Voice message, transcribed by muse-voice-transcribe-1.0")).toBeInTheDocument();
+    expect(screen.getByText(/12 s, sent as transcribed/)).toBeInTheDocument();
+
+    rerender(
+      <CaseView caseRecord={withNote({ model: "muse-voice-transcribe-1.0", durationMs: 12_400, demo: false, edited: true })} rules={makeRules()} now={NOW} />,
+    );
+    expect(screen.getByText(/edited by the customer after transcription/)).toBeInTheDocument();
+  });
+
+  it("never attributes a canned transcript to the speech model", () => {
+    render(<CaseView caseRecord={withNote({ model: "demo-mock", durationMs: 3000, demo: true, edited: false })} rules={makeRules()} now={NOW} />);
+    expect(screen.getByText("Voice message: DEMO MODE, canned transcript")).toBeInTheDocument();
+    expect(screen.queryByText(/transcribed by muse-voice/)).not.toBeInTheDocument();
+  });
+
+  it("shows nothing about voice for a typed message", () => {
+    render(<CaseView caseRecord={makeCase()} rules={makeRules()} now={NOW} />);
+    expect(screen.queryByText(/Voice message/)).not.toBeInTheDocument();
+  });
+});

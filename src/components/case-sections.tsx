@@ -8,6 +8,7 @@ import type {
   Evidence,
   Order,
   TraceStep,
+  VoiceNote,
 } from "@/lib/types";
 import { evidenceForPhotos } from "@/lib/evidence/merge";
 import { isStaleSource, noteVerification, prettyJson, type NoteFlag } from "./display-data";
@@ -86,11 +87,38 @@ function Photo({ src, alt, caption }: { src: string; alt: string; caption: strin
 }
 
 /** Customer's message and the photos. Annotated evidence (SAM 3.1) sits beside the original. */
-export function EvidenceSection({ message, photos, evidence }: { message: string; photos: string[]; evidence: Evidence[] }) {
+export function EvidenceSection({
+  message,
+  photos,
+  evidence,
+  voiceNote,
+}: {
+  message: string;
+  photos: string[];
+  evidence: Evidence[];
+  voiceNote?: VoiceNote;
+}) {
   // Every photo the customer sent, each with its annotated version when the agent made one.
   const items: Evidence[] = evidenceForPhotos(photos, evidence);
   return (
     <Card id="evidence-title" title="Customer report and evidence">
+      {voiceNote && (
+        <p className="mb-2 flex flex-wrap items-center gap-2 text-sm">
+          {voiceNote.demo ? (
+            <Flag>Voice message: DEMO MODE, canned transcript</Flag>
+          ) : (
+            <Flag tone="ok">Voice message, transcribed by {voiceNote.model}</Flag>
+          )}
+          <span className="text-muted">
+            {Math.max(1, Math.round(voiceNote.durationMs / 1000))} s
+            {voiceNote.demo
+              ? ": no speech model was called, the text below is not what was said."
+              : voiceNote.edited
+                ? ", edited by the customer after transcription."
+                : ", sent as transcribed."}
+          </span>
+        </p>
+      )}
       <blockquote className="whitespace-pre-wrap rounded-md border-l-4 border-accent bg-background px-4 py-3 text-sm">
         {message}
       </blockquote>
