@@ -33,7 +33,7 @@ describe("the committed showcase passes the publication audit", () => {
   it("every claim PDF holds no real e-mail, key or local path", async () => {
     const cases = await listShowcaseCases();
     const pdfs = cases.flatMap((c) => (c.document ? [c.document.pdfPath] : []));
-    expect(pdfs).toHaveLength(2); // the runs that ended with a carrier claim: cases 4 and 5
+    expect(pdfs).toHaveLength(3); // the runs that ended with a carrier claim: cases 1, 4 and 5
     for (const logical of pdfs) {
       const bytes = await readFile(path.join(SHOWCASE, logical.slice(SHOWCASE_PATH_PREFIX.length)));
       expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");

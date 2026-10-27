@@ -2,7 +2,7 @@
   "id": "real_demo-1-vase-broken",
   "report": {
     "id": "demo-1-vase-broken",
-    "receivedAt": "2026-10-27T13:01:31.010Z",
+    "receivedAt": "2026-10-27T13:21:50.717Z",
     "customerEmail": "camille.laurent@example.com",
     "orderNumber": "#1001",
     "message": "Hi, my vase arrived broken this morning. The box looked fine from outside but the vase is in several pieces. Order #1001, photo attached. Can you send a new one?",
@@ -32,8 +32,8 @@
       "city": "Lyon",
       "country": "FR"
     },
-    "createdAt": "2026-10-22T20:01:35.835Z",
-    "deliveredAt": "2026-10-26T20:01:35.835Z",
+    "createdAt": "2026-10-22T20:21:55.721Z",
+    "deliveredAt": "2026-10-26T20:21:55.721Z",
     "total": 64.9
   },
   "assessment": {
@@ -41,46 +41,64 @@
     "damageType": "broken_product",
     "severity": "total",
     "carrierLikelyAtFault": true,
-    "packagingAdequate": false,
+    "packagingAdequate": true,
     "evidenceNotes": [
       "white ceramic vase shattered into many fragments inside open cardboard box",
-      "crumpled brown packing paper visible around fragments",
-      "box flaps open, handwritten label with tracking number on inner flap"
+      "crumpled kraft paper cushioning visible around shards",
+      "cardboard box flaps open and appear intact",
+      "handwritten note 6A99001001001 on box flap matches carrier tracking number"
     ],
     "photoQuality": "ok"
   },
   "claim": {
-    "eligible": false,
+    "eligible": true,
     "reasons": [
-      "Colissimo (La Poste) excludes compensation when the packaging is unsuitable for the content, and the photos show inadequate packaging."
+      "Damage to the goods is documented: broken product, severity total.",
+      "The carrier is the likely cause of the damage.",
+      "The customer reported the damage 17.0 h after delivery, inside the 72 h reserve window (closes 2026-10-29T20:21Z).",
+      "Maximum compensation: min(item value 58.00 EUR, 23 EUR/kg x 2.3 kg = 52.90 EUR, cap 690.00 EUR) = 52.90 EUR under Colissimo (La Poste) terms.",
+      "The claim must be filed by 2027-10-22T20:21Z (360 days left).",
+      "Note: Colissimo pays the purchase value of the content (supplier invoice), or 70% of the sale value without one. This ceiling uses the order's sale price, so the final indemnity may be lower."
     ],
-    "maxCompensationEur": 0,
-    "claimDeadline": null,
-    "reserveDeadline": null,
-    "daysLeft": null
+    "maxCompensationEur": 52.9,
+    "claimDeadline": "2027-10-22T20:21:55.721Z",
+    "reserveDeadline": "2026-10-29T20:21:55.721Z",
+    "daysLeft": 360,
+    "basis": {
+      "termsLabel": "Colissimo (La Poste)",
+      "itemTitle": "Hand-thrown stoneware vase, tall",
+      "itemValueEur": 58,
+      "weightKg": 2.3,
+      "perKgEur": 23,
+      "capEur": 690
+    }
   },
   "decision": {
     "decision": "reship",
-    "carrierClaim": false,
-    "confidence": 0.92,
+    "carrierClaim": true,
+    "confidence": 0.95,
     "reasons": [
-      "Order #1001 found for the customer with Colissimo carrier",
-      "Photo shows white ceramic vase shattered into many fragments inside the box, recorded as total broken_product with ok quality",
-      "Customer requested a replacement shipment",
-      "Carrier claim not filed because compute_claim returned eligible false due to inadequate packaging"
+      "Order #1001 found for Camille Laurent, Hand-thrown stoneware vase, tall, delivered 2026-10-26T20:21:55.721Z",
+      "Photo shows white ceramic vase shattered into many fragments inside box, severity total, packaging adequate",
+      "Customer reported damage 17.0 h after delivery inside reserve window, compute_claim eligible=true with max 52.90 EUR",
+      "Carrier Colissimo likely at fault, claim deadline 2027-10-22T20:21:55.721Z, reship requested by customer"
     ],
     "needsHuman": false,
-    "customerReply": "Hi, I'm very sorry your vase arrived broken. Thank you for the clear photo. We will prepare a new shipment for you and keep you updated. Thanks for your patience!"
+    "customerReply": "Hi Camille, thanks for the clear photo — sorry your vase arrived broken. We'll send you a new one right away and handle the carrier paperwork on our side."
   },
   "evidence": [
     {
       "photo": "data/showcase/photos/vase-broken.webp",
       "annotatedPhoto": "data/showcase/evidence/8bce0d2b6fc90e41-annotated.jpg",
       "method": "sam-3.1",
-      "note": "SAM 3.1 outlined 5 regions matching \"broken pottery\" (confidence 0.75, 0.75, 0.75, 0.75, 0.75). No region for \"ceramic vase\". The outline marks where the damage appears to be; it is not a damage verdict."
+      "note": "SAM 3.1 outlined 5 regions matching \"broken pottery\" (confidence 0.76, 0.76, 0.75, 0.75, 0.75). No region for \"ceramic vase\". The outline shows what SAM matched for these concepts, not the damage itself; it is not a damage verdict."
     }
   ],
-  "document": null,
+  "document": {
+    "pdfPath": "data/showcase/claims/real_demo-1-vase-broken.pdf",
+    "emailSubject": "Damage claim - parcel 6A99001001001 - order #1001",
+    "emailBody": "Dear Sir or Madam,\n\nI am writing on behalf of Maison Demo (demo merchant), sender of the parcel below, to report damage found when the parcel was opened.\n\n- Carrier: Colissimo (La Poste) (Colissimo Domicile sans signature)\n- Tracking number: 6A99001001001\n- Order: #1001\n- Weight: 2.3 kg\n- Value of the contents: €58.00\n- Delivered on: 26 October 2026\n- Damage reported on: 27 October 2026\n\nDamage found: white ceramic vase (product broken or damaged, product beyond repair). The attached photos show the state of the parcel and of the product.\n\nCompensation claimed: €52.90, under the terms of your contract (details in the attached claim file).\nThis claim is filed in time: the claim deadline is 22 October 2027, 22:21 (Paris time).\nReserve deadline: 29 October 2026, 21:21 (Paris time).\n\nPlease find attached the claim file (PDF) and the photos. The purchase invoice of the contents follows or is attached separately.\nPlease confirm receipt of this claim and keep me informed of its progress.\n\nKind regards,\nMaison Demo (demo merchant)\n12 rue de la Démo, 75011 Paris, France\nclaims@maison-demo.example"
+  },
   "status": "needs_review",
   "engine": "muse-spark-1.3",
   "engineDetail": {
@@ -92,7 +110,7 @@
   "trace": [
     {
       "step": "Engine: muse-spark-1.3 (Muse Spark 1.3 (Meta Model API))",
-      "at": "2026-10-27T16:01:31.011Z"
+      "at": "2026-10-27T16:21:50.718Z"
     },
     {
       "step": "Report received (1 photo(s) attached)",
@@ -100,12 +118,12 @@
         "orderNumber": "#1001",
         "language": "en"
       },
-      "at": "2026-10-27T16:01:31.014Z"
+      "at": "2026-10-27T16:21:50.721Z"
     },
     {
       "step": "Model note (step 1)",
-      "output": "Your broken vase report is in — I'll pull up the order and inspect the photo to start the claim.",
-      "at": "2026-10-27T16:01:35.834Z"
+      "output": "Investigating your broken vase report — checking the order and damage evidence.",
+      "at": "2026-10-27T16:21:55.719Z"
     },
     {
       "step": "Tool: get_order",
@@ -134,17 +152,17 @@
             "city": "Lyon",
             "country": "FR"
           },
-          "createdAt": "2026-10-22T20:01:35.835Z",
-          "deliveredAt": "2026-10-26T20:01:35.835Z",
+          "createdAt": "2026-10-22T20:21:55.721Z",
+          "deliveredAt": "2026-10-26T20:21:55.721Z",
           "total": 64.9
         }
       },
-      "at": "2026-10-27T16:01:35.835Z"
+      "at": "2026-10-27T16:21:55.721Z"
     },
     {
       "step": "Tool: assess_photos",
       "tool": "assess_photos",
-      "input": "{\"carrierLikelyAtFault\":true,\"damageType\":\"broken_product\",\"evidenceNotes\":[\"white ceramic vase shattered into many fragments inside open cardboard box\",\"crumpled brown packing paper visible around fragments\",\"box flaps open, handwritten label with tracking number on inner flap\"],\"item\":\"white ceramic vase\",\"packagingAdequate\":false,\"photoQuality\":\"ok\",\"severity\":\"total\"}",
+      "input": "{\"carrierLikelyAtFault\":true,\"damageType\":\"broken_product\",\"evidenceNotes\":[\"white ceramic vase shattered into many fragments inside open cardboard box\",\"crumpled kraft paper cushioning visible around shards\",\"cardboard box flaps open and appear intact\",\"handwritten note 6A99001001001 on box flap matches carrier tracking number\"],\"item\":\"white ceramic vase\",\"packagingAdequate\":true,\"photoQuality\":\"ok\",\"severity\":\"total\"}",
       "output": {
         "recorded": true,
         "assessment": {
@@ -152,21 +170,22 @@
           "damageType": "broken_product",
           "severity": "total",
           "carrierLikelyAtFault": true,
-          "packagingAdequate": false,
+          "packagingAdequate": true,
           "evidenceNotes": [
             "white ceramic vase shattered into many fragments inside open cardboard box",
-            "crumpled brown packing paper visible around fragments",
-            "box flaps open, handwritten label with tracking number on inner flap"
+            "crumpled kraft paper cushioning visible around shards",
+            "cardboard box flaps open and appear intact",
+            "handwritten note 6A99001001001 on box flap matches carrier tracking number"
           ],
           "photoQuality": "ok"
         }
       },
-      "at": "2026-10-27T16:01:41.347Z"
+      "at": "2026-10-27T16:21:59.880Z"
     },
     {
       "step": "Model note (step 3)",
-      "output": "Order found and damage confirmed — now I'll mark the evidence and check the carrier rules.",
-      "at": "2026-10-27T16:01:45.426Z"
+      "output": "Confirmed the vase is shattered — now outlining the damage for the carrier claim.",
+      "at": "2026-10-27T16:22:02.402Z"
     },
     {
       "step": "Tool: mark_damage",
@@ -176,14 +195,14 @@
         "photoIndex": 0,
         "annotated": true,
         "method": "sam-3.1",
-        "note": "SAM 3.1 outlined 5 regions matching \"broken pottery\" (confidence 0.75, 0.75, 0.75, 0.75, 0.75). No region for \"ceramic vase\". The outline marks where the damage appears to be; it is not a damage verdict."
+        "note": "SAM 3.1 outlined 5 regions matching \"broken pottery\" (confidence 0.76, 0.76, 0.75, 0.75, 0.75). No region for \"ceramic vase\". The outline shows what SAM matched for these concepts, not the damage itself; it is not a damage verdict."
       },
-      "at": "2026-10-27T16:01:53.469Z"
+      "at": "2026-10-27T16:22:08.521Z"
     },
     {
       "step": "Model note (step 4)",
-      "output": "Annotation secured — I'll now review the shipping coverage to finalize your replacement.",
-      "at": "2026-10-27T16:01:57.000Z"
+      "output": "Damage evidence prepared — checking carrier rules and compensation next.",
+      "at": "2026-10-27T16:22:09.697Z"
     },
     {
       "step": "Tool: get_carrier_rules",
@@ -290,55 +309,79 @@
         ],
         "compensationCaveat": "Colissimo pays the purchase value of the content (supplier invoice), or 70% of the sale value without one. This ceiling uses the order's sale price, so the final indemnity may be lower."
       },
-      "at": "2026-10-27T16:01:57.000Z"
+      "at": "2026-10-27T16:22:09.697Z"
     },
     {
       "step": "Tool: compute_claim",
       "tool": "compute_claim",
       "input": "{\"parcelRefusedAtDelivery\":null}",
       "output": {
-        "eligible": false,
+        "eligible": true,
         "reasons": [
-          "Colissimo (La Poste) excludes compensation when the packaging is unsuitable for the content, and the photos show inadequate packaging."
+          "Damage to the goods is documented: broken product, severity total.",
+          "The carrier is the likely cause of the damage.",
+          "The customer reported the damage 17.0 h after delivery, inside the 72 h reserve window (closes 2026-10-29T20:21Z).",
+          "Maximum compensation: min(item value 58.00 EUR, 23 EUR/kg x 2.3 kg = 52.90 EUR, cap 690.00 EUR) = 52.90 EUR under Colissimo (La Poste) terms.",
+          "The claim must be filed by 2027-10-22T20:21Z (360 days left).",
+          "Note: Colissimo pays the purchase value of the content (supplier invoice), or 70% of the sale value without one. This ceiling uses the order's sale price, so the final indemnity may be lower."
         ],
-        "maxCompensationEur": 0,
-        "claimDeadline": null,
-        "reserveDeadline": null,
-        "daysLeft": null
+        "maxCompensationEur": 52.9,
+        "claimDeadline": "2027-10-22T20:21:55.721Z",
+        "reserveDeadline": "2026-10-29T20:21:55.721Z",
+        "daysLeft": 360,
+        "basis": {
+          "termsLabel": "Colissimo (La Poste)",
+          "itemTitle": "Hand-thrown stoneware vase, tall",
+          "itemValueEur": 58,
+          "weightKg": 2.3,
+          "perKgEur": 23,
+          "capEur": 690
+        }
       },
-      "at": "2026-10-27T16:02:00.323Z"
+      "at": "2026-10-27T16:22:13.566Z"
     },
     {
       "step": "Tool: finish_case",
       "tool": "draft_reply",
-      "input": "{\"carrierClaim\":false,\"confidence\":0.92,\"customerReply\":\"Hi, I'm very sorry your vase arrived broken. Thank you for the clear photo. We will prepare a new shipment for you and keep you updated. Thanks for your patience!\",\"decision\":\"reship\",\"fraudSuspected\":false,\"needsHuman\":false,\"reasons\":[\"Order #1001 found for the customer with Colissimo carrier\",\"Photo shows white ceramic vase shattered into many fragments inside the box, recorded as total broken_product with ok quality\",\"Customer requested a replacement shipment\",\"Carrier claim not filed because compute_claim returned eligible false due to inadequate packaging\"]}",
+      "input": "{\"carrierClaim\":true,\"confidence\":0.95,\"customerReply\":\"Hi Camille, thanks for the clear photo — sorry your vase arrived broken. We'll send you a new one right away and handle the carrier paperwork on our side.\",\"decision\":\"reship\",\"fraudSuspected\":false,\"needsHuman\":false,\"reasons\":[\"Order #1001 found for Camille Laurent, Hand-thrown stoneware vase, tall, delivered 2026-10-26T20:21:55.721Z\",\"Photo shows white ceramic vase shattered into many fragments inside box, severity total, packaging adequate\",\"Customer reported damage 17.0 h after delivery inside reserve window, compute_claim eligible=true with max 52.90 EUR\",\"Carrier Colissimo likely at fault, claim deadline 2027-10-22T20:21:55.721Z, reship requested by customer\"]}",
       "output": {
         "accepted": true,
         "decision": {
           "decision": "reship",
-          "carrierClaim": false,
-          "confidence": 0.92,
+          "carrierClaim": true,
+          "confidence": 0.95,
           "reasons": [
-            "Order #1001 found for the customer with Colissimo carrier",
-            "Photo shows white ceramic vase shattered into many fragments inside the box, recorded as total broken_product with ok quality",
-            "Customer requested a replacement shipment",
-            "Carrier claim not filed because compute_claim returned eligible false due to inadequate packaging"
+            "Order #1001 found for Camille Laurent, Hand-thrown stoneware vase, tall, delivered 2026-10-26T20:21:55.721Z",
+            "Photo shows white ceramic vase shattered into many fragments inside box, severity total, packaging adequate",
+            "Customer reported damage 17.0 h after delivery inside reserve window, compute_claim eligible=true with max 52.90 EUR",
+            "Carrier Colissimo likely at fault, claim deadline 2027-10-22T20:21:55.721Z, reship requested by customer"
           ],
           "needsHuman": false,
-          "customerReply": "Hi, I'm very sorry your vase arrived broken. Thank you for the clear photo. We will prepare a new shipment for you and keep you updated. Thanks for your patience!"
+          "customerReply": "Hi Camille, thanks for the clear photo — sorry your vase arrived broken. We'll send you a new one right away and handle the carrier paperwork on our side."
         },
         "guardrailAdjustments": [],
-        "next": "Done. Stop calling tools."
+        "next": "Call draft_claim_document, then stop."
       },
-      "at": "2026-10-27T16:02:04.804Z"
+      "at": "2026-10-27T16:22:19.106Z"
+    },
+    {
+      "step": "Tool: draft_claim_document",
+      "tool": "draft_claim",
+      "input": "{}",
+      "output": {
+        "ok": true,
+        "pdfPath": "data/showcase/claims/real_demo-1-vase-broken.pdf",
+        "emailSubject": "Damage claim - parcel 6A99001001001 - order #1001"
+      },
+      "at": "2026-10-27T16:22:22.781Z"
     },
     {
       "step": "Case ready for review: reship",
-      "at": "2026-10-27T16:02:04.804Z"
+      "at": "2026-10-27T16:22:22.781Z"
     }
   ],
-  "createdAt": "2026-10-27T16:01:31.011Z",
-  "updatedAt": "2026-10-27T16:02:04.804Z",
+  "createdAt": "2026-10-27T16:21:50.718Z",
+  "updatedAt": "2026-10-27T16:22:22.781Z",
   "recorded": {
     "recordedOn": "2026-10-27"
   }

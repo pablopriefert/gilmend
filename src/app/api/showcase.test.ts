@@ -11,8 +11,9 @@ import { GET as getFile } from "./files/route";
 
 const REPO_SHOWCASE = path.join(process.cwd(), "data", "showcase");
 const ID = "real_demo-1-vase-broken";
-// The recorded case that carries a claim PDF. The vase run of 27 Oct 2026 (16:01 UTC) ended
-// without a carrier claim (Muse read the box as inadequate packaging), so it has none.
+// A recorded case that carries a claim PDF (the vase, case 1, has one too since the re-recording
+// of 27 Oct 2026; the earlier vase run ended without a claim because Muse read the box as
+// inadequate packaging, which no longer cancels a claim).
 const PDF_ID = "real_demo-4-opened-missing";
 
 let scratch: string;
@@ -90,7 +91,7 @@ describe("the recorded runs through the API, with an empty store", () => {
   });
 
   it("a recorded run with no carrier claim has no PDF", async () => {
-    for (const id of ["real_demo-2-carton-crushed", ID]) {
+    for (const id of ["real_demo-2-carton-crushed", "real_demo-3-photo-blurry", "real_demo-6-late-report"]) {
       const res = await getPdf(new Request(`http://x/api/cases/${id}/pdf`), ctx(id));
       expect(res.status, id).toBe(404);
     }

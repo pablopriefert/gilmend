@@ -2,7 +2,7 @@
   "id": "real_demo-2-carton-crushed",
   "report": {
     "id": "demo-2-carton-crushed",
-    "receivedAt": "2026-10-27T12:02:05.167Z",
+    "receivedAt": "2026-10-27T12:22:26.980Z",
     "customerEmail": "Hugo.Bernard@Example.com",
     "orderNumber": "1002",
     "message": "The cardboard box was completely crushed on one corner when the courier dropped it off. I opened it and the print and frame look fine, but I wanted to let you know in case the carrier needs to hear about it.",
@@ -32,37 +32,55 @@
       "city": "Nantes",
       "country": "FR"
     },
-    "createdAt": "2026-10-24T14:02:07.280Z",
-    "deliveredAt": "2026-10-26T14:02:07.280Z",
+    "createdAt": "2026-10-24T14:22:33.278Z",
+    "deliveredAt": "2026-10-26T14:22:33.278Z",
     "total": 97.9
   },
   "assessment": {
-    "item": "cardboard shipping box",
+    "item": "framed linocut print in oak frame",
     "damageType": "crushed_packaging",
     "severity": "none",
     "carrierLikelyAtFault": true,
     "packagingAdequate": null,
     "evidenceNotes": [
-      "cardboard box corner heavily crushed and torn open",
-      "framed botanical print leaning against wall appears intact",
+      "corner of cardboard shipping box is heavily crushed and torn open",
+      "framed botanical print leaning against wall behind box appears intact with no visible damage",
       "customer states print and frame look fine"
     ],
     "photoQuality": "ok"
   },
-  "claim": null,
+  "claim": {
+    "eligible": false,
+    "reasons": [
+      "Only the outer packaging is crushed and the product itself is intact. Carriers compensate damaged goods, not a damaged box, so there is nothing to claim.",
+      "Warning: the photos do not show whether the packaging was adequate; the carrier may refuse compensation if it was not."
+    ],
+    "maxCompensationEur": 0,
+    "claimDeadline": null,
+    "reserveDeadline": null,
+    "daysLeft": null
+  },
   "decision": {
     "decision": "no_action",
     "carrierClaim": false,
     "confidence": 0.95,
     "reasons": [
-      "Order found for the reporting customer",
-      "Customer states print and frame look fine and photo shows framed print intact",
-      "Only outer cardboard box is crushed with no product damage requiring reship or refund"
+      "Order #1002 found for Hugo Bernard, Chronopost delivery on 2026-10-26.",
+      "Customer states print and frame look fine; photo shows framed print appears intact with only outer cardboard crushed.",
+      "Assessment recorded as crushed_packaging with severity none, photoQuality ok.",
+      "compute_claim returned eligible=false: carriers compensate damaged goods, not a damaged box."
     ],
     "needsHuman": false,
-    "customerReply": "Thank you for letting us know, and glad to hear your print and frame look fine! No further action is needed for now, but please contact us if you notice anything later."
+    "customerReply": "Thank you for letting us know, and I'm glad to hear your print and frame look fine! No further action is needed for now, but please keep the box and photos and contact us right away if you notice any hidden damage."
   },
-  "evidence": [],
+  "evidence": [
+    {
+      "photo": "data/showcase/photos/carton-crushed.webp",
+      "annotatedPhoto": "data/showcase/evidence/e31a4ae4eedf535b-annotated.jpg",
+      "method": "sam-3.1",
+      "note": "SAM 3.1 outlined 1 region matching \"torn cardboard\" (confidence 0.74). The outline shows what SAM matched for these concepts, not the damage itself; it is not a damage verdict."
+    }
+  ],
   "document": null,
   "status": "needs_review",
   "engine": "muse-spark-1.3",
@@ -75,7 +93,7 @@
   "trace": [
     {
       "step": "Engine: muse-spark-1.3 (Muse Spark 1.3 (Meta Model API))",
-      "at": "2026-10-27T16:02:05.168Z"
+      "at": "2026-10-27T16:22:26.981Z"
     },
     {
       "step": "Report received (1 photo(s) attached)",
@@ -83,12 +101,12 @@
         "orderNumber": "1002",
         "language": "en"
       },
-      "at": "2026-10-27T16:02:05.171Z"
+      "at": "2026-10-27T16:22:26.984Z"
     },
     {
       "step": "Model note (step 1)",
-      "output": "Investigating your crushed-box report — I'll verify the order and check the evidence.",
-      "at": "2026-10-27T16:02:07.278Z"
+      "output": "I'll verify your order and examine the delivery photos to confirm the product is intact.",
+      "at": "2026-10-27T16:22:33.277Z"
     },
     {
       "step": "Tool: get_order",
@@ -117,39 +135,39 @@
             "city": "Nantes",
             "country": "FR"
           },
-          "createdAt": "2026-10-24T14:02:07.280Z",
-          "deliveredAt": "2026-10-26T14:02:07.280Z",
+          "createdAt": "2026-10-24T14:22:33.278Z",
+          "deliveredAt": "2026-10-26T14:22:33.278Z",
           "total": 97.9
         }
       },
-      "at": "2026-10-27T16:02:07.280Z"
+      "at": "2026-10-27T16:22:33.279Z"
     },
     {
       "step": "Tool: assess_photos",
       "tool": "assess_photos",
-      "input": "{\"carrierLikelyAtFault\":true,\"damageType\":\"crushed_packaging\",\"evidenceNotes\":[\"cardboard box corner heavily crushed and torn open\",\"framed botanical print leaning against wall appears intact\",\"customer states print and frame look fine\"],\"item\":\"cardboard shipping box\",\"packagingAdequate\":null,\"photoQuality\":\"ok\",\"severity\":\"none\"}",
+      "input": "{\"carrierLikelyAtFault\":true,\"damageType\":\"crushed_packaging\",\"evidenceNotes\":[\"corner of cardboard shipping box is heavily crushed and torn open\",\"framed botanical print leaning against wall behind box appears intact with no visible damage\",\"customer states print and frame look fine\"],\"item\":\"framed linocut print in oak frame\",\"packagingAdequate\":null,\"photoQuality\":\"ok\",\"severity\":\"none\"}",
       "output": {
         "recorded": true,
         "assessment": {
-          "item": "cardboard shipping box",
+          "item": "framed linocut print in oak frame",
           "damageType": "crushed_packaging",
           "severity": "none",
           "carrierLikelyAtFault": true,
           "packagingAdequate": null,
           "evidenceNotes": [
-            "cardboard box corner heavily crushed and torn open",
-            "framed botanical print leaning against wall appears intact",
+            "corner of cardboard shipping box is heavily crushed and torn open",
+            "framed botanical print leaning against wall behind box appears intact with no visible damage",
             "customer states print and frame look fine"
           ],
           "photoQuality": "ok"
         }
       },
-      "at": "2026-10-27T16:02:14.595Z"
+      "at": "2026-10-27T16:22:42.011Z"
     },
     {
       "step": "Model note (step 3)",
-      "output": "Confirmed your order arrived with only the outer box damaged while the print itself looks fine — I'll finalize the decision.",
-      "at": "2026-10-27T16:02:20.449Z"
+      "output": "The shipping box was crushed but your framed print looks undamaged, so I'll pull the carrier's policy to complete the assessment.",
+      "at": "2026-10-27T16:22:47.232Z"
     },
     {
       "step": "Tool: get_carrier_rules",
@@ -243,12 +261,34 @@
         ],
         "compensationCaveat": "Chronopost pays on supporting documents (purchase invoice dated no later than the shipping day, photos of the damage)."
       },
-      "at": "2026-10-27T16:02:20.449Z"
+      "at": "2026-10-27T16:22:47.233Z"
+    },
+    {
+      "step": "Model note (step 4)",
+      "output": "I've confirmed your order and that the artwork is fine — now I'll finalize the case documentation.",
+      "at": "2026-10-27T16:22:54.668Z"
+    },
+    {
+      "step": "Tool: compute_claim",
+      "tool": "compute_claim",
+      "input": "{\"parcelRefusedAtDelivery\":null}",
+      "output": {
+        "eligible": false,
+        "reasons": [
+          "Only the outer packaging is crushed and the product itself is intact. Carriers compensate damaged goods, not a damaged box, so there is nothing to claim.",
+          "Warning: the photos do not show whether the packaging was adequate; the carrier may refuse compensation if it was not."
+        ],
+        "maxCompensationEur": 0,
+        "claimDeadline": null,
+        "reserveDeadline": null,
+        "daysLeft": null
+      },
+      "at": "2026-10-27T16:22:54.669Z"
     },
     {
       "step": "Tool: finish_case",
       "tool": "draft_reply",
-      "input": "{\"carrierClaim\":false,\"confidence\":0.95,\"customerReply\":\"Thank you for letting us know, and glad to hear your print and frame look fine! No further action is needed for now, but please contact us if you notice anything later.\",\"decision\":\"no_action\",\"fraudSuspected\":false,\"needsHuman\":false,\"reasons\":[\"Order found for the reporting customer\",\"Customer states print and frame look fine and photo shows framed print intact\",\"Only outer cardboard box is crushed with no product damage requiring reship or refund\"]}",
+      "input": "{\"carrierClaim\":false,\"confidence\":0.95,\"customerReply\":\"Thank you for letting us know, and I'm glad to hear your print and frame look fine! No further action is needed for now, but please keep the box and photos and contact us right away if you notice any hidden damage.\",\"decision\":\"no_action\",\"fraudSuspected\":false,\"needsHuman\":false,\"reasons\":[\"Order #1002 found for Hugo Bernard, Chronopost delivery on 2026-10-26.\",\"Customer states print and frame look fine; photo shows framed print appears intact with only outer cardboard crushed.\",\"Assessment recorded as crushed_packaging with severity none, photoQuality ok.\",\"compute_claim returned eligible=false: carriers compensate damaged goods, not a damaged box.\"]}",
       "output": {
         "accepted": true,
         "decision": {
@@ -256,25 +296,47 @@
           "carrierClaim": false,
           "confidence": 0.95,
           "reasons": [
-            "Order found for the reporting customer",
-            "Customer states print and frame look fine and photo shows framed print intact",
-            "Only outer cardboard box is crushed with no product damage requiring reship or refund"
+            "Order #1002 found for Hugo Bernard, Chronopost delivery on 2026-10-26.",
+            "Customer states print and frame look fine; photo shows framed print appears intact with only outer cardboard crushed.",
+            "Assessment recorded as crushed_packaging with severity none, photoQuality ok.",
+            "compute_claim returned eligible=false: carriers compensate damaged goods, not a damaged box."
           ],
           "needsHuman": false,
-          "customerReply": "Thank you for letting us know, and glad to hear your print and frame look fine! No further action is needed for now, but please contact us if you notice anything later."
+          "customerReply": "Thank you for letting us know, and I'm glad to hear your print and frame look fine! No further action is needed for now, but please keep the box and photos and contact us right away if you notice any hidden damage."
         },
         "guardrailAdjustments": [],
         "next": "Done. Stop calling tools."
       },
-      "at": "2026-10-27T16:02:25.488Z"
+      "at": "2026-10-27T16:22:59.198Z"
+    },
+    {
+      "step": "Evidence fallback: the model did not outline any photo, so the code (not the model) called mark_damage once on photo 1, for the concepts of the recorded assessment (crushed packaging).",
+      "tool": "mark_damage",
+      "input": {
+        "photoIndex": 0,
+        "concepts": [
+          "torn cardboard"
+        ],
+        "fallbackConcepts": [
+          "torn cardboard",
+          "cardboard box"
+        ],
+        "calledBy": "code"
+      },
+      "output": {
+        "annotated": true,
+        "method": "sam-3.1",
+        "note": "SAM 3.1 outlined 1 region matching \"torn cardboard\" (confidence 0.74). The outline shows what SAM matched for these concepts, not the damage itself; it is not a damage verdict."
+      },
+      "at": "2026-10-27T16:23:02.043Z"
     },
     {
       "step": "Case ready for review: no_action",
-      "at": "2026-10-27T16:02:25.488Z"
+      "at": "2026-10-27T16:23:02.043Z"
     }
   ],
-  "createdAt": "2026-10-27T16:02:05.168Z",
-  "updatedAt": "2026-10-27T16:02:25.488Z",
+  "createdAt": "2026-10-27T16:22:26.981Z",
+  "updatedAt": "2026-10-27T16:23:02.043Z",
   "recorded": {
     "recordedOn": "2026-10-27"
   }

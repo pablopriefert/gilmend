@@ -24,6 +24,13 @@ function argument(name: string): string | undefined {
 
 /** Where a path stored in a recorded case lives on disk, and where it goes in the showcase. */
 function plan(stored: string, runtime: string): { from: string; to: string } {
+  // A run recorded with DAMAGE_DESK_RUNTIME_DIR pointing outside the project (27 Oct 2026, to keep
+  // data/runtime empty while re-recording) stores absolute paths under that folder: read them as
+  // the "data/runtime/..." paths they stand for.
+  const runtimePrefix = `${path.resolve(runtime)}${path.sep}`;
+  if (stored.startsWith(runtimePrefix)) {
+    stored = `data/runtime/${stored.slice(runtimePrefix.length).split(path.sep).join("/")}`;
+  }
   const name = path.posix.basename(stored);
   if (stored.startsWith("data/photos/")) return { from: path.join(ROOT, stored), to: `photos/${name}` };
   if (stored.startsWith("data/runtime/evidence/")) return { from: path.join(runtime, "evidence", name), to: `evidence/${name}` };
