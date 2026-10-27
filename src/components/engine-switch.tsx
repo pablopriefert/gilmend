@@ -26,6 +26,7 @@ export function EngineSwitch({
 }) {
   const options = engineOptions(availability);
   const willRunAs = effectiveEngine(value, availability, hasAccess);
+  const needsCode = availability.accessCodeRequired === true && !hasAccess;
   return (
     <fieldset className="min-w-0">
       <legend className="mb-2 text-sm font-medium">Engine</legend>
@@ -56,15 +57,27 @@ export function EngineSwitch({
         })}
       </div>
       <p className="mt-2 flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
-        This report will run as <EngineBadge engine={willRunAs} detail={detailFor(willRunAs, availability)} />
-        {availability.accessCodeRequired && !hasAccess ? (
-          // The server takes no report at all without the code (demo mode included).
-          <span className="text-muted">(nothing is accepted until you enter the access code of this demo)</span>
+        This report will run as{" "}
+        {needsCode ? (
+          // The server takes no report at all without the code (demo mode included), so there is no
+          // engine to name yet: the DEMO MODE badge here read as "this will run in demo mode" and
+          // sat next to "nothing is accepted" (final review of 27 Oct 2026).
+          <>
+            <span
+              data-testid="needs-access-code"
+              className="inline-flex items-center whitespace-nowrap rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900"
+            >
+              Needs the access code
+            </span>
+            <span className="text-muted">(nothing is accepted until you enter the access code of this demo)</span>
+          </>
         ) : (
-          willRunAs === "demo-mock" &&
-          value !== "demo-mock" && (
-            <span className="text-muted">(the requested engine is not configured on this server)</span>
-          )
+          <>
+            <EngineBadge engine={willRunAs} detail={detailFor(willRunAs, availability)} />
+            {willRunAs === "demo-mock" && value !== "demo-mock" && (
+              <span className="text-muted">(the requested engine is not configured on this server)</span>
+            )}
+          </>
         )}
       </p>
     </fieldset>

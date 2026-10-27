@@ -24,8 +24,9 @@ import { errorResponse } from "./responses";
 // client are counted and, past ACCESS_FAILURES, even the right code is refused (429) until the
 // window has slid. A request WITHOUT any code is not an attempt and is not counted. The count is
 // per instance, in memory and keyed by the first hop of x-forwarded-for, like the other limits
-// here: on Vercel the platform sets that header, behind a proxy that does not overwrite it a client can
-// spoof it.
+// here. Vercel only: the platform sets that header itself. Anywhere else (a self-hosted server, a
+// proxy that does not overwrite it) a client can send any x-forwarded-for it likes, so the count is
+// bypassed by changing the header and the limit protects nothing there.
 // The real protection is a long random code (16 characters or more, see .env.example).
 
 export const ACCESS_CODE_HEADER = "x-access-code";

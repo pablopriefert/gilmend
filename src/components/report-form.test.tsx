@@ -248,9 +248,13 @@ describe("access code on a public deployment", () => {
     render(<ReportForm availability={PUBLIC} />);
     expect(screen.getByLabelText("Access code")).toBeInTheDocument();
     expect(screen.getByText(/nothing is accepted until you enter the access code/)).toBeInTheDocument();
+    // No engine is named yet: "Needs the access code", not a DEMO MODE badge.
+    expect(screen.getByTestId("needs-access-code")).toHaveTextContent("Needs the access code");
+    expect(screen.getByText(/This report will run as/).textContent).not.toMatch(/DEMO MODE/);
     fireEvent.change(screen.getByLabelText("Access code"), { target: { value: "judges-2026" } });
     expect(screen.getByText(/This report will run as/).textContent).toMatch(/Muse Spark/);
     expect(screen.queryByText(/nothing is accepted/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("needs-access-code")).not.toBeInTheDocument();
   });
 
   it("does not send a report without the code: it says so and moves to the code field", async () => {

@@ -81,7 +81,10 @@ export function takeRealRun(limit: number, now: number = Date.now()): boolean {
   return true;
 }
 
-/** Best-effort client key: first hop of x-forwarded-for, else a shared bucket. */
+/**
+ * Best-effort client key: first hop of x-forwarded-for, else a shared bucket. Vercel only: the
+ * platform writes that header. Elsewhere a client can forge it and get a fresh bucket every time.
+ */
 export function clientKey(request: Request): string {
   const forwarded = request.headers.get("x-forwarded-for");
   return forwarded?.split(",")[0]?.trim() || "local";

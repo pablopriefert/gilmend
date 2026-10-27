@@ -32,6 +32,13 @@ instance, then the case, its photo and its claim PDF opened on a second instance
 
 ## Vercel Blob (`DAMAGE_DESK_STORAGE=blob`)
 
+**On a public deployment that accepts reports, Blob is required, not optional.** Without it a case lives
+on one serverless instance, and `GET /api/cases/[id]/pdf` rebuilds a claim PDF that is not found where the
+request lands. Rebuilding needs the access code (`requireAccessCode`), and the `<iframe>` on the case page
+cannot send a header, so the preview fails with a 401 for the very person who filed the case. With Blob the
+PDF is copied out when it is written and copied back when another instance asks for it, so it is never
+rebuilt. Only a deployment that shows the six recorded runs and takes no new report can run on the default.
+
 `src/lib/storage/blob-object-store.ts` implements the store with the official SDK, `@vercel/blob`
 pinned to 2.8.1 (published 6 Oct 2026, so it passes the 14-day dependency rule; installed with
 `--before=2026-10-13` so its own dependencies do too). The raw REST protocol was not used: Vercel
@@ -79,7 +86,10 @@ The deployed app has no accounts. Everything the pages show is readable by anyon
   the server and never sent to the browser. Approving, editing or rejecting a case needs the access
   code when `DAMAGE_DESK_ACCESS_CODE` is set; so does every new report (demo mode included, so that a
   stranger cannot put text and photos on the page the judges look at) and every dictation. Wrong codes
-  are counted per client (10 per 10 minutes, then 429). The six recorded runs stay readable by anyone.
+  are counted per client (10 per 10 minutes, then 429). The client is the first hop of `x-forwarded-for`:
+  **Vercel only**, because the platform sets that header itself; on any other host a client can forge it
+  and the count (like the other per-client limits) protects nothing. The six recorded runs stay readable
+  by anyone.
 - **Not capped:** the number of cases stored by people who have the code. Each client is limited to 30
   reports per 10 minutes and real runs to `DAMAGE_DESK_REAL_RUNS_PER_DAY`, but nothing deletes or hides
   old cases: after a public round, empty the Blob store by hand.

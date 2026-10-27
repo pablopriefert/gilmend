@@ -232,7 +232,7 @@ Environment variables (all listed, empty, in [`.env.example`](.env.example)):
 | `SAM_BASE_URL` | SAM 3.1 endpoint if different from `MODEL_BASE_URL`. |
 | `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_ADMIN_ACCESS_TOKEN` | Optional read-only dev store. Empty means fictitious orders. |
 | `MERCHANT_NAME`, `MERCHANT_ADDRESS`, `MERCHANT_EMAIL` | Merchant identity printed on the claim. |
-| `DAMAGE_DESK_ACCESS_CODE`, `DAMAGE_DESK_REAL_RUNS_PER_DAY` | For a public deployment: a shared code that every new report (demo mode included), every dictation and every approve/edit/reject needs (401 without it, 429 after 10 wrong codes in 10 minutes from one client; use a random code of 16+ characters), and a daily cap of real runs (default 100, counted per instance in memory). |
+| `DAMAGE_DESK_ACCESS_CODE`, `DAMAGE_DESK_REAL_RUNS_PER_DAY` | For a public deployment: a shared code that every new report (demo mode included), every dictation and every approve/edit/reject needs (401 without it, 429 after 10 wrong codes in 10 minutes from one client, counted on `x-forwarded-for`, which is reliable on Vercel only; use a random code of 16+ characters), and a daily cap of real runs (default 100, counted per instance in memory). |
 | `DAMAGE_DESK_STORAGE` (empty, `file` or `blob`), `BLOB_READ_WRITE_TOKEN` | Case storage: local files (default) or a private Vercel Blob store ([`docs/storage.md`](docs/storage.md)). On Vercel the Blob SDK authenticates with `BLOB_STORE_ID` and the injected OIDC token; `BLOB_READ_WRITE_TOKEN` is only for code running outside Vercel. |
 
 **Demo mode.** Without `MODEL_API_KEY` the app uses a deterministic mock provider and labels every
@@ -320,9 +320,12 @@ computed from the recordings. Everything in them is fictitious, and a test
    the public deployment**: the first would put a store's orders on a public URL, the second would
    open the third-party test engine to every visitor. Set a **spend alert on the Meta console**: the
    daily cap of real runs is per instance and in memory, so it is a soft limit.
-4. Storage: either keep the default (temporary, per serverless instance: a case a visitor files can
-   answer "not on this server" from another instance; the recorded runs are unaffected) or use a
-   shared store. For Vercel Blob ([`docs/storage.md`](docs/storage.md)): create the store
+4. Storage: **a public deployment that accepts reports needs Vercel Blob.** The default is temporary
+   and per serverless instance: a case a visitor files can answer "not on this server" from another
+   instance, and a claim PDF that is not found on the instance that serves the request is rebuilt on
+   the spot, which needs the access code that the iframe of the case page cannot send (the preview
+   fails with a 401). Only a deployment that shows the recorded runs and takes no report can keep the
+   default. For Vercel Blob ([`docs/storage.md`](docs/storage.md)): create the store
    **private** (it cannot be changed afterwards) with the CLI, from the linked project,
    `vercel blob create-store damage-desk --access private --yes`, which adds `BLOB_STORE_ID` and an
    OIDC token to the project, then set `DAMAGE_DESK_STORAGE=blob`. `BLOB_READ_WRITE_TOKEN` is only
