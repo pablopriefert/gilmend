@@ -36,6 +36,8 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/demo-photo": ["./data/photos/**/*"],
     ...Object.fromEntries(SHOWCASE_ROUTES.map((route) => [route, ["./data/showcase/**/*"]])),
+    // The /eval page reads the committed evaluation (data/eval) from a computed path.
+    "/eval": ["./data/eval/**/*"],
   },
   // Security headers (explained directive by directive in src/lib/security-headers.ts). The later
   // rule wins for a key both set: the claim PDF is framed by the case page, so it relaxes the two

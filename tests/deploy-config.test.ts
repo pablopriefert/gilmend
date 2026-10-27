@@ -22,6 +22,10 @@ describe("deployment configuration", () => {
     expect(includes["/api/demo-photo"]).toEqual(["./data/photos/**/*"]);
   });
 
+  it("traces data/eval into the /eval page, which reads the committed evaluation at run time", () => {
+    expect(nextConfig.outputFileTracingIncludes?.["/eval"]).toEqual(["./data/eval/**/*"]);
+  });
+
   it("never ships the git-ignored runtime folder", () => {
     expect(nextConfig.outputFileTracingExcludes?.["/*"]).toContain("./data/runtime/**/*");
   });

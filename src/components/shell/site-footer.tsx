@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Logo } from "../brand/logo";
 
 /**
@@ -17,7 +18,12 @@ export function SiteFooter({ builtWithSparkOpen }: { builtWithSparkOpen: boolean
         <p className="text-sm leading-relaxed text-muted">
           Fictitious orders and customers only. Gilmend never sends anything to a carrier or a
           customer: every message waits for a human click, and even then it is only marked ready to send.
-          {builtWithSparkOpen && " Built with Muse Spark Open."}
+          {builtWithSparkOpen && " Built with Muse Spark Open."}{" "}
+          {/* Discreet on purpose: the evaluation is for whoever wants to check, not a call to action. */}
+          <Link href="/eval" className="whitespace-nowrap underline underline-offset-4 hover:text-ink">
+            How we tested it
+          </Link>
+          .
         </p>
       </div>
     </footer>
