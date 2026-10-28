@@ -74,6 +74,12 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   compared, and a photo keeps at most 5 matches on its record (`MAX_STORED_MATCHES`), the comparison
   covers the 200 most recent cases (`MAX_COMPARED_CASES`): keep the record under 2 KB. What the model is shown
   (`integrityForModel`) must hold nothing about another customer.
+- **Social card (28 Oct 2026).** `src/app/opengraph-image.tsx` and `twitter-image.tsx` render the 1200x630 link preview
+  with `next/og` from `src/lib/brand/social-image.tsx`; the colours there are copies of the CSS tokens
+  (`social-image.test.tsx` pins them to `globals.css`), the mark is the SVG of `src/app/icon.svg`, and the text only
+  says what the README says ("Muse Spark 1.3 · SAM 3.1" is the stack, not a claim about a run). `metadataBase` in
+  `layout.tsx` is the public address, because the card URL must be absolute. `docs/assets/` holds the demo captures and
+  says where each one comes from (one is a local DEMO MODE run: keep its label).
 - Do not commit, push, deploy or create a GitHub repository unless Pablo asks.
 - **Live run events** (`src/lib/agent/events.ts`) are shown to the person who filed the report and
   stream through proxies: never put the API key, photo bytes (a data URL), the customer's name,
