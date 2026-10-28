@@ -4,6 +4,7 @@ import type {
   ChatCompletionMessageParam,
 } from "openai/resources/chat/completions";
 import { describeEngine } from "../config";
+import { isLanguageCode, type LanguageCode } from "../languages";
 import { parseFollowUpMessage, type FollowUpPromptFields } from "../agent/follow-up-prompt";
 import { parseReportMessage, type ReportPromptFields } from "../agent/report-prompt";
 import type { Provider, ChatParams } from "./index";
@@ -91,6 +92,8 @@ const DEMO_ORDER_SCENARIOS: Record<string, Scenario> = {
   "1004": "missing_or_opened",
   "1005": "broken",
   "1006": "broken",
+  // Added on 28 Oct 2026: the German customer of the Europe lot (DHL Paket, a cracked water carafe).
+  "1011": "broken",
 };
 
 function classify(message: string, orderNumber: string): Scenario {
@@ -115,15 +118,23 @@ function classifyFollowUp(original: Scenario, followUp: FollowUpPromptFields): S
 
 function classifyWords(message: string): Scenario {
   const t = message.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-  if (/ignore (all|your|the|previous|les|tes|vos)|system prompt|you are now|tu es maintenant|instructions precedentes/.test(t)) {
+  if (/ignore (all|your|the|previous|les|tes|vos)|ignoriere (alle|deine|die|vorherige)|ignora (todas|tus|las|le|tutte|tutti)|system prompt|you are now|tu es maintenant|instructions precedentes/.test(t)) {
     return "injection";
   }
-  if (/\bblur|\bflou|out of focus|too dark|trop sombre/.test(t)) return "blurry";
-  if (/crush|ecras|squash|dented|enfonce/.test(t) && /intact|undamaged|works|working|fine|fonctionne|marche|pas casse|pas abime|rien de casse/.test(t)) {
+  // German, Spanish and Italian words are matched after the accents are stripped (above).
+  if (/\bblur|\bflou|out of focus|too dark|trop sombre|unscharf|verschwommen|borros|sfocat/.test(t)) return "blurry";
+  if (
+    /crush|ecras|squash|dented|enfonce|zerdruckt|eingedruckt|aplastad|abollad|schiacciat|ammaccat/.test(t) &&
+    /intact|undamaged|works|working|fine|fonctionne|marche|pas casse|pas abime|rien de casse|unversehrt|funktioniert|in ordnung|intacto|funciona|integro|funziona/.test(t)
+  ) {
     return "crushed_intact";
   }
-  if (/missing|manque|opened|\bopen\b|ouvert|empty|\bvide\b|disparu|stolen|vole/.test(t)) return "missing_or_opened";
-  if (/broke|broken|cass|shatter|smash|crack|fissur|brise|smashed|bris/.test(t)) return "broken";
+  if (/missing|manque|opened|\bopen\b|ouvert|empty|\bvide\b|disparu|stolen|vole|fehlt|fehlen|geoffnet|aufgerissen|\bleer\b|falta|faltan|abierto|vacio|\bmanca|mancano|aperto|vuoto/.test(t)) {
+    return "missing_or_opened";
+  }
+  if (/broke|broken|cass|shatter|smash|crack|fissur|brise|smashed|bris|kaputt|zerbroch|gebroch|zersplitter|beschadigt|\b(roto|rota|rotos|rotas)\b|quebrad|danad|\b(rotto|rotta|rotti|rotte)\b|danneggiat|incrinat|crepat|spezzat/.test(t)) {
+    return "broken";
+  }
   return "unknown";
 }
 
@@ -191,37 +202,73 @@ function assessmentFor(s: Scenario, item: string, followUp = false): Json {
 
 type Reply = "reship" | "refund" | "ask_photos" | "no_action" | "no_order" | "review";
 
+// The scripted replies, in the five languages of the product (German, Spanish and Italian added on
+// 28 Oct 2026). Written by hand, short, polite, no amount and no date, and labelled DEMO MODE by the
+// case itself like everything this provider produces: they are not Muse's words.
+const GREETING: Record<LanguageCode, string> = {
+  en: "Hello",
+  fr: "Bonjour",
+  de: "Hallo",
+  es: "Hola",
+  it: "Buongiorno",
+};
+const SIGN_OFF: Record<LanguageCode, string> = {
+  en: "Kind regards,\nCustomer support",
+  fr: "Cordialement,\nLe service client",
+  de: "Mit freundlichen Grüßen,\nIhr Kundenservice",
+  es: "Un cordial saludo,\nAtención al cliente",
+  it: "Cordiali saluti,\nServizio clienti",
+};
+const REPLY_BODY: Record<Reply, Record<LanguageCode, string>> = {
+  reship: {
+    en: "Thank you for your photos, and sorry about this. We are sending you a replacement and will contact the carrier ourselves.",
+    fr: "Merci pour vos photos, et désolé pour ce désagrément. Nous vous envoyons un nouvel article et nous nous occupons du transporteur.",
+    de: "Vielen Dank für Ihre Fotos, und entschuldigen Sie die Umstände. Wir senden Ihnen einen Ersatz und kümmern uns selbst um den Transportdienstleister.",
+    es: "Gracias por sus fotos, y disculpe las molestias. Le enviamos un artículo de reemplazo y nos encargamos nosotros del transportista.",
+    it: "Grazie per le foto, e ci scusiamo per il disagio. Le spediamo un articolo sostitutivo e ci occupiamo noi del corriere.",
+  },
+  refund: {
+    en: "Thank you for your photos, and sorry about this. We will refund your order; you do not need to do anything else.",
+    fr: "Merci pour vos photos, et désolé pour ce désagrément. Nous allons vous rembourser, vous n'avez rien d'autre à faire.",
+    de: "Vielen Dank für Ihre Fotos, und entschuldigen Sie die Umstände. Wir erstatten Ihnen die Bestellung; Sie müssen nichts weiter tun.",
+    es: "Gracias por sus fotos, y disculpe las molestias. Le reembolsaremos el pedido; no necesita hacer nada más.",
+    it: "Grazie per le foto, e ci scusiamo per il disagio. Rimborseremo il suo ordine; non deve fare altro.",
+  },
+  ask_photos: {
+    en: "Thank you for your message. The photos are not clear enough for us to see the damage. Could you send one or two sharper photos of the item and of the box, in good light?",
+    fr: "Merci pour votre message. Les photos ne sont pas assez nettes pour voir le dégât. Pouvez-vous envoyer une ou deux photos plus nettes de l'article et du carton, avec une bonne lumière ?",
+    de: "Vielen Dank für Ihre Nachricht. Auf den Fotos ist der Schaden leider nicht deutlich genug zu erkennen. Könnten Sie ein oder zwei schärfere Fotos vom Artikel und vom Karton bei gutem Licht schicken?",
+    es: "Gracias por su mensaje. Las fotos no son lo bastante nítidas para ver el daño. ¿Podría enviar una o dos fotos más nítidas del artículo y de la caja, con buena luz?",
+    it: "Grazie per il messaggio. Le foto non sono abbastanza nitide per vedere il danno. Potrebbe inviare una o due foto più nitide dell'articolo e della scatola, con buona luce?",
+  },
+  no_action: {
+    en: "Thank you for your message. From what you describe, the item itself is fine, so there is nothing for us to replace. If something is wrong with it after all, just tell us.",
+    fr: "Merci pour votre message. D'après votre description, l'article lui-même est intact, il n'y a donc rien à remplacer. Si un problème apparaît, dites-le-nous.",
+    de: "Vielen Dank für Ihre Nachricht. Nach Ihrer Beschreibung ist der Artikel selbst in Ordnung, es gibt also nichts zu ersetzen. Falls doch ein Problem auftritt, melden Sie sich bitte bei uns.",
+    es: "Gracias por su mensaje. Según su descripción, el artículo en sí está bien, así que no hay nada que reemplazar. Si aparece algún problema, díganoslo.",
+    it: "Grazie per il messaggio. Da quanto descrive, l'articolo in sé è integro, quindi non c'è nulla da sostituire. Se compare un problema, ce lo faccia sapere.",
+  },
+  no_order: {
+    en: "Thank you for your message. We could not find an order matching this number and e-mail. Could you check the order number in your confirmation e-mail and write back?",
+    fr: "Merci pour votre message. Nous ne retrouvons pas de commande avec ce numéro et cet e-mail. Pouvez-vous vérifier le numéro dans votre e-mail de confirmation et nous répondre ?",
+    de: "Vielen Dank für Ihre Nachricht. Wir konnten keine Bestellung zu dieser Nummer und E-Mail-Adresse finden. Könnten Sie die Bestellnummer in Ihrer Bestätigungs-E-Mail prüfen und uns antworten?",
+    es: "Gracias por su mensaje. No hemos encontrado ningún pedido con este número y este correo. ¿Podría comprobar el número en su correo de confirmación y respondernos?",
+    it: "Grazie per il messaggio. Non troviamo un ordine con questo numero e questa e-mail. Potrebbe controllare il numero nell'e-mail di conferma e risponderci?",
+  },
+  review: {
+    en: "Thank you for your message. A member of our team is reviewing your case and will get back to you.",
+    fr: "Merci pour votre message. Un membre de l'équipe examine votre dossier et reviendra vers vous.",
+    de: "Vielen Dank für Ihre Nachricht. Ein Mitglied unseres Teams prüft Ihren Fall und meldet sich bei Ihnen.",
+    es: "Gracias por su mensaje. Un miembro de nuestro equipo está revisando su caso y le responderá.",
+    it: "Grazie per il messaggio. Un membro del nostro team sta esaminando il suo caso e la ricontatterà.",
+  },
+};
+
 function reply(lang: string, kind: Reply, name: string): string {
-  const fr = lang.toLowerCase().startsWith("fr");
-  const hello = fr ? `Bonjour${name ? ` ${name}` : ""},` : `Hello${name ? ` ${name}` : ""},`;
-  const bye = fr ? "Cordialement,\nLe service client" : "Kind regards,\nCustomer support";
-  const body: Record<Reply, [string, string]> = {
-    reship: [
-      "Thank you for your photos, and sorry about this. We are sending you a replacement and will contact the carrier ourselves.",
-      "Merci pour vos photos, et désolé pour ce désagrément. Nous vous envoyons un nouvel article et nous nous occupons du transporteur.",
-    ],
-    refund: [
-      "Thank you for your photos, and sorry about this. We will refund your order; you do not need to do anything else.",
-      "Merci pour vos photos, et désolé pour ce désagrément. Nous allons vous rembourser, vous n'avez rien d'autre à faire.",
-    ],
-    ask_photos: [
-      "Thank you for your message. The photos are not clear enough for us to see the damage. Could you send one or two sharper photos of the item and of the box, in good light?",
-      "Merci pour votre message. Les photos ne sont pas assez nettes pour voir le dégât. Pouvez-vous envoyer une ou deux photos plus nettes de l'article et du carton, avec une bonne lumière ?",
-    ],
-    no_action: [
-      "Thank you for your message. From what you describe, the item itself is fine, so there is nothing for us to replace. If something is wrong with it after all, just tell us.",
-      "Merci pour votre message. D'après votre description, l'article lui-même est intact, il n'y a donc rien à remplacer. Si un problème apparaît, dites-le-nous.",
-    ],
-    no_order: [
-      "Thank you for your message. We could not find an order matching this number and e-mail. Could you check the order number in your confirmation e-mail and write back?",
-      "Merci pour votre message. Nous ne retrouvons pas de commande avec ce numéro et cet e-mail. Pouvez-vous vérifier le numéro dans votre e-mail de confirmation et nous répondre ?",
-    ],
-    review: [
-      "Thank you for your message. A member of our team is reviewing your case and will get back to you.",
-      "Merci pour votre message. Un membre de l'équipe examine votre dossier et reviendra vers vous.",
-    ],
-  };
-  return `${hello}\n\n${fr ? body[kind][1] : body[kind][0]}\n\n${bye}`;
+  const code = lang.trim().toLowerCase().slice(0, 2);
+  const language: LanguageCode = isLanguageCode(code) ? code : "en";
+  const hello = `${GREETING[language]}${name ? ` ${name}` : ""},`;
+  return `${hello}\n\n${REPLY_BODY[kind][language]}\n\n${SIGN_OFF[language]}`;
 }
 
 // ---- the script ----------------------------------------------------------------------

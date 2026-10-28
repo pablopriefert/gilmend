@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  detectCarrier,
   fetchOrderFromShopify,
   mapShopifyOrder,
   normalizeShopDomain,
@@ -160,6 +161,39 @@ describe("mapShopifyOrder data convention", () => {
     expect(
       mapShopifyOrder(node({ shippingLines: { nodes: [{ title: "Chrono 13 express", code: null }] } })).carrier,
     ).toBe("chronopost");
+  });
+
+  it("carrier: finds DHL Paket and GLS from the metafield, the tag, the tracking company or the shipping line", () => {
+    expect(mapShopifyOrder(node({ mfCarrier: { value: "DHL Paket" } })).carrier).toBe("dhl_paket");
+    expect(mapShopifyOrder(node({ tags: ["dd-carrier:gls"] })).carrier).toBe("gls");
+    expect(
+      mapShopifyOrder(
+        node({
+          shippingLines: { nodes: [{ title: "Standard", code: null }] },
+          fulfillments: [{ deliveredAt: null, trackingInfo: [{ number: "1", company: "GLS" }] }],
+        }),
+      ).carrier,
+    ).toBe("gls");
+    expect(mapShopifyOrder(node({ shippingLines: { nodes: [{ title: "DHL Paket Standard", code: null }] } })).carrier).toBe("dhl_paket");
+    expect(mapShopifyOrder(node({ shippingLines: { nodes: [{ title: "General Logistics Systems", code: null }] } })).carrier).toBe("gls");
+  });
+
+  it("carrier: a bare 'DHL' is not enough (DHL Express and eCommerce follow other terms), and 'GLS' is a whole word", () => {
+    const n = (title: string) => node({ shippingLines: { nodes: [{ title, code: null }] } });
+    expect(() => mapShopifyOrder(n("DHL"))).toThrow(OrderDataError);
+    expect(() => mapShopifyOrder(n("DHL Express Worldwide"))).toThrow(OrderDataError);
+    expect(() => mapShopifyOrder(n("Wiegls Lieferung"))).toThrow(OrderDataError);
+  });
+
+  it("carrier: 'DHL Parcel' (the Benelux, UK, Spanish and Polish networks, other terms) is not DHL Paket", () => {
+    const n = (title: string) => node({ shippingLines: { nodes: [{ title, code: null }] } });
+    expect(() => mapShopifyOrder(n("DHL Parcel"))).toThrow(OrderDataError);
+    expect(() => mapShopifyOrder(n("DHL Parcel NL Standard"))).toThrow(OrderDataError);
+    expect(detectCarrier("DHL-Parcel")).toBeNull();
+    // The merchant can still say it by hand.
+    expect(mapShopifyOrder(node({ tags: ["dd-carrier:dhl_paket"] })).carrier).toBe("dhl_paket");
+    expect(detectCarrier("DHL Paket")).toBe("dhl_paket");
+    expect(detectCarrier("DHL-Paket Standard")).toBe("dhl_paket");
   });
 
   it("throws OrderDataError, naming the fix, when no carrier can be found", () => {

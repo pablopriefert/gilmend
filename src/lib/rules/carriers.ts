@@ -13,6 +13,8 @@ import {
   type CarrierRulesDetailed,
   type Compensation,
   type CompensationVariant,
+  type DomesticScope,
+  type ReserveBasis,
   type RuleFigure,
 } from "./schema";
 
@@ -164,9 +166,9 @@ function selectCompensation(
   return { compensation: rules.compensation, variant: null };
 }
 
-function isDomestic(country: string | undefined): boolean {
+function isDomestic(country: string | undefined, scope: DomesticScope): boolean {
   const c = normalise(country ?? "");
-  return c === "" || c === "fr" || c === "france";
+  return c === "" || scope.aliases.some((alias) => normalise(alias) === c);
 }
 
 /**
@@ -240,9 +242,9 @@ export function computeClaim(
       `The order is in ${order.currency || "an unknown currency"}; carrier compensation grids are in EUR and no conversion is applied, so a person must handle this claim.`,
     );
   }
-  if (!isDomestic(order.shippingAddress?.country)) {
+  if (!isDomestic(order.shippingAddress?.country, rules.domestic)) {
     blockPermanent(
-      `The parcel went to ${order.shippingAddress.country}; the rules in this file cover shipments within France only (international terms and deadlines differ), so a person must handle this claim.`,
+      `The parcel went to ${order.shippingAddress.country}; the ${rules.label} rules modelled here cover shipments within ${rules.domestic.name} only (international terms and deadlines differ, and so do the terms of a carrier's other national branches), so a person must handle this claim.`,
     );
   }
 
@@ -334,8 +336,20 @@ export function computeClaim(
             `The customer reported the damage ${hours(afterDeliveryMs)} h after delivery, after the ${rules.reserveDeadlineHours} h reserve window of ${rules.label} closed on ${stamp(reserveDeadlineMs)}. The carrier rejects such claims.`,
           );
         } else {
+          // The wording follows the declared basis of the window (reserveDeadlineBasis), never the
+          // status of a figure: "verified" says we read it, not that it is the law (28 Oct 2026).
+          // statutory (DHL Paket, GLS: HGB § 438): a late report only lets the carrier presume an
+          // undamaged delivery, which can be rebutted. prudential (Colissimo): our own safe-side
+          // figure, not confirmed for the carrier. carrier: only reached by a window that does not block.
+          const sinceDelivery = `${hours(afterDeliveryMs)} h after delivery`;
+          const window = `${rules.reserveDeadlineHours} h`;
+          const text: Record<ReserveBasis, string> = {
+            statutory: `beyond the ${window} statutory report window of ${rules.label} (a late report lets the carrier presume an undamaged delivery, which can be rebutted, so it weakens the claim without ending it)`,
+            prudential: `beyond the ${window} prudential reserve window (not confirmed for ${rules.label})`,
+            carrier: `beyond the ${window} reserve window of ${rules.label}`,
+          };
           advice.push(
-            `Warning: the customer reported the damage ${hours(afterDeliveryMs)} h after delivery, beyond the ${rules.reserveDeadlineHours} h prudential reserve window (not confirmed for ${rules.label}); the carrier may contest the claim.`,
+            `Warning: the customer reported the damage ${sinceDelivery}, ${text[rules.reserveDeadlineBasis]}; the carrier may contest the claim.`,
           );
         }
       } else if (afterDeliveryMs >= 0) {
@@ -383,7 +397,11 @@ export function computeClaim(
       ceiling = Math.min(ceiling, byWeight);
     }
     if (compensation.flatEur !== undefined) {
-      terms.push(`${eur(compensation.flatEur)} per parcel`);
+      terms.push(
+        compensation.kind === "limit"
+          ? `limit ${eur(compensation.flatEur)} per parcel`
+          : `${eur(compensation.flatEur)} per parcel`,
+      );
       ceiling = Math.min(ceiling, compensation.flatEur);
     }
     terms.push(`cap ${eur(compensation.capEur)}`);
@@ -396,6 +414,7 @@ export function computeClaim(
       weightKg: order.weightKg,
       ...(compensation.perKgEur !== undefined ? { perKgEur: compensation.perKgEur } : {}),
       ...(compensation.flatEur !== undefined ? { flatEur: compensation.flatEur } : {}),
+      ...(compensation.flatEur !== undefined && compensation.kind ? { flatKind: compensation.kind } : {}),
       capEur: compensation.capEur,
     };
 

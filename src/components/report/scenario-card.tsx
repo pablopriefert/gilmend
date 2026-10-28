@@ -5,6 +5,7 @@ import { Check, CircleCheck, Hand, LoaderCircle, PackageCheck, PackageX, ScanSea
 import Badge from "../arc/badge/badge";
 import type { DemoScenario, OutcomeTone } from "../demo-scenarios";
 import { cn } from "@/lib/utils";
+import { languageName } from "../format";
 
 // A demo case as a selectable card (Gilmend redesign, 27 Oct 2026): thumbnail, title, carrier and
 // the outcome the case is built to show. The card is a button that fills the form; it never sends
@@ -87,7 +88,7 @@ export function ScenarioCard({
           <Truck aria-hidden="true" className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
           {scenario.carrier}
           <span aria-hidden="true">·</span>
-          <span>{scenario.language === "fr" ? "French message" : "English message"}</span>
+          <span>{languageName(scenario.language)} message</span>
         </span>
         <span className="text-xs leading-5 text-muted">{scenario.shows}</span>
         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">

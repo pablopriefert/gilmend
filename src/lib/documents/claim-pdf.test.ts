@@ -360,3 +360,43 @@ describe("buildClaimDocument", () => {
     expect(simulated.match(/simulated demo reply/g)).toHaveLength(1);
   });
 });
+
+describe("buildClaimDocument: how the per-parcel amount of the terms is named", () => {
+  const withBasis = (carrier: "gls" | "mondial_relay", basis: Record<string, unknown>) => {
+    const base = sampleCase();
+    return build({
+      id: `case-${carrier}`,
+      order: { ...base.order!, carrier },
+      claim: { ...base.claim!, maxCompensationEur: 120, basis: { termsLabel: "x", itemTitle: "Stoneware vase, tall", itemValueEur: 120, weightKg: 2.4, ...basis } },
+    });
+  };
+
+  it("calls a GLS amount a liability limit, never a flat rate (clause 10.2 is a ceiling)", async () => {
+    const text = extractPdfText(await readFile(path.resolve((await withBasis("gls", { termsLabel: "GLS Germany (business terms)", flatEur: 750, flatKind: "limit", capEur: 750 })).pdfPath)));
+    expect(text).toContain("Liability limit: €750.00 per parcel.");
+    expect(text).toContain("liability limit €750.00");
+    expect(text).not.toMatch(/Flat rate|flat rate/);
+    // The limit is also the cap: said once, not as two terms.
+    expect(text).not.toContain("Cap: €750.00 per parcel.");
+  });
+
+  it("keeps \"Flat rate\" for terms that really pay a fixed amount, and the cap line next to it", async () => {
+    const text = extractPdfText(await readFile(path.resolve((await withBasis("mondial_relay", { termsLabel: "Mondial Relay", flatEur: 25, flatKind: "flat", capEur: 25 })).pdfPath)));
+    expect(text).toContain("Flat rate: €25.00 per parcel.");
+    expect(text).toContain("Cap: €25.00 per parcel.");
+  });
+
+  it("says it the same way in the one-line grid summary of a case computed without a structured basis", async () => {
+    const base = sampleCase();
+    const doc = await build({ id: "case-gls-nobasis", order: { ...base.order!, carrier: "gls" }, claim: { ...base.claim!, basis: undefined } });
+    const text = extractPdfText(await readFile(path.resolve(doc.pdfPath)));
+    expect(text).toContain("GLS Germany (business terms): liability limit of €750.00 per parcel.");
+    expect(text).not.toMatch(/flat rate|cap of/);
+  });
+
+  it("says neither for a case stored before the kind existed", async () => {
+    const text = extractPdfText(await readFile(path.resolve((await withBasis("gls", { termsLabel: "GLS Germany (business terms)", flatEur: 750, capEur: 750 })).pdfPath)));
+    expect(text).toContain("Per-parcel amount: €750.00 per parcel.");
+    expect(text).not.toMatch(/Flat rate/);
+  });
+});

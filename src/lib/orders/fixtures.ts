@@ -17,7 +17,7 @@ export interface FixtureOrder
   };
 }
 
-const CARRIERS: readonly CarrierId[] = ["colissimo", "mondial_relay", "chronopost"];
+const CARRIERS: readonly CarrierId[] = ["colissimo", "mondial_relay", "chronopost", "dhl_paket", "gls"];
 const HOUR_MS = 3_600_000;
 
 // Reserved documentation domains only: a fixture can never be a real person's mailbox.

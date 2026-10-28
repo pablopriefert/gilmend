@@ -14,7 +14,7 @@ import { emailsMatch, normalizeEmail, normalizeOrderNumber } from "./match";
 //
 //   carrier   metafield damage_desk.carrier  ->  tag "dd-carrier:<id>"
 //             ->  fulfillment tracking company  ->  shipping line title/code
-//             (<id> is colissimo | mondial_relay | chronopost)
+//             (<id> is colissimo | mondial_relay | chronopost | dhl_paket | gls)
 //   service   metafield damage_desk.service  ->  shipping line title
 //   weight    metafield damage_desk.parcel_weight_kg (packed parcel, in kg)
 //             ->  order.totalWeight / 1000 (goods only, in grams, no packaging)
@@ -202,12 +202,21 @@ export function detectCarrier(text: string | null | undefined): CarrierId | null
   if (/colissimo|la\s*poste|laposte/i.test(text)) return "colissimo";
   if (/mondial\s*-?\s*relay|mondialrelay/i.test(text)) return "mondial_relay";
   if (/chronopost|chrono\s*(13|18|classic|relais)/i.test(text)) return "chronopost";
+  // "DHL" alone is not enough: DHL Express and DHL eCommerce follow other terms than DHL Paket. "DHL
+  // Parcel" is not DHL Paket either: it is the brand of DHL's Benelux, UK, Spanish and Polish parcel
+  // networks, with their own terms, so it stays unmapped (the merchant sets the carrier by hand). The
+  // exact tracking-company string Shopify sends for DHL Germany was not confirmed, hence only the name.
+  if (/dhl\s*-?\s*paket/i.test(text)) return "dhl_paket";
+  // A bare "GLS" also covers GLS France, Italy or Spain, whose terms are not modelled: the claim is then
+  // refused for its destination or left to a person, and computeClaim's message says the rules are GLS
+  // Germany's.
+  if (/\bgls\b|general\s+logistics\s+systems/i.test(text)) return "gls";
   return null;
 }
 
 function asCarrierId(value: string | null | undefined): CarrierId | null {
   const v = value?.trim().toLowerCase().replace(/[\s-]+/g, "_");
-  return v === "colissimo" || v === "mondial_relay" || v === "chronopost" ? v : null;
+  return v === "colissimo" || v === "mondial_relay" || v === "chronopost" || v === "dhl_paket" || v === "gls" ? v : null;
 }
 
 function resolveCarrier(node: ShopifyOrderNode): CarrierId | null {
@@ -257,7 +266,7 @@ export function mapShopifyOrder(node: ShopifyOrderNode): Order {
   const carrier = resolveCarrier(node);
   if (!carrier) {
     throw new OrderDataError(
-      `Order ${node.name} has no carrier. Set metafield ${METAFIELD_NAMESPACE}.carrier or tag ${CARRIER_TAG_PREFIX}<colissimo|mondial_relay|chronopost>.`,
+      `Order ${node.name} has no carrier. Set metafield ${METAFIELD_NAMESPACE}.carrier or tag ${CARRIER_TAG_PREFIX}<colissimo|mondial_relay|chronopost|dhl_paket|gls>.`,
     );
   }
   const weightKg = resolveWeightKg(node);

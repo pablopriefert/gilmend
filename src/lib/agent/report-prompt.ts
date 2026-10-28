@@ -1,3 +1,4 @@
+import { supportedLanguageName } from "../languages";
 import type { DamageReport } from "../types";
 
 // The user turn that opens every agent run. Its format lives in one place because two
@@ -35,6 +36,17 @@ export interface ReportPromptFields {
   message: string;
 }
 
+/**
+ * The name of the reply language next to its code (28 Oct 2026, German, Spanish and Italian next to
+ * English and French): a model that only sees "de" may still answer in English, "German" is plain.
+ * The line is not read back by parseReportMessage; the code is, and it is two letters the server
+ * checked (reports route), never the customer's text. A code outside the supported list adds no line.
+ */
+function languageHint(code: string): string[] {
+  const name = supportedLanguageName(code);
+  return name ? [`Reply language: ${name}`] : [];
+}
+
 export function formatReportMessage(report: DamageReport, photoIndexes: number[]): string {
   // A message the server saw being transcribed (a verified, non-demo voice note) went through
   // speech recognition: names and numbers INSIDE it may be misheard. The order number and the
@@ -53,6 +65,7 @@ export function formatReportMessage(report: DamageReport, photoIndexes: number[]
     `Order number quoted by the customer: ${report.orderNumber}`,
     `Customer e-mail: ${report.customerEmail}`,
     `Customer language: ${report.language}`,
+    ...languageHint(report.language),
     `Received at: ${report.receivedAt}`,
     `Photos attached to this message (index in photo_index): ${
       photoIndexes.length > 0 ? photoIndexes.join(", ") : "none"

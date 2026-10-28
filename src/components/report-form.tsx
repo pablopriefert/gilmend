@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import FileDropzone, { type FileDropzoneItem } from "./arc/file-dropzone/file-dropzone";
 import SegmentedControl from "./arc/segmented-control/segmented-control";
 import { DEMO_SCENARIOS, type DemoScenario } from "./demo-scenarios";
+import { SUPPORTED_LANGUAGES, type LanguageCode } from "@/lib/languages";
 import { effectiveEngine, type EngineAvailability } from "./engine-choice";
 import { EngineSwitch } from "./engine-switch";
 import { prepareImage } from "./image-prep";
@@ -33,12 +34,11 @@ import {
   type FieldErrors,
 } from "./report-validation";
 
-type LanguageChoice = "auto" | "en" | "fr";
+type LanguageChoice = "auto" | LanguageCode;
 
 const LANGUAGE_OPTIONS = [
   { value: "auto", label: "Auto-detect" },
-  { value: "en", label: "English" },
-  { value: "fr", label: "French" },
+  ...SUPPORTED_LANGUAGES.map((l) => ({ value: l.code, label: l.name })),
 ];
 
 const PRIVATE_DICTATION_ERROR =
@@ -530,7 +530,7 @@ export function ReportForm({
                     options={LANGUAGE_OPTIONS}
                     value={language}
                     onValueChange={(value) => setLanguage(value as LanguageChoice)}
-                    className="w-full sm:w-auto [&>div]:flex-1 [&_button]:min-h-11 [&_button]:flex-1 sm:[&_button]:min-w-28"
+                    className="w-full sm:w-auto [&>div]:flex-1 [&_button]:min-h-11 [&_button]:flex-1 sm:[&_button]:min-w-20"
                   />
                 </div>
               </Section>

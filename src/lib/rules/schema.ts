@@ -25,9 +25,21 @@ export interface RuleFigure {
   note: string;
 }
 
+/**
+ * What `flatEur` is in the carrier's terms (a claim document must not misstate the carrier's own
+ * terms back to it):
+ * - flat: the carrier pays that fixed amount per parcel (Mondial Relay Offre Start, Chrono flat rate);
+ * - limit: a ceiling per parcel, the indemnity being the value of the goods up to it (DHL clause 6(3),
+ *   GLS clause 10.2).
+ * Required whenever `flatEur` is set.
+ */
+export type FlatAmountKind = "flat" | "limit";
+
 export interface Compensation {
   perKgEur?: number;
   flatEur?: number;
+  /** What `flatEur` is; present exactly when `flatEur` is. */
+  kind?: FlatAmountKind;
   capEur: number;
 }
 
@@ -48,14 +60,39 @@ export interface CompensationVariant {
   compensation: Compensation;
 }
 
+/**
+ * Where the rules apply: the destination country of a domestic shipment. A parcel to another
+ * country goes to a person (international terms and deadlines differ), whatever the carrier.
+ */
+export interface DomesticScope {
+  /** English name of the country, used in the message to the merchant ("within France only"). */
+  name: string;
+  /** Lowercase spellings accepted for the destination country (ISO code, English and local name). */
+  aliases: string[];
+}
+
+/**
+ * Where a reserve window comes from, which decides what a late report is called:
+ * - carrier: written in the carrier's own terms (a late report is rejected, so it is binding);
+ * - statutory: a deadline of the law the carrier's terms apply (HGB § 438 for DHL Paket and GLS), whose
+ *   breach only creates a rebuttable presumption: a warning, never a block;
+ * - prudential: our own safe-side figure, not confirmed for this carrier: a warning.
+ */
+export type ReserveBasis = "carrier" | "statutory" | "prudential";
+
+export const RESERVE_BASES: readonly ReserveBasis[] = ["carrier", "statutory", "prudential"];
+
 export interface CarrierRulesDetailed extends CarrierRules {
+  domestic: DomesticScope;
   /** Which date `claimDeadlineDays` counts from. "shipment" is proxied by the order date. */
   claimDeadlineFrom: "delivery" | "shipment";
   /**
    * true: a customer report after the reserve window blocks the claim (written in the
-   * carrier's terms); false: the window is only prudential and yields a warning.
+   * carrier's terms); false: a late report only yields a warning.
    */
   reserveDeadlineBinding: boolean;
+  /** Where the window comes from; the wording of the warning follows it, never the status of a figure. */
+  reserveDeadlineBasis: ReserveBasis;
   compensationVariants: CompensationVariant[];
   figures: RuleFigure[];
   /** Advisory sentence added to an eligible claim's reasons (what the ceiling does not cover). */
@@ -70,7 +107,7 @@ export interface CarrierRulesFile {
   carriers: Record<CarrierId, CarrierRulesDetailed>;
 }
 
-export const CARRIER_IDS: readonly CarrierId[] = ["colissimo", "mondial_relay", "chronopost"];
+export const CARRIER_IDS: readonly CarrierId[] = ["colissimo", "mondial_relay", "chronopost", "dhl_paket", "gls"];
 
 const FIGURE_STATUSES: readonly FigureStatus[] = ["verified", "dated_source", "unverified"];
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -103,6 +140,10 @@ function checkCompensation(v: unknown, path: string): void {
   }
   if (v.perKgEur !== undefined) checkNumber(v.perKgEur, `${path}.perKgEur`, { min: 0 });
   if (v.flatEur !== undefined) checkNumber(v.flatEur, `${path}.flatEur`, { min: 0 });
+  if (v.flatEur !== undefined && v.kind !== "flat" && v.kind !== "limit") {
+    fail(`${path}.kind`, 'a flatEur needs a kind: "flat" (a fixed amount) or "limit" (a ceiling per parcel)');
+  }
+  if (v.flatEur === undefined && v.kind !== undefined) fail(`${path}.kind`, "only goes with flatEur");
 }
 
 function checkStringArray(v: unknown, path: string): void {
@@ -138,7 +179,21 @@ export function validateCarrierRulesFile(raw: unknown): CarrierRulesFile {
     if (typeof c.reserveDeadlineBinding !== "boolean") {
       fail(`${p}.reserveDeadlineBinding`, "expected a boolean");
     }
+    if (!RESERVE_BASES.includes(c.reserveDeadlineBasis as ReserveBasis)) {
+      fail(`${p}.reserveDeadlineBasis`, 'expected "carrier", "statutory" or "prudential"');
+    }
+    // A block must be written in the carrier's terms; a statutory or prudential window only warns.
+    if ((c.reserveDeadlineBasis === "carrier") !== c.reserveDeadlineBinding) {
+      fail(`${p}.reserveDeadlineBinding`, 'binding exactly when reserveDeadlineBasis is "carrier"');
+    }
     checkStringArray(c.notes, `${p}.notes`);
+    if (!isRecord(c.domestic)) return fail(`${p}.domestic`, "expected an object");
+    checkString(c.domestic.name, `${p}.domestic.name`);
+    checkStringArray(c.domestic.aliases, `${p}.domestic.aliases`);
+    if ((c.domestic.aliases as string[]).length === 0) fail(`${p}.domestic.aliases`, "needs at least one spelling");
+    if ((c.domestic.aliases as string[]).some((a) => a !== a.toLowerCase())) {
+      fail(`${p}.domestic.aliases`, "spellings must be lowercase (the destination is compared in lowercase)");
+    }
     if (c.compensationCaveat !== undefined) checkString(c.compensationCaveat, `${p}.compensationCaveat`);
 
     if (!Array.isArray(c.sources) || c.sources.length === 0) {

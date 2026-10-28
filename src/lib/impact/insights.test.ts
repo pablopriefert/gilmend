@@ -46,9 +46,9 @@ function claimCase(
 }
 
 describe("buildInsights: carriers", () => {
-  it("always lists the three carriers, the short windows first, with zeros when there is nothing", () => {
+  it("always lists the five carriers, the short windows first, with zeros when there is nothing", () => {
     const i = buildInsights([], NOW, { includeRecorded: false });
-    expect(i.carriers.map((c) => c.carrier)).toEqual(["mondial_relay", "chronopost", "colissimo"]);
+    expect(i.carriers.map((c) => c.carrier)).toEqual(["mondial_relay", "chronopost", "colissimo", "dhl_paket", "gls"]);
     expect(i.carriers.every((c) => c.openClaims === 0 && c.recoverableEur === 0)).toBe(true);
     expect(i.recoverableEur).toBe(0);
     expect(i.openClaims).toBe(0);
@@ -95,7 +95,19 @@ describe("buildInsights: carriers", () => {
     expect(windowLabelShort("chronopost")).toBe("3 days after delivery");
     expect(reserveLabel("mondial_relay")).toBe("72 h reserve window");
     expect(reserveLabel("colissimo")).toBe("72 h reserve window (prudential)");
-    expect(CARRIER_ORDER).toHaveLength(3);
+    // A window of the law is not called prudential (DHL Paket and GLS: HGB § 438).
+    expect(reserveLabel("dhl_paket")).toBe("168 h reserve window (statutory)");
+    expect(reserveLabel("gls")).toBe("168 h reserve window (statutory)");
+    expect(CARRIER_ORDER).toHaveLength(5);
+  });
+
+  it("counts a DHL Paket and a GLS claim, with the window the German rules state", () => {
+    const i = buildInsights([claimCase("d", "dhl_paket", 54, 100), claimCase("g", "gls", 120, 100)], NOW, { includeRecorded: false });
+    const by = Object.fromEntries(i.carriers.map((c) => [c.carrier, c]));
+    expect(by.dhl_paket).toMatchObject({ openClaims: 1, recoverableEur: 54, windowLabel: "365 days after delivery", reserveLabel: "168 h reserve window (statutory)" });
+    expect(by.gls).toMatchObject({ openClaims: 1, recoverableEur: 120, windowLabel: "365 days after delivery", reserveLabel: "168 h reserve window (statutory)" });
+    expect(i.recoverableEur).toBe(174);
+    expect(i.openClaims).toBe(2);
   });
 });
 
@@ -168,6 +180,13 @@ describe("buildInsights: deadline timeline", () => {
     expect(timeline.events).toHaveLength(1);
     expect(timeline.events[0]).toMatchObject({ kind: "reserve", binding: false, amountEur: null, hoursFromRead: 40 });
     expect(timeline.later.count).toBe(1);
+  });
+
+  it("gives a DHL Paket or GLS reserve window as a non-binding, statutory event (a late report only warns)", () => {
+    for (const carrier of ["dhl_paket", "gls"] as const) {
+      const { timeline } = buildInsights([claimCase("de", carrier, 54, 300 * 24, { reserveHours: 40 })], NOW, { includeRecorded: false });
+      expect(timeline.events[0], carrier).toMatchObject({ kind: "reserve", binding: false, basis: "statutory" });
+    }
   });
 
   it("does not double a window that is the same moment as the claim deadline (Mondial Relay, Chronopost)", () => {

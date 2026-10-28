@@ -16,7 +16,7 @@ afterAll(async () => {
 });
 
 describe("npm run demo (scripts/demo.ts)", () => {
-  it("runs the six demo cases end to end in demo mode, stores them and builds their PDFs", async () => {
+  it("runs the seven demo cases end to end in demo mode, stores them and builds their PDFs", async () => {
     const { stdout, stderr } = await run("npx", ["tsx", "scripts/demo.ts"], {
       cwd: process.cwd(),
       timeout: 90_000,
@@ -32,7 +32,7 @@ describe("npm run demo (scripts/demo.ts)", () => {
     });
 
     expect(stdout).toContain("DEMO MODE");
-    expect(stdout).toContain("All six cases ended as expected");
+    expect(stdout).toContain("All seven cases ended as expected");
     for (const id of [
       "demo-1-vase-broken",
       "demo-2-carton-crushed",
@@ -40,17 +40,19 @@ describe("npm run demo (scripts/demo.ts)", () => {
       "demo-4-opened-missing",
       "demo-5-expensive-escalation",
       "demo-6-late-report",
+      "demo-7-german-carafe",
     ]) {
       expect(stdout).toContain(id);
     }
     expect(stderr).not.toMatch(/Error|FAILED/);
 
-    // The cases are stored, and the three claims have their PDF.
-    expect((await readdir(path.join(runtime, "cases"))).filter((f) => f.endsWith(".json"))).toHaveLength(6);
+    // The cases are stored, and the four claims have their PDF.
+    expect((await readdir(path.join(runtime, "cases"))).filter((f) => f.endsWith(".json"))).toHaveLength(7);
     expect((await readdir(path.join(runtime, "claims"))).sort()).toEqual([
       "case_demo-1-vase-broken.pdf",
       "case_demo-4-opened-missing.pdf",
       "case_demo-5-expensive-escalation.pdf",
+      "case_demo-7-german-carafe.pdf",
     ]);
   }, 120_000);
 });

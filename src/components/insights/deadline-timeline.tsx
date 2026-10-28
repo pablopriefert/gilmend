@@ -65,7 +65,7 @@ function kindText(event: TimelineEvent): string {
   if (event.kind === "claim") return "Last day to file the claim";
   return event.binding
     ? "Reserve window ends: a later report is rejected"
-    : "Reserve window ends (prudential: a later report only adds a warning)";
+    : `Reserve window ends (${event.basis}: a later report only adds a warning)`;
 }
 
 function LegendItem({ children, swatch }: { children: string; swatch: React.ReactNode }) {

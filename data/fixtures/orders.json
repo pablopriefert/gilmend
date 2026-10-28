@@ -1,5 +1,5 @@
 {
-  "_readme": "FICTITIOUS orders for the Gilmend demo. Every person, e-mail (example.com / .org / .net only), tracking number and address below is invented. Timing is stored as an offset from 'now' (hours ago) and resolved when the file is loaded, so deadlines (Mondial Relay 72 h, Chronopost 3 days...) stay meaningful during the whole demo week. See src/lib/orders/fixtures.ts.",
+  "_readme": "FICTITIOUS orders for the Gilmend demo. Every person, e-mail (example.com / .org / .net only), tracking number and address below is invented. Timing is stored as an offset from 'now' (hours ago) and resolved when the file is loaded, so deadlines (Mondial Relay 72 h, Chronopost 3 days, DHL Paket 7 days...) stay meaningful during the whole demo week. Order #1011 is the German order of the Europe lot: DHL Paket, a parcel within Germany (it assumes a German fulfilment centre; the DHL national terms do not cover France to Germany). See src/lib/orders/fixtures.ts.",
   "orders": [
     {
       "id": "#1001",
@@ -163,6 +163,22 @@
       "shippingEur": 6.9,
       "shippingAddress": { "city": "Dijon", "country": "FR" },
       "timing": { "orderedHoursAgo": 100, "deliveredHoursAgo": 5 }
+    },
+    {
+      "id": "#1011",
+      "name": "Jonas Weber",
+      "email": "jonas.weber@example.org",
+      "carrier": "dhl_paket",
+      "service": "DHL Paket",
+      "trackingNumber": "00340434990010110017",
+      "weightKg": 1.8,
+      "currency": "EUR",
+      "lineItems": [
+        { "sku": "CARAFE-CUT-15", "title": "Cut-glass water carafe, 1.5 L", "quantity": 1, "unitPrice": 54.0 }
+      ],
+      "shippingEur": 5.9,
+      "shippingAddress": { "city": "Hamburg", "country": "DE" },
+      "timing": { "orderedHoursAgo": 100, "deliveredHoursAgo": 18 }
     }
   ]
 }

@@ -214,6 +214,97 @@ describe("figures grounded in tool results", () => {
     ]);
   });
 
+  it("finds written dates in German, Spanish and Italian too (the reply is in the customer's language)", () => {
+    const found = extractDates(
+      "am 15. November 2026, el 15 de noviembre de 2026, il 15 novembre 2026, 3. März, el 3 de marzo, il 3 marzo, 1 de septiembre, 30. Dezember, 1 gennaio, 7 ottobre",
+    );
+    expect(found.map((d) => [d.month, d.day, d.year])).toEqual([
+      [11, 15, 2026],
+      [11, 15, 2026],
+      [11, 15, 2026],
+      [3, 3, null],
+      [3, 3, null],
+      [3, 3, null],
+      [9, 1, null],
+      [12, 30, null],
+      [1, 1, null],
+      [10, 7, null],
+    ]);
+  });
+
+  it("accepts the tool's own deadline written in German, Spanish or Italian, and rejects any other day", () => {
+    expect(findUngroundedFigures(["Bitte bis zum 15. November 2026 einreichen."], outputs, REPORT_AT)).toEqual([]);
+    expect(findUngroundedFigures(["Presentar antes del 15 de noviembre."], outputs, REPORT_AT)).toEqual([]);
+    expect(findUngroundedFigures(["Da presentare entro il 15 novembre."], outputs, REPORT_AT)).toEqual([]);
+    expect(findUngroundedFigures(["Bitte bis zum 16. November einreichen."], outputs, REPORT_AT)).toHaveLength(1);
+    expect(findUngroundedFigures(["Presentar antes del 14 de noviembre de 2026."], outputs, REPORT_AT)).toHaveLength(1);
+    expect(findUngroundedFigures(["Da presentare entro il 15 novembre 2027."], outputs, REPORT_AT)).toHaveLength(1);
+  });
+
+  it("finds the numeric date without a year, the usual German, Spanish and Italian way to write a deadline", () => {
+    expect(extractDates("bis zum 05.11., spätestens Mittwoch, 4.11., entro il 5/11, hasta el 5/11").map((d) => [d.month, d.day, d.year])).toEqual([
+      [11, 5, null],
+      [11, 4, null],
+      [11, 5, null],
+      [11, 5, null],
+    ]);
+    // The full numeric date is still one date, with its year, not a year-less one plus a stray number.
+    expect(extractDates("bis zum 05.11.2026 und am 5/11/2026").map((d) => [d.month, d.day, d.year])).toEqual([
+      [11, 5, 2026],
+      [11, 5, 2026],
+    ]);
+  });
+
+  it("does not read a decimal, a weight, a price, a time or a fraction as a date", () => {
+    for (const text of [
+      "Cut-glass water carafe, 1.5 L",
+      "Karaffe 1.5 L, 54.00 EUR",
+      "wiegt 1.8 kg",
+      "2.5 cm",
+      "12.50 €",
+      "EUR 1.10.",
+      "um 10.30 Uhr",
+      "version 1.2.3",
+      "1/2 kg",
+      "Preis: 54.00",
+      "1.5-litre carafe",
+    ]) {
+      expect(extractDates(text), text).toEqual([]);
+    }
+  });
+
+  it("accepts the tool's own deadline written without a year, and rejects any other day", () => {
+    expect(findUngroundedFigures(["Bitte bis zum 15.11. einreichen."], outputs, REPORT_AT)).toEqual([]);
+    expect(findUngroundedFigures(["Presentar antes del 15/11."], outputs, REPORT_AT)).toEqual([]);
+    expect(findUngroundedFigures(["Da presentare entro il 15/11."], outputs, REPORT_AT)).toEqual([]);
+    expect(findUngroundedFigures(["Bitte bis zum 05.11. einreichen."], outputs, REPORT_AT)).toEqual(["05.11."]);
+    expect(findUngroundedFigures(["Spätestens Mittwoch, 4.11."], outputs, REPORT_AT)).toEqual(["4.11."]);
+    expect(findUngroundedFigures(["Da presentare entro il 5/11."], outputs, REPORT_AT)).toEqual(["5/11"]);
+    // A weight is not an invented date.
+    expect(findUngroundedFigures(["Ihre Karaffe (1.5 L) wiegt 1.8 kg."], outputs, REPORT_AT)).toEqual([]);
+  });
+
+  it("sends a German reply that invents a year-less deadline to a person, and keeps it out of the carrier text", () => {
+    const r = applyGuardrails(raw({ customerReply: "Hallo, der Ersatz kommt bis zum 05.11. Mit freundlichen Grüßen" }), ctx());
+    expect(r.decision.needsHuman).toBe(true);
+    expect(r.adjustments.join(" ")).toMatch(/customer reply states figures this case does not allow: 05\.11\./);
+    expect(stripFigures("Karaffe, geliefert bis 05.11.")).toBe("Karaffe, geliefert bis");
+  });
+
+  it("sends a German reply that invents a deadline to a person", () => {
+    const r = applyGuardrails(
+      raw({ customerReply: "Hallo, wir senden Ihnen den Ersatz bis zum 3. Dezember 2026. Mit freundlichen Grüßen" }),
+      ctx(),
+    );
+    expect(r.decision.needsHuman).toBe(true);
+    expect(r.adjustments.join(" ")).toMatch(/customer reply states figures this case does not allow: 3\. Dezember 2026/);
+  });
+
+  it("checks the amounts of a German reply: 'Euro' and a trailing euro sign count", () => {
+    expect(findUngroundedFigures(["Sie erhalten 500 Euro."], outputs, REPORT_AT)).toEqual(["500 Euro"]);
+    expect(findUngroundedFigures(["Maximal 32,20 €."], outputs, REPORT_AT)).toEqual([]);
+  });
+
   it("accepts the tool's own deadline in any written form", () => {
     expect(findUngroundedFigures(["File before 15 November 2026."], outputs, REPORT_AT)).toEqual([]);
     expect(findUngroundedFigures(["À déposer avant le 15 novembre."], outputs, REPORT_AT)).toEqual([]);

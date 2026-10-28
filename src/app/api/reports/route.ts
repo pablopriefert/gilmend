@@ -63,8 +63,8 @@ function text(form: FormData, key: string): string {
 
 /**
  * POST /api/reports: simulates an inbound customer e-mail or chat message.
- * multipart/form-data with orderNumber, email, message, optional language ("en", "fr", or
- * "auto") and engine, and 1 to 3 `photos`. Stores the photos under data/runtime/uploads/,
+ * multipart/form-data with orderNumber, email, message, optional language (en, fr, de, es, it
+ * or "auto") and engine, and 1 to 3 `photos`. Stores the photos under data/runtime/uploads/,
  * runs the agent, saves the resulting case and answers `{ caseId, status, engine }`.
  * Nothing is ever sent to anyone: the case waits in "needs_review" for a human click.
  * When DAMAGE_DESK_ACCESS_CODE is set (a public deployment) the `x-access-code` header must carry

@@ -59,6 +59,17 @@ describe("POST /api/transcribe, demo mode", () => {
     expect((await res.json()).transcript).toMatch(/^Bonjour/);
   });
 
+  it.each([
+    ["de", /^Hallo, meine Vase/],
+    ["es", /^Hola, mi jarr/],
+    ["it", /^Buongiorno, il mio vaso/],
+  ])("answers the canned text in %s too", async (language, start) => {
+    const res = await POST(request({ fields: { language } }));
+    const body = await res.json();
+    expect(body.transcript).toMatch(start);
+    expect(body).toMatchObject({ demo: true, model: "demo-mock" });
+  });
+
   it("on a public deployment, refuses a dictation without the access code, with a real key or none", async () => {
     vi.stubEnv("DAMAGE_DESK_ACCESS_CODE", "judges-2026");
     for (const key of ["k", ""]) {
@@ -109,6 +120,15 @@ describe("POST /api/transcribe, real mode", () => {
     transcribeAudio.mockResolvedValue({ transcript: "Hello.", durationMs: 0, model: "muse-voice-transcribe-1.0" });
     const res = await POST(request({ headers: { "x-access-code": "judges-2026" } }));
     expect(await res.json()).toMatchObject({ demo: false, durationMs: 3000 }); // falls back to our own header reading
+  });
+
+  it("passes German, Spanish and Italian on as the language bias of a real transcription", async () => {
+    transcribeAudio.mockResolvedValue({ transcript: "Hallo.", durationMs: 1, model: "muse-voice-transcribe-1.0" });
+    for (const language of ["de", "es", "it"]) {
+      transcribeAudio.mockClear();
+      await POST(request({ fields: { language } }));
+      expect(transcribeAudio.mock.calls[0][1]).toEqual({ language });
+    }
   });
 
   it("ignores an unknown language instead of passing it on", async () => {

@@ -1,4 +1,4 @@
-// `npm run demo`: runs the six demo cases of the video end to end, with no key and no
+// `npm run demo`: runs the demo cases of the video (six, and a German seventh since 28 Oct 2026) end to end, with no key and no
 // network, and prints what the agent did.
 //
 //   report -> runAgent (DEMO MODE: the demo-mock provider) -> case saved -> claim PDF built
@@ -97,6 +97,8 @@ function checkAgainstExpectation(demo: DemoCase, c: CaseRecord): { ok: boolean; 
   return { ok: why.length === 0, why };
 }
 
+const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+
 async function main(): Promise<void> {
   const now = new Date();
   console.log("[gilmend] DEMO MODE: deterministic mock provider (scripted, no image analysed, not Muse).");
@@ -163,7 +165,7 @@ async function main(): Promise<void> {
     for (const p of problems) console.error(`  - ${p}`);
     process.exitCode = 1;
   } else {
-    console.log("\nAll six cases ended as expected (DEMO MODE).");
+    console.log(`\nAll ${NUMBER_WORDS[rows.length] ?? rows.length} cases ended as expected (DEMO MODE).`);
   }
 }
 

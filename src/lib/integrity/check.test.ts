@@ -327,6 +327,38 @@ describe("demo photos", () => {
     expect(result.photos[0].matches.every((m) => m.source === "demo")).toBe(true);
   });
 
+  describe("a demo photo shared by two demo cases (the German carafe reuses the late-report carafe, 28 Oct 2026)", () => {
+    const carafe = () => demoPhotoBytes("carafe-cracked");
+    const lateReport = { orderNumber: "#1006", customerEmail: "thomas.garnier@example.org" };
+    const german = { orderNumber: "#1011", customerEmail: "jonas.weber@example.org" };
+
+    it.each([
+      ["the late-report case", lateReport],
+      ["the German case", german],
+    ])("shows only %s as the match when it is the one filed, never the other as another customer", async (_label, own) => {
+      const result = await checkPhotoIntegrity(input({ report: { photos: ["p1"], ...own } }), deps({ p1: carafe() }));
+      expect(result.signals).toEqual([]);
+      expect(result.photos[0].matches).toHaveLength(1);
+      expect(result.photos[0].matches[0]).toMatchObject({ source: "demo", sameOrderAndCustomer: true });
+      // The model is told nothing about "another order or customer" on the demo's own photo.
+      expect(integrityForModel(result).photos).toEqual([expect.objectContaining({ otherOrderOrCustomerMatches: 0 })]);
+    });
+
+    it("still flags the shared photo filed for a third order, and lists both demo cases", async () => {
+      const result = await checkPhotoIntegrity(
+        input({ report: { photos: ["p1"], orderNumber: "#1002", customerEmail: "hugo.bernard@example.com" } }),
+        deps({ p1: carafe() }),
+      );
+      expect(result.signals.map((x) => x.kind)).toEqual(["demo_photo_reused"]);
+      expect(result.photos[0].matches.map((m) => m.caseId).sort()).toEqual(["demo-6-late-report", "demo-7-german-carafe"]);
+    });
+
+    it("counts the demo pictures, not the demo cases that use them", async () => {
+      const result = await checkPhotoIntegrity(input({ report: { photos: ["p1"], ...german } }), deps({ p1: carafe() }));
+      expect(result.comparedDemoPhotos).toBe(6);
+    });
+  });
+
   it("still catches an ordinary photo that matches no demo photo", async () => {
     const result = await checkPhotoIntegrity(input(), deps({ p1: await syntheticPhoto(5) }));
     expect(result.signals).toEqual([]);

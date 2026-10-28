@@ -192,11 +192,11 @@ describe("report form submission", () => {
 });
 
 describe("demo case buttons", () => {
-  it("offers the six demo cases", () => {
+  it("offers the six demo cases and the German one", () => {
     render(<ReportForm availability={NONE} />);
     expect(screen.getByRole("heading", { name: "Demo cases" })).toBeInTheDocument();
     for (const s of DEMO_SCENARIOS) expect(screen.getByRole("button", { name: new RegExp(s.title) })).toBeInTheDocument();
-    expect(DEMO_SCENARIOS).toHaveLength(6);
+    expect(DEMO_SCENARIOS).toHaveLength(7);
   });
 
   it("fills the form and attaches the photo, using the illustration while the real photo is missing", async () => {
@@ -422,6 +422,53 @@ describe("the redesigned form: grouping, language, engine line", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const body = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
     expect(body.get("language")).toBe("fr");
+  });
+
+  it("offers English, French, German, Spanish and Italian next to auto-detect, in that order", () => {
+    render(<ReportForm availability={NONE} />);
+    const group = screen.getByRole("group", { name: "Customer language" });
+    expect(within(group).getAllByRole("button").map((b) => b.textContent)).toEqual([
+      "Auto-detect",
+      "English",
+      "French",
+      "German",
+      "Spanish",
+      "Italian",
+    ]);
+  });
+
+  it.each([
+    ["German", "de"],
+    ["Spanish", "es"],
+    ["Italian", "it"],
+  ])("sends the code of %s when it is picked", async (name, code) => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ caseId: "c1" }) }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ReportForm availability={NONE} />);
+    fireEvent.click(screen.getByRole("button", { name }));
+    expect(screen.getByRole("button", { name })).toHaveAttribute("aria-pressed", "true");
+    fill("#1001", "camille@example.com", "My vase arrived broken");
+    attach(image());
+    submit();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData;
+    expect(body.get("language")).toBe(code);
+  });
+
+  it("loads the German demo case: German message, German picked, DHL Paket on the card", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, blob: async () => new Blob([new Uint8Array(10)], { type: "image/jpeg" }) }) as Response),
+    );
+    render(<ReportForm availability={NONE} />);
+    const card = screen.getByRole("button", { name: /Broken carafe, in German/ });
+    expect(card).toHaveTextContent("DHL Paket");
+    expect(card).toHaveTextContent("German message");
+    fireEvent.click(card);
+    await screen.findByText(/Demo case loaded: Broken carafe, in German/);
+    expect(screen.getByLabelText("Order number")).toHaveValue("#1011");
+    expect((screen.getByLabelText("Message from the customer") as HTMLTextAreaElement).value).toContain("Guten Tag");
+    expect(screen.getByRole("button", { name: "German" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("says where the photos go for what the report will really run as", () => {

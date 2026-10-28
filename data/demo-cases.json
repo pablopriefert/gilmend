@@ -1,5 +1,5 @@
 {
-  "_readme": "The six filmable cases of the spec (section 4). Each one is a DamageReport (resolved at load time, see src/lib/store/demo-cases.ts) plus the outcome we EXPECT from the agent. 'reportedHoursAgo' is an offset from now, so a case reported 3 hours ago stays 3 hours old whenever the demo is opened; it must be smaller than the order's 'deliveredHoursAgo' in data/fixtures/orders.json (a test checks it). Photos: the team shoots them (data/photos/<name>.jpg, see data/photos/README.md). Until then data/photos/<name>.webp holds a PROVISIONAL AI-generated stand-in, labelled as such there; no real customer image is ever used.",
+  "_readme": "The six filmable cases of the spec (section 4), plus a seventh added on 28 Oct 2026 for the Europe lot (a German customer, DHL Paket). Each one is a DamageReport (resolved at load time, see src/lib/store/demo-cases.ts) plus the outcome we EXPECT from the agent. 'reportedHoursAgo' is an offset from now, so a case reported 3 hours ago stays 3 hours old whenever the demo is opened; it must be smaller than the order's 'deliveredHoursAgo' in data/fixtures/orders.json (a test checks it). Photos: the team shoots them (data/photos/<name>.jpg, see data/photos/README.md). Until then data/photos/<name>.webp holds a PROVISIONAL AI-generated stand-in, labelled as such there; no real customer image is ever used.",
   "cases": [
     {
       "id": "demo-1-vase-broken",
@@ -107,6 +107,24 @@
         "needsHuman": false,
         "claimEligible": false,
         "rationale": "Delivered 9 days ago, reported long after the 3-day Chronopost deadline: the carrier claim is time-barred, but the merchant still owes the customer (the merchant chose the carrier), so serve the customer without claiming."
+      }
+    },
+    {
+      "id": "demo-7-german-carafe",
+      "title": "Broken carafe, German customer (DHL Paket): reship, claim, reply in German",
+      "reportedHoursAgo": 3,
+      "customerEmail": "jonas.weber@example.org",
+      "orderNumber": "#1011",
+      "message": "Guten Tag, meine Karaffe ist heute Morgen kaputt angekommen. Der Karton sah von außen in Ordnung aus, aber die Karaffe hat einen langen Riss am Hals und ein Stück ist abgesplittert. Bestellung #1011, Foto im Anhang. Können Sie mir bitte Ersatz schicken?",
+      "photos": ["data/photos/carafe-cracked.jpg"],
+      "language": "de",
+      "expected": {
+        "decision": "reship",
+        "acceptableDecisions": ["reship"],
+        "carrierClaim": true,
+        "needsHuman": false,
+        "claimEligible": true,
+        "rationale": "The Europe lot's case: a German customer writes in German, so the customer reply must be in German (the language is set to German on the demo card, and Auto-detect also finds German for this message). Clear crack on a 54 EUR item, reported about 15 h after delivery, well inside the 7-day statutory damage-report window (HGB § 438) that DHL Paket asks for: reship, then claim DHL Paket, whose standard terms pay the item value up to 500 EUR, so the 54 EUR item value is the ceiling. It reuses the photo of the carafe of case 6 on purpose, under its own order and customer, so the integrity check does not flag it. It assumes the parcel was shipped from within Germany (a German fulfilment centre): the DHL national terms do not cover a parcel sent from France."
       }
     }
   ]

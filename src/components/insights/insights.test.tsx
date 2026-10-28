@@ -64,7 +64,13 @@ describe("Insights: per carrier", () => {
   it("shows the money and the claims of each carrier, short windows first, and the total", () => {
     render(section(live()));
     const rows = screen.getAllByTestId(/^carrier-/);
-    expect(rows.map((r) => r.getAttribute("data-testid"))).toEqual(["carrier-mondial_relay", "carrier-chronopost", "carrier-colissimo"]);
+    expect(rows.map((r) => r.getAttribute("data-testid"))).toEqual([
+      "carrier-mondial_relay",
+      "carrier-chronopost",
+      "carrier-colissimo",
+      "carrier-dhl_paket",
+      "carrier-gls",
+    ]);
     expect(within(rows[0]).getByText("€25")).toBeInTheDocument();
     expect(within(rows[1]).getByText("€120")).toBeInTheDocument();
     expect(within(rows[2]).getByText("€34.50")).toBeInTheDocument();
@@ -149,6 +155,13 @@ describe("Insights: deadline timeline", () => {
     const reserve = screen.getByTestId("deadline-co-reserve");
     expect(reserve).toHaveTextContent("prudential: a later report only adds a warning");
     expect(reserve).not.toHaveTextContent("€");
+  });
+
+  it("names a statutory reserve window (DHL Paket, GLS) as statutory, not as prudential", () => {
+    render(section([claimCase("dhl", "dhl_paket", 54, 24 * 300, { reserveHours: 50 })]));
+    const reserve = screen.getByTestId("deadline-dhl-reserve");
+    expect(reserve).toHaveTextContent("statutory: a later report only adds a warning");
+    expect(reserve).not.toHaveTextContent("prudential");
   });
 
   it("draws the strips for the eye only: the list carries the same events as text", () => {

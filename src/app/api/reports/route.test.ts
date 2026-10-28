@@ -164,6 +164,22 @@ describe("POST /api/reports", () => {
     expect(runAgent.mock.calls[2][0].language).toBe("en");
   });
 
+  it.each([
+    ["Guten Tag, meine Karaffe ist heute kaputt angekommen, bitte um Ersatz.", "de"],
+    ["Hola, mi jarrón llegó roto esta mañana, adjunto una foto.", "es"],
+    ["Buongiorno, il mio vaso è arrivato rotto, allego una foto.", "it"],
+  ])("detects German, Spanish and Italian from the message when the form says nothing", async (message, expected) => {
+    await POST(reportRequest({ fields: { message } }));
+    expect(runAgent.mock.calls[0][0].language).toBe(expected);
+    await POST(reportRequest({ fields: { language: "auto", message } }));
+    expect(runAgent.mock.calls[1][0].language).toBe(expected);
+  });
+
+  it("lets the language picked on the form win over what the message looks like", async () => {
+    await POST(reportRequest({ fields: { language: "de", message: "My lamp is cracked, see the photos." } }));
+    expect(runAgent.mock.calls[0][0].language).toBe("de");
+  });
+
   it("rejects a report with missing fields and no photo, naming each field", async () => {
     const res = await POST(reportRequest({ fields: { orderNumber: "", email: "nope", message: "" }, photos: [] }));
     expect(res.status).toBe(400);

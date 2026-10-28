@@ -1,6 +1,6 @@
 import { computeClaim, getCarrierRulesDetailed } from "../rules/carriers";
 import type { CarrierId, DamageAssessment, Order } from "../types";
-import { CARRIER_ORDER, windowLabel } from "./insights";
+import { windowLabel } from "./insights";
 import type { MeasuredTime } from "./measured-time";
 
 // The ROI calculator behind /impact (27 Oct 2026): what damaged parcels cost a merchant in a year,
@@ -309,7 +309,16 @@ const SERVICE: Record<CarrierId, string> = {
   colissimo: "Colissimo Domicile sans signature",
   mondial_relay: "Mondial Relay point relais",
   chronopost: "Chronopost standard",
+  dhl_paket: "DHL Paket",
+  gls: "GLS Paket",
 };
+
+/**
+ * The carriers the calculator has a share input for: the three French ones. DHL Paket and GLS (28 Oct
+ * 2026) have rules and claims but no input here: the calculator's defaults describe a French
+ * merchant, and a share the merchant cannot set would be a guess.
+ */
+const ROI_CARRIERS: readonly CarrierId[] = ["mondial_relay", "chronopost", "colissimo"];
 
 function syntheticOrder(carrier: CarrierId, inputs: RoiInputs): Order {
   const delivered = Date.parse(REFERENCE_DELIVERY);
@@ -493,6 +502,9 @@ function pickShare(inputs: RoiInputs, carrier: CarrierId): number {
       return inputs.shareMondialRelayPct;
     case "chronopost":
       return inputs.shareChronopostPct;
+    case "dhl_paket":
+    case "gls":
+      return 0;
   }
 }
 
@@ -504,9 +516,9 @@ function pickShare(inputs: RoiInputs, carrier: CarrierId): number {
 export function computeRoi(inputs: RoiInputs, measured: MeasuredTime | null): RoiResult {
   const damagedPerYear = inputs.ordersPerMonth * 12 * (inputs.damageRatePct / 100);
   const claimsPerYear = damagedPerYear * (inputs.qualifyingSharePct / 100);
-  const totalShare = CARRIER_ORDER.reduce((sum, c) => sum + pickShare(inputs, c), 0);
+  const totalShare = ROI_CARRIERS.reduce((sum, c) => sum + pickShare(inputs, c), 0);
 
-  const carriers = CARRIER_ORDER.map((carrier): CarrierRoi => {
+  const carriers = ROI_CARRIERS.map((carrier): CarrierRoi => {
     const sharePct = totalShare > 0 ? (pickShare(inputs, carrier) / totalShare) * 100 : 0;
     const carrierDamaged = (damagedPerYear * sharePct) / 100;
     const carrierClaims = (claimsPerYear * sharePct) / 100;

@@ -176,6 +176,17 @@ interface RulesSummary {
 }
 
 /**
+ * How the per-parcel amount of the terms is named in a document that goes to the carrier. DHL
+ * clause 6(3) and GLS clause 10.2 give a ceiling, not a fixed payment: calling it a "flat rate"
+ * would misstate the carrier's own terms back to it. Without a kind (a case stored before the
+ * field existed) the neutral "per-parcel amount" is used.
+ */
+function flatAmountLabel(kind: "flat" | "limit" | undefined, lower = false): string {
+  const label = kind === "flat" ? "Flat rate" : kind === "limit" ? "Liability limit" : "Per-parcel amount";
+  return lower ? label.toLowerCase() : label;
+}
+
+/**
  * Contract summary for the "compensation basis" section. Built defensively: the rules live
  * in another module that evolves on its own, and a PDF without this block is still correct
  * (it keeps the computed amount and the reasons), whereas a thrown error loses the claim.
@@ -183,11 +194,14 @@ interface RulesSummary {
 function summariseRules(carrier: CarrierId): RulesSummary | null {
   try {
     const rules = getCarrierRules(carrier);
-    const { perKgEur, flatEur, capEur } = rules.compensation;
+    const { perKgEur, flatEur, capEur, kind } = rules.compensation;
     const parts: string[] = [];
-    if (typeof flatEur === "number") parts.push(`flat rate of ${formatMoney(flatEur)} per parcel`);
+    if (typeof flatEur === "number") parts.push(`${flatAmountLabel(kind, true)} of ${formatMoney(flatEur)} per parcel`);
     if (typeof perKgEur === "number") parts.push(`${formatMoney(perKgEur)} per kg`);
-    if (typeof capEur === "number") parts.push(`cap of ${formatMoney(capEur)} per parcel`);
+    // A liability limit that is also the cap is one figure: say it once.
+    if (typeof capEur === "number" && !(kind === "limit" && capEur === flatEur)) {
+      parts.push(`cap of ${formatMoney(capEur)} per parcel`);
+    }
     return {
       line: `${rules.label}: ${parts.join(", ")}.`,
       sources: (rules.sources ?? []).map((s) => `${s.title} (${s.url}, checked on ${s.checkedOn})`),
@@ -245,11 +259,14 @@ export function compensationBasisLines(basis: ClaimBasis): string[] {
     caps.push(`weight rate ${formatMoney(byWeight)}`);
   }
   if (typeof basis.flatEur === "number") {
-    lines.push(`Flat rate: ${formatMoney(basis.flatEur)} per parcel.`);
-    caps.push(`flat rate ${formatMoney(basis.flatEur)}`);
+    lines.push(`${flatAmountLabel(basis.flatKind)}: ${formatMoney(basis.flatEur)} per parcel.`);
+    caps.push(`${flatAmountLabel(basis.flatKind, true)} ${formatMoney(basis.flatEur)}`);
   }
-  lines.push(`Cap: ${formatMoney(basis.capEur)} per parcel.`);
-  caps.push(`cap ${formatMoney(basis.capEur)}`);
+  // A liability limit that equals the cap is the same figure: listing it twice would read as two terms.
+  if (!(basis.flatKind === "limit" && basis.flatEur === basis.capEur)) {
+    lines.push(`Cap: ${formatMoney(basis.capEur)} per parcel.`);
+    caps.push(`cap ${formatMoney(basis.capEur)}`);
+  }
   lines.push(`The maximum compensation is the lowest of these amounts: ${caps.join(", ")}.`);
   return lines;
 }

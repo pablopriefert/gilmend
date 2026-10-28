@@ -9,7 +9,10 @@
 //  - amounts and deadlines NEVER come from the model: they come from carriers.ts rules
 //    and computeClaim (deterministic code).
 
-export type CarrierId = "colissimo" | "mondial_relay" | "chronopost";
+// Colissimo, Mondial Relay and Chronopost cover shipments within France; DHL Paket and GLS cover
+// shipments within Germany (28 Oct 2026, Europe lot). Each carrier's domestic scope is in
+// data/carriers.json (`domestic`); computeClaim sends a parcel outside it to a person.
+export type CarrierId = "colissimo" | "mondial_relay" | "chronopost" | "dhl_paket" | "gls";
 
 /**
  * Which engine produced a case. 'demo-mock' is the deterministic mock provider (no key).
@@ -139,6 +142,8 @@ export interface CarrierRules {
   compensation: {
     perKgEur?: number;
     flatEur?: number;
+    /** What flatEur is: "flat" (a fixed amount per parcel) or "limit" (a ceiling per parcel). */
+    kind?: "flat" | "limit";
     capEur: number;
   };
   /** True when the carrier expects the customer to refuse the damaged parcel. */
@@ -175,6 +180,12 @@ export interface ClaimBasis {
   weightKg: number;
   perKgEur?: number;
   flatEur?: number;
+  /**
+   * What flatEur is in the carrier's terms: "flat" (the carrier pays a fixed amount) or "limit" (a
+   * ceiling per parcel, the indemnity being the value of the goods up to it). Absent on a case stored
+   * before the field existed; the claim PDF then says neither.
+   */
+  flatKind?: "flat" | "limit";
   capEur: number;
 }
 

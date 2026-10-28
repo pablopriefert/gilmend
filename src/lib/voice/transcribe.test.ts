@@ -20,7 +20,11 @@ describe("transcribe settings and endpoint", () => {
     expect(buildTranscribeSettings()).toEqual({ mode: "PUSH_TO_TALK", model: "muse-voice-transcribe-1.0", audioEncoding: "WAV" });
     expect(buildTranscribeSettings("fr")).toMatchObject({ languageBias: ["French"] });
     expect(buildTranscribeSettings("en")).toMatchObject({ languageBias: ["English"] });
-    expect(buildTranscribeSettings("de")).not.toHaveProperty("languageBias");
+    // German, Spanish and Italian since 28 Oct 2026 (src/lib/languages.ts); a code outside the list gives no bias.
+    expect(buildTranscribeSettings("de")).toMatchObject({ languageBias: ["German"] });
+    expect(buildTranscribeSettings("es")).toMatchObject({ languageBias: ["Spanish"] });
+    expect(buildTranscribeSettings("it")).toMatchObject({ languageBias: ["Italian"] });
+    expect(buildTranscribeSettings("pt")).not.toHaveProperty("languageBias");
     expect(JSON.stringify(buildTranscribeSettings("en"))).not.toMatch(/contributor/i);
   });
 });

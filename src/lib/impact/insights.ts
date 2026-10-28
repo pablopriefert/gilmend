@@ -1,4 +1,5 @@
 import { getCarrierRulesDetailed } from "../rules/carriers";
+import type { ReserveBasis } from "../rules/schema";
 import { isRecoverable } from "../store/summary";
 import type { CarrierId, CaseRecord, DecisionKind } from "../types";
 
@@ -17,7 +18,7 @@ const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
 /** Mondial Relay and Chronopost first: their windows are the short ones, the ones that lose money. */
-export const CARRIER_ORDER: readonly CarrierId[] = ["mondial_relay", "chronopost", "colissimo"];
+export const CARRIER_ORDER: readonly CarrierId[] = ["mondial_relay", "chronopost", "colissimo", "dhl_paket", "gls"];
 
 export const DECISION_ORDER: readonly DecisionKind[] = ["reship", "refund", "ask_more_photos", "no_action"];
 
@@ -41,7 +42,7 @@ export interface CarrierInsight {
   recoverableEur: number;
   /** "3 days after delivery", from the carrier rules. */
   windowLabel: string;
-  /** "72 h reserve window (prudential)", from the carrier rules. */
+  /** "72 h reserve window (prudential)" or "168 h reserve window (statutory)", from the carrier rules. */
   reserveLabel: string;
 }
 
@@ -51,8 +52,10 @@ export interface TimelineEvent {
   carrier: CarrierId;
   /** claim: the last day to file; reserve: the end of the window to state reserves after delivery. */
   kind: "claim" | "reserve";
-  /** A reserve window that only warns (Colissimo) and does not block a claim. */
+  /** A reserve window that only warns (Colissimo, DHL Paket, GLS) and does not block a claim. */
   binding: boolean;
+  /** Where a reserve window comes from (carrier terms, the law, our own prudence); "carrier" on a claim event. */
+  basis: ReserveBasis;
   /** ISO date-time of the deadline. */
   at: string;
   /** Hours from the moment the case is read to the deadline (a recorded run: from its recording). */
@@ -133,7 +136,9 @@ export function windowLabelShort(carrier: CarrierId): string {
 
 export function reserveLabel(carrier: CarrierId): string {
   const rules = getCarrierRulesDetailed(carrier);
-  return `${rules.reserveDeadlineHours} h reserve window${rules.reserveDeadlineBinding ? "" : " (prudential)"}`;
+  // A window that blocks says nothing more; one that only warns says where it comes from (statutory for
+  // DHL Paket and GLS, prudential for Colissimo): "prudential" would be wrong for a deadline of the HGB.
+  return `${rules.reserveDeadlineHours} h reserve window${rules.reserveDeadlineBinding ? "" : ` (${rules.reserveDeadlineBasis})`}`;
 }
 
 export function buildInsights(all: CaseRecord[], now: Date, options: InsightsOptions): Insights {
@@ -172,6 +177,7 @@ export function buildInsights(all: CaseRecord[], now: Date, options: InsightsOpt
           ...base,
           kind: "claim",
           binding: true,
+          basis: "carrier",
           at: new Date(claimMs).toISOString(),
           hoursFromRead: (claimMs - readMs) / HOUR_MS,
           urgent: claimMs - readMs <= URGENT_DAYS * DAY_MS,
@@ -196,6 +202,7 @@ export function buildInsights(all: CaseRecord[], now: Date, options: InsightsOpt
         ...base,
         kind: "reserve",
         binding: getCarrierRulesDetailed(carrier).reserveDeadlineBinding,
+        basis: getCarrierRulesDetailed(carrier).reserveDeadlineBasis,
         at: new Date(reserveMs).toISOString(),
         hoursFromRead: (reserveMs - readMs) / HOUR_MS,
         urgent: reserveMs - readMs <= URGENT_DAYS * DAY_MS,
