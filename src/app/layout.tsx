@@ -11,10 +11,28 @@ import "./globals.css";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap" });
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 
+const DESCRIPTION =
+  "The agent that prepares the claim to recover the money from damaged parcels: investigates, decides, prepares the carrier claim, and waits for one click.";
+
 export const metadata: Metadata = {
+  // The link preview (src/app/opengraph-image.tsx, twitter-image.tsx) needs an absolute URL. Without
+  // metadataBase Next guesses one from the Vercel environment, which on this project can be the
+  // internal deployment name instead of the public address. Preview deployments therefore point at
+  // the public address too (a preview's own card is not worth a second source of truth).
+  metadataBase: new URL("https://gilmend.vercel.app"),
   title: { default: "Gilmend · Broken parcels, mended in gold", template: "%s · Gilmend" },
-  description:
-    "The agent that prepares the claim to recover the money from damaged parcels: investigates, decides, prepares the carrier claim, and waits for one click.",
+  description: DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: "Gilmend",
+    title: "Gilmend · Broken parcels, mended in gold",
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Gilmend · Broken parcels, mended in gold",
+    description: DESCRIPTION,
+  },
 };
 
 // The header reads the server environment (is a model key set?). Without this the layout
