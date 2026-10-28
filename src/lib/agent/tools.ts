@@ -46,7 +46,7 @@ export const TRACE_TOOL_NAME: Record<ModelToolName, AgentToolName> = {
   finish_case: "draft_reply",
 };
 
-export const CARRIERS: readonly CarrierId[] = ["colissimo", "mondial_relay", "chronopost"];
+export const CARRIERS: readonly CarrierId[] = ["colissimo", "mondial_relay", "chronopost", "dhl_paket", "gls"];
 const DAMAGE_TYPES: readonly DamageType[] = [
   "broken_product",
   "crushed_packaging",

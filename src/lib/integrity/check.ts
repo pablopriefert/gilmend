@@ -191,9 +191,15 @@ export async function checkPhotoIntegrity(input: IntegrityInput, deps: Integrity
       // Dark, blank or over-exposed: every such photo hashes alike, so a "match" would say nothing.
       uniform.push(f.index);
     } else if (f.hash) {
-      const demoHits = demos
+      const allDemoHits = demos
         .map((d) => ({ d, cmp: compareHashes(f.hash as PhotoHash, d.hash) }))
         .filter((x) => x.cmp.match);
+      // Two demo cases may share one photo (the German carafe reuses the late-report carafe, 28 Oct 2026).
+      // When one of them is this report's own, the other is the same picture of the same demo, not
+      // "another case": counting it would show the agent a match with another customer on a photo
+      // that is exactly where it belongs.
+      const ownDemoHits = allDemoHits.filter((x) => sameCustomerAndOrder(x.d.orderNumber, x.d.customerEmail));
+      const demoHits = ownDemoHits.length > 0 ? ownDemoHits : allDemoHits;
       if (demoHits.length > 0) {
         // A demo photo is public: it is only compared with the demo cases, never with other cases.
         for (const { d, cmp } of demoHits) {
@@ -318,7 +324,8 @@ export async function checkPhotoIntegrity(input: IntegrityInput, deps: Integrity
     photos,
     comparedCases,
     comparedPhotos: stored.length,
-    comparedDemoPhotos: demos.length,
+    // Distinct pictures, not entries: a photo shared by two demo cases counts once.
+    comparedDemoPhotos: new Set(demos.map((d) => `${d.hash.dhash}/${d.hash.ahash}`)).size,
     ...(casesNotCompared > 0 ? { casesNotCompared } : {}),
     deliveredAt: Number.isNaN(delivered) ? null : deliveredAt,
     signals,

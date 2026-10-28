@@ -292,19 +292,22 @@ export function parseAmount(raw: string): number {
   return Number.parseFloat(s);
 }
 
+// English and French, and since 28 Oct 2026 German, Spanish and Italian (the reply is written in the
+// customer's language, so a date can be written in any of them: without these a German "am 5. November"
+// would have gone through as a date no tool gave). A month name shared by several languages is listed once.
 const MONTHS: Record<string, number> = {
-  january: 1, jan: 1, janvier: 1,
-  february: 2, feb: 2, fevrier: 2, février: 2,
-  march: 3, mar: 3, mars: 3,
-  april: 4, apr: 4, avril: 4,
-  may: 5, mai: 5,
-  june: 6, jun: 6, juin: 6,
-  july: 7, jul: 7, juillet: 7,
-  august: 8, aug: 8, aout: 8, août: 8,
-  september: 9, sep: 9, sept: 9, septembre: 9,
-  october: 10, oct: 10, octobre: 10,
-  november: 11, nov: 11, novembre: 11,
-  december: 12, dec: 12, decembre: 12, décembre: 12,
+  january: 1, jan: 1, janvier: 1, januar: 1, enero: 1, gennaio: 1,
+  february: 2, feb: 2, fevrier: 2, février: 2, februar: 2, febrero: 2, febbraio: 2,
+  march: 3, mar: 3, mars: 3, märz: 3, maerz: 3, marzo: 3,
+  april: 4, apr: 4, avril: 4, abril: 4, aprile: 4,
+  may: 5, mai: 5, mayo: 5, maggio: 5,
+  june: 6, jun: 6, juin: 6, juni: 6, junio: 6, giugno: 6,
+  july: 7, jul: 7, juillet: 7, juli: 7, julio: 7, luglio: 7,
+  august: 8, aug: 8, aout: 8, août: 8, agosto: 8,
+  september: 9, sep: 9, sept: 9, septembre: 9, septiembre: 9, setiembre: 9, settembre: 9,
+  october: 10, oct: 10, octobre: 10, oktober: 10, octubre: 10, ottobre: 10,
+  november: 11, nov: 11, novembre: 11, noviembre: 11,
+  december: 12, dec: 12, decembre: 12, décembre: 12, dezember: 12, diciembre: 12, dicembre: 12,
 };
 const MONTH_ALT = Object.keys(MONTHS)
   .sort((a, b) => b.length - a.length)
@@ -331,8 +334,9 @@ export function extractDates(text: string): FoundDate[] {
     const [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
     if (validMd(mo, d)) out.push({ text: m[0], year: y, month: mo, day: d });
   }
+  // "15th November", "15 de noviembre de 2026" (Spanish), "15. November 2026" (German: a dot after the day).
   const dayFirst = new RegExp(
-    `\\b(\\d{1,2})(?:st|nd|rd|th|er)?\\s+(?:of\\s+)?(${MONTH_ALT})\\b(?:,?\\s+(\\d{4}))?`,
+    `\\b(\\d{1,2})(?:st|nd|rd|th|er)?\\.?\\s+(?:of\\s+|de\\s+|del\\s+)?(${MONTH_ALT})\\b(?:,?\\s+(?:de\\s+)?(\\d{4}))?`,
     "gi",
   );
   for (const m of text.matchAll(dayFirst)) {

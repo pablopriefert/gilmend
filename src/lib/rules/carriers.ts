@@ -13,6 +13,7 @@ import {
   type CarrierRulesDetailed,
   type Compensation,
   type CompensationVariant,
+  type DomesticScope,
   type RuleFigure,
 } from "./schema";
 
@@ -164,9 +165,9 @@ function selectCompensation(
   return { compensation: rules.compensation, variant: null };
 }
 
-function isDomestic(country: string | undefined): boolean {
+function isDomestic(country: string | undefined, scope: DomesticScope): boolean {
   const c = normalise(country ?? "");
-  return c === "" || c === "fr" || c === "france";
+  return c === "" || scope.aliases.some((alias) => normalise(alias) === c);
 }
 
 /**
@@ -240,9 +241,9 @@ export function computeClaim(
       `The order is in ${order.currency || "an unknown currency"}; carrier compensation grids are in EUR and no conversion is applied, so a person must handle this claim.`,
     );
   }
-  if (!isDomestic(order.shippingAddress?.country)) {
+  if (!isDomestic(order.shippingAddress?.country, rules.domestic)) {
     blockPermanent(
-      `The parcel went to ${order.shippingAddress.country}; the rules in this file cover shipments within France only (international terms and deadlines differ), so a person must handle this claim.`,
+      `The parcel went to ${order.shippingAddress.country}; the rules in this file cover shipments within ${rules.domestic.name} only (international terms and deadlines differ), so a person must handle this claim.`,
     );
   }
 
@@ -334,8 +335,14 @@ export function computeClaim(
             `The customer reported the damage ${hours(afterDeliveryMs)} h after delivery, after the ${rules.reserveDeadlineHours} h reserve window of ${rules.label} closed on ${stamp(reserveDeadlineMs)}. The carrier rejects such claims.`,
           );
         } else {
+          // Colissimo: the window itself is not confirmed. GLS: it is the statutory one, whose
+          // breach only lets the carrier presume an undamaged delivery (HGB § 438); say which.
+          const confirmed = rules.figures.find((f) => f.key === "reserveDeadlineHours")?.status === "verified";
+          const why = confirmed
+            ? `a statutory window: a late report weakens the claim for ${rules.label} without ending it`
+            : `not confirmed for ${rules.label}`;
           advice.push(
-            `Warning: the customer reported the damage ${hours(afterDeliveryMs)} h after delivery, beyond the ${rules.reserveDeadlineHours} h prudential reserve window (not confirmed for ${rules.label}); the carrier may contest the claim.`,
+            `Warning: the customer reported the damage ${hours(afterDeliveryMs)} h after delivery, beyond the ${rules.reserveDeadlineHours} h prudential reserve window (${why}); the carrier may contest the claim.`,
           );
         }
       } else if (afterDeliveryMs >= 0) {

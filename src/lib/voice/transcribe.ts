@@ -1,4 +1,5 @@
 import { assertStandardModel, META_API_BASE_URL, type Env } from "../config";
+import { supportedLanguageName } from "../languages";
 import { VOICE_MODEL } from "./limits";
 
 // Muse Voice Transcribe on the Meta Model API. Shape read on dev.meta.ai/docs/speech-to-text
@@ -10,11 +11,12 @@ import { VOICE_MODEL } from "./limits";
 //  - PUSH_TO_TALK (the default) treats the clip as a single turn, which is what a spoken
 //    message is; the answer is JSON { sessionId, transcript, audioDurationMs, turns: [] };
 //  - 400 wrong audio, 413 body over 32 MB, 429 rate limit, 500 failure or server timeout.
-// Language is detected by the model unless we pass a bias, and a bias is only a hint.
+// Language is detected by the model unless we pass a bias, and a bias is only a hint. German,
+// Spanish and Italian are passed by name like English and French (28 Oct 2026); only English
+// and French were tried against the real API, so check a German clip before relying on it.
 
 export const TRANSCRIBE_TIMEOUT_MS = 30_000;
 
-const LANGUAGE_NAMES: Record<string, string> = { en: "English", fr: "French" };
 
 export type TranscribeFailure =
   | "bad_audio" // the API refused the audio (400, 413)
@@ -39,7 +41,7 @@ export class TranscribeError extends Error {
 }
 
 export interface TranscribeOptions {
-  /** "en" or "fr" biases the model; anything else (or nothing) lets it detect the language. */
+  /** A supported language code (en, fr, de, es, it) biases the model; anything else (or nothing) lets it detect the language. */
   language?: string;
   env?: Env;
   fetchImpl?: typeof fetch;
@@ -58,7 +60,7 @@ export function transcribeEndpoint(env: Env = process.env): string {
 }
 
 export function buildTranscribeSettings(language?: string): Record<string, unknown> {
-  const name = language ? LANGUAGE_NAMES[language] : undefined;
+  const name = language ? supportedLanguageName(language) : undefined;
   return {
     mode: "PUSH_TO_TALK",
     // Checked here as well as at the config level so no path reaches a Contributor model.

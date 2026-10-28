@@ -107,6 +107,41 @@ describe("demo-mock provider", () => {
     expect(c.decision?.customerReply).toMatch(/Cordialement/);
   });
 
+  it.each([
+    ["de", "Meine Vase ist kaputt angekommen", /Hallo Ada/, /Mit freundlichen Grüßen/, /Ersatz/],
+    ["es", "Mi jarrón llegó roto", /Hola Ada/, /Un cordial saludo/, /reemplazo/],
+    ["it", "Il mio vaso è arrivato rotto", /Buongiorno Ada/, /Cordiali saluti/, /sostitutivo/],
+  ])("answers in the customer's language: %s (greeting, sign-off and the reshipment)", async (language, message, hello, bye, body) => {
+    const c = await run(rep({ message, language }));
+    // The words alone say "broken" in each language, so the scripted reading is a reshipment with a claim.
+    expect(c.decision).toMatchObject({ decision: "reship", carrierClaim: true });
+    expect(c.decision?.customerReply).toMatch(hello);
+    expect(c.decision?.customerReply).toMatch(bye);
+    expect(c.decision?.customerReply).toMatch(body);
+    // No money and no date in a scripted reply, in any language.
+    expect(c.decision?.customerReply).not.toMatch(/[€$]|\beur|\d{4}-\d{2}/i);
+  });
+
+  it.each([
+    ["de", "Der Karton ist zerdrückt, aber die Vase ist unversehrt und in Ordnung.", "no_action"],
+    ["es", "La caja llegó aplastada pero el jarrón está intacto.", "no_action"],
+    ["it", "La scatola è schiacciata ma il vaso è integro.", "no_action"],
+    ["de", "Das Foto ist leider unscharf, die Vase ist kaputt.", "ask_more_photos"],
+    ["es", "Mi jarrón está roto, la foto salió borrosa.", "ask_more_photos"],
+    ["it", "Il vaso è rotto ma la foto è sfocata.", "ask_more_photos"],
+    ["de", "Das Paket war geöffnet und es fehlt ein Artikel.", "reship"],
+    ["es", "El paquete llegó abierto y falta un artículo.", "reship"],
+    ["it", "Il pacco era aperto e manca un articolo.", "reship"],
+  ] as const)("reads the words of a %s message the way it reads the English ones: %s", async (language, message, decision) => {
+    const c = await run(rep({ message, language }));
+    expect(c.decision?.decision).toBe(decision);
+  });
+
+  it("falls back to English for a language it has no script for", async () => {
+    const c = await run(rep({ message: "Mijn vaas is kapot aangekomen", language: "nl" }));
+    expect(c.decision?.customerReply).toMatch(/^Hello Ada/);
+  });
+
   it("is deterministic: the same report gives the same decision", async () => {
     const a = await run(rep());
     const b = await run(rep());

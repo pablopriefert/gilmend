@@ -1,4 +1,4 @@
-// The six demo cases of the video, one click each on the "New report" screen. They fill the
+// The six demo cases of the video (and a seventh, German one, since 28 Oct 2026), one click each on the "New report" screen. They fill the
 // form with a fictitious customer message and a photo. The wording comes from
 // data/demo-cases.json (the agent's expected outcomes live there too), so a click here gives the
 // agent exactly the case that file describes; src/components/demo-scenarios.test.ts fails if the two drift.
@@ -9,6 +9,8 @@
 // scripts/make-demo-photos.mjs) when the server has neither. Dropping the real JPEG into
 // data/photos/ is all it takes to switch: no code change. (They used to point to
 // /demo/<name>.jpg, a folder that never held them, so the buttons always showed illustrations.)
+
+import type { LanguageCode } from "@/lib/languages";
 
 export interface DemoPhoto {
   /** The demo photo, tried first (served from data/photos by /api/demo-photo). */
@@ -37,7 +39,7 @@ export interface DemoScenario {
   orderNumber: string;
   email: string;
   message: string;
-  language: "en" | "fr";
+  language: LanguageCode;
   photos: DemoPhoto[];
 }
 
@@ -118,6 +120,21 @@ export const DEMO_SCENARIOS: readonly DemoScenario[] = [
     message:
       "I only unpacked the carafe today and found it cracked along the neck. It was delivered over a week ago, sorry for the delay. Order #1006.",
     language: "en",
+    photos: [{ src: "/api/demo-photo?name=carafe-cracked", fallback: "/demo/illustration-cracked-bowl.png" }],
+  },
+  // The Europe lot (28 Oct 2026): a German customer writes in German about a DHL Paket parcel within
+  // Germany. It reuses the carafe photo of the case above, under its own order and customer.
+  {
+    id: "german-carafe",
+    title: "Broken carafe, in German",
+    shows: "DHL Paket in Germany: the reply is in German",
+    carrier: "DHL Paket",
+    outcome: { label: "Reship + carrier claim", tone: "success" },
+    orderNumber: "#1011",
+    email: "jonas.weber@example.org",
+    message:
+      "Guten Tag, meine Karaffe ist heute Morgen kaputt angekommen. Der Karton sah von außen in Ordnung aus, aber die Karaffe hat einen langen Riss am Hals und ein Stück ist abgesplittert. Bestellung #1011, Foto im Anhang. Können Sie mir bitte Ersatz schicken?",
+    language: "de",
     photos: [{ src: "/api/demo-photo?name=carafe-cracked", fallback: "/demo/illustration-cracked-bowl.png" }],
   },
 ];

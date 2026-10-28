@@ -17,7 +17,7 @@ const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
 /** Mondial Relay and Chronopost first: their windows are the short ones, the ones that lose money. */
-export const CARRIER_ORDER: readonly CarrierId[] = ["mondial_relay", "chronopost", "colissimo"];
+export const CARRIER_ORDER: readonly CarrierId[] = ["mondial_relay", "chronopost", "colissimo", "dhl_paket", "gls"];
 
 export const DECISION_ORDER: readonly DecisionKind[] = ["reship", "refund", "ask_more_photos", "no_action"];
 

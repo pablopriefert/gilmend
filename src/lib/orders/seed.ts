@@ -52,6 +52,8 @@ function splitName(full: string): { firstName: string; lastName: string } {
 /** DraftOrderInput for one fixture order (custom line items: no product catalogue needed). */
 export function buildDraftOrderInput(order: Order, shippingEur: number) {
   const { firstName, lastName } = splitName(order.name);
+  const country = order.shippingAddress.country.trim().toUpperCase();
+  const countryCode = /^[A-Z]{2}$/.test(country) ? country : "FR";
   return {
     email: order.email,
     note: "Fictitious order created by scripts/seed-shopify-dev-store.ts for the Gilmend demo. Not a real customer.",
@@ -65,14 +67,15 @@ export function buildDraftOrderInput(order: Order, shippingEur: number) {
       taxable: false,
     })),
     shippingLine: { title: order.service, priceWithCurrency: money(shippingEur, order.currency) },
-    // Invented address: only the city/country carry meaning for the demo.
+    // Invented address: only the city/country carry meaning for the demo. The country follows the
+    // fixture (a German order is seeded as German); the street and the post code are made up per country.
     shippingAddress: {
       firstName,
       lastName,
-      address1: "1 rue de l'Exemple",
+      address1: countryCode === "DE" ? "Beispielstrasse 1" : "1 rue de l'Exemple",
       city: order.shippingAddress.city,
-      zip: "75001",
-      countryCode: "FR",
+      zip: countryCode === "DE" ? "10115" : "75001",
+      countryCode,
     },
   };
 }

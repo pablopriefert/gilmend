@@ -48,7 +48,19 @@ export interface CompensationVariant {
   compensation: Compensation;
 }
 
+/**
+ * Where the rules apply: the destination country of a domestic shipment. A parcel to another
+ * country goes to a person (international terms and deadlines differ), whatever the carrier.
+ */
+export interface DomesticScope {
+  /** English name of the country, used in the message to the merchant ("within France only"). */
+  name: string;
+  /** Lowercase spellings accepted for the destination country (ISO code, English and local name). */
+  aliases: string[];
+}
+
 export interface CarrierRulesDetailed extends CarrierRules {
+  domestic: DomesticScope;
   /** Which date `claimDeadlineDays` counts from. "shipment" is proxied by the order date. */
   claimDeadlineFrom: "delivery" | "shipment";
   /**
@@ -70,7 +82,7 @@ export interface CarrierRulesFile {
   carriers: Record<CarrierId, CarrierRulesDetailed>;
 }
 
-export const CARRIER_IDS: readonly CarrierId[] = ["colissimo", "mondial_relay", "chronopost"];
+export const CARRIER_IDS: readonly CarrierId[] = ["colissimo", "mondial_relay", "chronopost", "dhl_paket", "gls"];
 
 const FIGURE_STATUSES: readonly FigureStatus[] = ["verified", "dated_source", "unverified"];
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -139,6 +151,13 @@ export function validateCarrierRulesFile(raw: unknown): CarrierRulesFile {
       fail(`${p}.reserveDeadlineBinding`, "expected a boolean");
     }
     checkStringArray(c.notes, `${p}.notes`);
+    if (!isRecord(c.domestic)) return fail(`${p}.domestic`, "expected an object");
+    checkString(c.domestic.name, `${p}.domestic.name`);
+    checkStringArray(c.domestic.aliases, `${p}.domestic.aliases`);
+    if ((c.domestic.aliases as string[]).length === 0) fail(`${p}.domestic.aliases`, "needs at least one spelling");
+    if ((c.domestic.aliases as string[]).some((a) => a !== a.toLowerCase())) {
+      fail(`${p}.domestic.aliases`, "spellings must be lowercase (the destination is compared in lowercase)");
+    }
     if (c.compensationCaveat !== undefined) checkString(c.compensationCaveat, `${p}.compensationCaveat`);
 
     if (!Array.isArray(c.sources) || c.sources.length === 0) {

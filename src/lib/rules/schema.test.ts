@@ -55,4 +55,24 @@ describe("validateCarrierRulesFile", () => {
     f.carriers.colissimo.sources[0].checkedOn = "yesterday";
     expect(() => validateCarrierRulesFile(f)).toThrow(/YYYY-MM-DD/);
   });
+  it("rejects a carrier without a domestic scope, or with spellings that cannot match", () => {
+    const a = clone();
+    delete a.carriers.gls.domestic;
+    expect(() => validateCarrierRulesFile(a)).toThrow(/carriers\.gls\.domestic/);
+    const b = clone();
+    b.carriers.dhl_paket.domestic.aliases = [];
+    expect(() => validateCarrierRulesFile(b)).toThrow(/at least one spelling/);
+    const c = clone();
+    c.carriers.dhl_paket.domestic.aliases = ["DE"];
+    expect(() => validateCarrierRulesFile(c)).toThrow(/lowercase/);
+    const d = clone();
+    d.carriers.colissimo.domestic.name = "";
+    expect(() => validateCarrierRulesFile(d)).toThrow(/domestic\.name/);
+  });
+
+  it("requires the two German carriers", () => {
+    const f = clone();
+    delete f.carriers.dhl_paket;
+    expect(() => validateCarrierRulesFile(f)).toThrow(/carriers\.dhl_paket/);
+  });
 });

@@ -84,4 +84,13 @@ describe("carrierClaimChannel", () => {
     expect(carrierClaimChannel("chronopost").email).toBeNull();
     expect(carrierClaimChannel("colissimo").verified).toBe(false);
   });
+
+  it("knows how DHL Paket and GLS take claims: no claims address, and where to go instead", () => {
+    const dhl = carrierClaimChannel("dhl_paket");
+    expect(dhl).toMatchObject({ label: "DHL Paket", email: null, verified: true });
+    expect(dhl.how).toMatch(/Schadensanzeige/);
+    const gls = carrierClaimChannel("gls");
+    expect(gls).toMatchObject({ label: "GLS Germany", email: null, verified: true });
+    expect(gls.how).toMatch(/customer portal/);
+  });
 });

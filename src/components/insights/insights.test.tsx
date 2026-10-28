@@ -64,7 +64,13 @@ describe("Insights: per carrier", () => {
   it("shows the money and the claims of each carrier, short windows first, and the total", () => {
     render(section(live()));
     const rows = screen.getAllByTestId(/^carrier-/);
-    expect(rows.map((r) => r.getAttribute("data-testid"))).toEqual(["carrier-mondial_relay", "carrier-chronopost", "carrier-colissimo"]);
+    expect(rows.map((r) => r.getAttribute("data-testid"))).toEqual([
+      "carrier-mondial_relay",
+      "carrier-chronopost",
+      "carrier-colissimo",
+      "carrier-dhl_paket",
+      "carrier-gls",
+    ]);
     expect(within(rows[0]).getByText("€25")).toBeInTheDocument();
     expect(within(rows[1]).getByText("€120")).toBeInTheDocument();
     expect(within(rows[2]).getByText("€34.50")).toBeInTheDocument();

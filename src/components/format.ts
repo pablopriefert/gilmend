@@ -8,6 +8,7 @@ import type {
   DecisionKind,
   PhotoQuality,
 } from "@/lib/types";
+import { supportedLanguageName } from "@/lib/languages";
 
 // Everything is formatted in an explicit time zone and locale so the server render and the
 // browser render produce the same text (no hydration mismatch), whatever the machine is set to.
@@ -120,10 +121,10 @@ export const CARRIER_LABEL: Record<CarrierId, string> = {
   colissimo: "Colissimo",
   mondial_relay: "Mondial Relay",
   chronopost: "Chronopost",
+  dhl_paket: "DHL Paket",
+  gls: "GLS",
 };
 
-const LANGUAGE_NAMES: Record<string, string> = { en: "English", fr: "French" };
-
 export function languageName(code: string): string {
-  return LANGUAGE_NAMES[code] ?? code.toUpperCase();
+  return supportedLanguageName(code) ?? code.toUpperCase();
 }

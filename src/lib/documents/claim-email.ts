@@ -38,7 +38,8 @@ export interface CarrierChannel {
   verified: boolean;
 }
 
-// From research_notes (22 Oct 2026). None of the three carriers has a public claims API, so
+// From research_notes (22 Oct 2026) for the three French carriers, and from the carriers' own pages
+// read on 28 Oct 2026 for DHL Paket and GLS. None of them has a public claims API, so
 // the agent prepares the file and the merchant files it: nothing is sent without a click.
 export const CARRIER_CHANNELS: Record<CarrierId, CarrierChannel> = {
   colissimo: {
@@ -58,6 +59,18 @@ export const CARRIER_CHANNELS: Record<CarrierId, CarrierChannel> = {
     label: CARRIER_LABELS.chronopost,
     email: null,
     how: "Online form or live chat in the customer area; no claims e-mail is published.",
+    verified: true,
+  },
+  dhl_paket: {
+    label: CARRIER_LABELS.dhl_paket,
+    email: null,
+    how: "DHL Schadensanzeige form with the damaged parcel and all its parts, handed in at a DHL branch or collected (DHL's help page for recipients; check the procedure of your own contract). No claims e-mail is published.",
+    verified: true,
+  },
+  gls: {
+    label: CARRIER_LABELS.gls,
+    email: null,
+    how: "GLS business contact form, or the customer portal under \"Paketschäden\" (GLS's FAQ for business shippers). No claims e-mail is published.",
     verified: true,
   },
 };

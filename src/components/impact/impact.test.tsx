@@ -272,6 +272,34 @@ describe("Sources section", () => {
     expect(screen.getByTestId("rules-colissimo")).toHaveTextContent(/unverified/);
   });
 
+  it("lists the German carriers too: DHL Paket and GLS, with their amounts, windows and the official pages they were read on", () => {
+    render(<SourcesSection measured={null} />);
+    const dhl = screen.getByTestId("rules-dhl_paket");
+    expect(dhl).toHaveTextContent("DHL Paket");
+    expect(dhl).toHaveTextContent("€500 per parcel, capped at €500");
+    expect(dhl).toHaveTextContent("7 days after delivery");
+    expect(dhl).toHaveTextContent("168 h reserve window");
+    expect(dhl).not.toHaveTextContent("prudential"); // DHL says damage must be reported within the 7 days
+    expect(within(dhl).getByRole("link", { name: /DHL Paket\/Express National general terms/ })).toHaveAttribute(
+      "href",
+      expect.stringMatching(/^https:\/\/www\.dhl\.de\/dam\//),
+    );
+    const gls = screen.getByTestId("rules-gls");
+    expect(gls).toHaveTextContent("GLS");
+    expect(gls).toHaveTextContent("€750 per parcel, capped at €750");
+    expect(gls).toHaveTextContent("365 days after delivery");
+    expect(gls).toHaveTextContent("168 h reserve window (prudential)");
+    // The statutory basis of the GLS windows is one of the two links shown, not hidden behind a third.
+    expect(within(gls).getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual([
+      expect.stringMatching(/gls-pakete\.de\/downloads\/AGB_GLS_Germany/),
+      "https://www.gesetze-im-internet.de/hgb/__438.html",
+    ]);
+    // Every German figure was read in an official text: all verified, nothing to warn about.
+    expect(dhl).toHaveTextContent(/4 verified/);
+    expect(gls).toHaveTextContent(/4 verified/);
+    expect(gls).not.toHaveTextContent(/unverified/);
+  });
+
   it("cites the public study with its address, its date and what it is not", () => {
     render(<SourcesSection measured={null} />);
     const source = screen.getByTestId("source-ds-smith-opinium-2026");

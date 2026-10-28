@@ -18,7 +18,9 @@ export function formatKg(weightKg: number): string {
 
 /**
  * "30 October 2026" or "30 October 2026, 23:59 (Paris time)". Europe/Paris, because the
- * carriers are French and their deadlines run on French time.
+ * carriers were French and their deadlines run on French time. The German carriers (DHL Paket,
+ * GLS, 28 Oct 2026) keep the same clock: Germany is on the same offset as France all year, so the
+ * time shown is right there too, only the word "Paris" is not the carrier's.
  */
 export function formatDate(iso: string, withTime = false): string {
   const date = new Date(iso);
@@ -47,6 +49,8 @@ export const CARRIER_LABELS: Record<CarrierId, string> = {
   colissimo: "Colissimo (La Poste)",
   mondial_relay: "Mondial Relay",
   chronopost: "Chronopost",
+  dhl_paket: "DHL Paket",
+  gls: "GLS Germany",
 };
 
 export const DAMAGE_TYPE_LABEL: Record<DamageType, string> = {

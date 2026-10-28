@@ -1,4 +1,5 @@
 import { hasModelKey } from "@/lib/config";
+import { isLanguageCode } from "@/lib/languages";
 import { MAX_VOICE_BYTES, MAX_VOICE_SECONDS, VOICE_MODEL } from "@/lib/voice/limits";
 import { issueVoiceReceipt } from "@/lib/voice/token";
 import { TranscribeError, transcribeAudio } from "@/lib/voice/transcribe";
@@ -24,6 +25,9 @@ const MAX_BODY_BYTES = MAX_VOICE_BYTES + 64 * 1024;
 const DEMO_TRANSCRIPTS: Record<string, string> = {
   en: "Hello, my vase arrived broken this morning. My order number is 1001. I attached a photo.",
   fr: "Bonjour, mon vase est arrivé cassé ce matin. Ma commande est la 1001. Je joins une photo.",
+  de: "Hallo, meine Vase ist heute Morgen kaputt angekommen. Meine Bestellnummer ist 1001. Ich habe ein Foto angehängt.",
+  es: "Hola, mi jarrón llegó roto esta mañana. Mi número de pedido es el 1001. Adjunto una foto.",
+  it: "Buongiorno, il mio vaso è arrivato rotto stamattina. Il mio numero d'ordine è 1001. Allego una foto.",
 };
 
 function isUploadedFile(value: FormDataEntryValue | null): value is File {
@@ -38,7 +42,7 @@ function isUploadedFile(value: FormDataEntryValue | null): value is File {
 /**
  * POST /api/transcribe: speech to text for a spoken damage report.
  * multipart/form-data with `audio` (a mono 16-bit PCM WAV at 16 or 24 kHz, at most
- * MAX_VOICE_SECONDS long: the browser encodes it) and an optional `language` ("en" or "fr").
+ * MAX_VOICE_SECONDS long: the browser encodes it) and an optional `language` (en, fr, de, es or it).
  * Answers `{ transcript, durationMs, model, demo, fellBackReason, voiceReceipt }`; the receipt is
  * signed and only present on a real transcription (see lib/voice/token.ts). The audio is held in
  * memory for the call and never written to disk.
@@ -95,7 +99,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const languageField = form.get("language");
   const language = typeof languageField === "string" ? languageField.trim().toLowerCase() : "";
-  const knownLanguage = language === "en" || language === "fr" ? language : undefined;
+  const knownLanguage = isLanguageCode(language) ? language : undefined;
 
   // Without a key the form still gets a labelled canned text (the access code was checked above).
   const fellBackReason: "no_credentials" | null = hasModelKey() ? null : "no_credentials";

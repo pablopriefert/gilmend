@@ -79,6 +79,14 @@ describe("seed payloads", () => {
     expect(input.shippingAddress).toMatchObject({ firstName: "Camille", lastName: "Laurent", countryCode: "FR" });
   });
 
+  it("seeds the German order as a German one, not with a French address", () => {
+    const german = listFixtureOrders(NOW).find((o) => o.id === "#1011")!;
+    const input = buildDraftOrderInput(german, shippingEurById[german.id]);
+    expect(input.tags).toContain("dd-carrier:dhl_paket");
+    expect(input.shippingAddress).toMatchObject({ city: "Hamburg", countryCode: "DE", zip: "10115" });
+    expect(input.shippingAddress.address1).not.toMatch(/rue/);
+  });
+
   it("writes the convention metafields, with delivered_at only when delivered", () => {
     const delivered = buildOrderMetafields(orders[0]);
     expect(delivered.map((m) => m.key).sort()).toEqual(

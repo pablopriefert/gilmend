@@ -4,6 +4,7 @@ import { CircleAlert, LoaderCircle, Mic, Square } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { MAX_VOICE_SECONDS } from "@/lib/voice/limits";
+import type { LanguageCode } from "@/lib/languages";
 import { accessHeaders } from "./access-code";
 import { cn } from "@/lib/utils";
 import { blobToWav } from "./voice-wav";
@@ -58,7 +59,7 @@ export function VoiceRecorder({
   onTranscript,
   onBusyChange,
 }: {
-  language: "auto" | "en" | "fr";
+  language: "auto" | LanguageCode;
   accessCode: string;
   disabled?: boolean;
   onTranscript: (result: VoiceResult) => void;

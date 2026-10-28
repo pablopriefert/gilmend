@@ -1,11 +1,18 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-10-27",
+  "lastReviewed": "2026-10-28",
   "disclaimer": "Public terms of the standard carrier contracts. A merchant with a negotiated contract may have different caps and deadlines; check the contract before filing. Amounts and deadlines are computed from this file by deterministic code, never by a model.",
   "carriers": {
     "colissimo": {
       "carrier": "colissimo",
       "label": "Colissimo (La Poste)",
+      "domestic": {
+        "name": "France",
+        "aliases": [
+          "fr",
+          "france"
+        ]
+      },
       "sources": [
         {
           "title": "Colissimo Entreprise general terms, Contrat Facilite (edition of 2020-12-08; clauses on standard indemnity and 12-month limitation read)",
@@ -107,6 +114,13 @@
     "mondial_relay": {
       "carrier": "mondial_relay",
       "label": "Mondial Relay (Offre Start)",
+      "domestic": {
+        "name": "France",
+        "aliases": [
+          "fr",
+          "france"
+        ]
+      },
       "sources": [
         {
           "title": "Mondial Relay general terms, Offre Start (updated 2025-09-01; 25 EUR per parcel and 72 h clauses read)",
@@ -183,6 +197,13 @@
     "chronopost": {
       "carrier": "chronopost",
       "label": "Chronopost (professional terms)",
+      "domestic": {
+        "name": "France",
+        "aliases": [
+          "fr",
+          "france"
+        ]
+      },
       "sources": [
         {
           "title": "Chronopost general terms of sale, professionals (online page, undated; limits and 3-day claim deadline read)",
@@ -267,6 +288,185 @@
         "Claims are filed by the merchant through the online customer service form or live chat; no claim API was found. The shipping fee must have been paid."
       ],
       "compensationCaveat": "Chronopost pays on supporting documents (purchase invoice dated no later than the shipping day, photos of the damage)."
+    },
+    "dhl_paket": {
+      "carrier": "dhl_paket",
+      "label": "DHL Paket (Germany, standard terms)",
+      "domestic": {
+        "name": "Germany",
+        "aliases": [
+          "de",
+          "germany",
+          "deutschland"
+        ]
+      },
+      "sources": [
+        {
+          "title": "DHL Paket/Express National general terms (AGB), the edition linked from dhl.de's list of valid terms on 2026-10-28 (it states \"Maßgeblicher Stand: 01/2027\"); clauses 3(4), 6(3) and 7(3) read",
+          "url": "https://www.dhl.de/dam/jcr:b2845bef-cd08-4139-a4a1-0a9253d0bfd1/dhl-agb-paket-express-national-de-102026.pdf",
+          "checkedOn": "2026-10-28"
+        },
+        {
+          "title": "DHL help page, my parcel was delivered but the content is damaged or missing (7-day report deadline, Schadensanzeige form)",
+          "url": "https://www.dhl.de/de/privatkunden/hilfe-kundenservice/empfangen/zustellung/paket-geliefert.html",
+          "checkedOn": "2026-10-28"
+        },
+        {
+          "title": "German Commercial Code (HGB), § 438 Schadensanzeige (apparent damage at delivery, otherwise 7 days; the DHL terms apply the HGB freight law)",
+          "url": "https://www.gesetze-im-internet.de/hgb/__438.html",
+          "checkedOn": "2026-10-28"
+        }
+      ],
+      "reserveDeadlineHours": 168,
+      "claimDeadlineDays": 7,
+      "compensation": {
+        "flatEur": 500,
+        "capEur": 500
+      },
+      "requiresRefusal": false,
+      "claimDeadlineFrom": "delivery",
+      "reserveDeadlineBinding": true,
+      "compensationVariants": [],
+      "figures": [
+        {
+          "key": "compensation.flatEur",
+          "label": "Amount up to which DHL waives the statutory liability limit (parcels)",
+          "value": "500 EUR per parcel",
+          "status": "verified",
+          "sourceUrl": "https://www.dhl.de/dam/jcr:b2845bef-cd08-4139-a4a1-0a9253d0bfd1/dhl-agb-paket-express-national-de-102026.pdf",
+          "checkedOn": "2026-10-28",
+          "note": "Clause 6(3): DHL does not invoke the statutory limits for loss or damage of up to 500 EUR. The same 500 EUR figure is in the 07/2025 edition (read on 2026-10-28 too). Above 500 EUR only the statutory limit of the HGB applies; it was not read and is not modelled, so the ceiling stays at 500 EUR."
+        },
+        {
+          "key": "compensation.capEur",
+          "label": "Cap per parcel (standard terms)",
+          "value": "500 EUR",
+          "status": "verified",
+          "sourceUrl": "https://www.dhl.de/dam/jcr:b2845bef-cd08-4139-a4a1-0a9253d0bfd1/dhl-agb-paket-express-national-de-102026.pdf",
+          "checkedOn": "2026-10-28",
+          "note": "Same clause. The claim is the lower of the item value and 500 EUR. The Päckchen (small packet) is not modelled: the edition of 01/2027 lowers this amount to 20 EUR for it."
+        },
+        {
+          "key": "claimDeadlineDays",
+          "label": "Time limit to report damage after delivery",
+          "value": "7 days after delivery",
+          "status": "verified",
+          "sourceUrl": "https://www.dhl.de/de/privatkunden/hilfe-kundenservice/empfangen/zustellung/paket-geliefert.html",
+          "checkedOn": "2026-10-28",
+          "note": "DHL's help page says damage to the contents must be reported to DHL within 7 days of delivery. The HGB says the same for damage that is not visible from outside (§ 438(2)). The page is written for recipients; the merchant's own contract is not public. Counted in calendar days."
+        },
+        {
+          "key": "reserveDeadlineHours",
+          "label": "Reserve window after delivery",
+          "value": "168 hours (7 days)",
+          "status": "verified",
+          "sourceUrl": "https://www.dhl.de/de/privatkunden/hilfe-kundenservice/empfangen/zustellung/paket-geliefert.html",
+          "checkedOn": "2026-10-28",
+          "note": "Same 7-day clause as the claim deadline. Damage visible from outside should be shown to the courier at delivery (§ 438(1) HGB: otherwise the carrier may presume the parcel arrived undamaged); the order does not record that, so the code cannot check it."
+        }
+      ],
+      "notes": [
+        "Figures are for DHL's public standard terms for parcels within Germany (AGB Paket/Express National). A merchant with a negotiated DHL business contract may have other limits and deadlines (not public). UNVERIFIED for those merchants.",
+        "Scope: the national terms cover a parcel sent from and to an address in Germany (a German warehouse, for example). A parcel shipped from France to Germany is cross-border and is not covered by this file. The order does not carry the origin, so the code only checks the destination country.",
+        "Edition: dhl.de links an edition of the national terms dated \"Maßgeblicher Stand: 01/2027\" (read on 2026-10-28). Its parcel figures (500 EUR) match the 07/2025 edition, so nothing modelled depends on the difference. Check dhl.de again in January 2027.",
+        "The sender must pack the goods so that they are protected from damage (clause 3(4), § 411 HGB), and the optional transport insurance excludes damage caused by missing or poor packaging (clause 7(3)). Expect DHL to look at the packaging.",
+        "Above 500 EUR only the statutory HGB limit applies unless the sender bought the optional transport insurance (2,500 or 25,000 EUR); the order does not say whether it was bought and it is not modelled. Jewellery, watches, art and similar items worth over 500 EUR are excluded from carriage (clause 2(2) no. 7): a high-value parcel must go to a human.",
+        "The Päckchen (small packet) is not modelled: dhl.de lists the Brief AGB for it, which were not read, and the national terms of 01/2027 give it a 20 EUR amount. The demo orders are Pakete.",
+        "How to file, per DHL's help page for recipients: fill in the DHL Schadensanzeige form, then hand the damaged parcel in with all its parts at a DHL branch or book the free collection; DHL inspects it and sends it back. No claim API was found. Check the procedure of the merchant's own contract."
+      ],
+      "compensationCaveat": "DHL pays at most 500 EUR per parcel without the optional transport insurance; the amount is computed from the sale price on the order, so the final indemnity may be lower."
+    },
+    "gls": {
+      "carrier": "gls",
+      "label": "GLS Germany (business terms)",
+      "domestic": {
+        "name": "Germany",
+        "aliases": [
+          "de",
+          "germany",
+          "deutschland"
+        ]
+      },
+      "sources": [
+        {
+          "title": "GLS Germany general terms for business customers (AGB), valid from 2025-01-01 as listed on gls-pakete.de; clauses 4.1, 4.5, 10.1, 10.2, 10.3 and 10.6 read",
+          "url": "https://www.gls-pakete.de/downloads/AGB_GLS_Germany_2025-01_DE_2024-10-25_FINAL-WEB.pdf",
+          "checkedOn": "2026-10-28"
+        },
+        {
+          "title": "German Commercial Code (HGB), § 438 Schadensanzeige (the statutory report deadlines that GLS clause 10.6 makes applicable)",
+          "url": "https://www.gesetze-im-internet.de/hgb/__438.html",
+          "checkedOn": "2026-10-28"
+        },
+        {
+          "title": "German Commercial Code (HGB), § 439 Verjährung (one-year limitation for freight claims, from delivery)",
+          "url": "https://www.gesetze-im-internet.de/hgb/__439.html",
+          "checkedOn": "2026-10-28"
+        },
+        {
+          "title": "GLS Germany: how a business shipper reports a damaged parcel (contact form or customer portal)",
+          "url": "https://www.gls-pakete.de/geschaeftlich-versenden/faq/was-kann-ich-als-geschaeftlicher-versender-tun-wenn-mein-paket-beschaedigt-oder-nicht-in-ordnung-ist-q-321587",
+          "checkedOn": "2026-10-28"
+        }
+      ],
+      "reserveDeadlineHours": 168,
+      "claimDeadlineDays": 365,
+      "compensation": {
+        "flatEur": 750,
+        "capEur": 750
+      },
+      "requiresRefusal": false,
+      "claimDeadlineFrom": "delivery",
+      "reserveDeadlineBinding": false,
+      "compensationVariants": [],
+      "figures": [
+        {
+          "key": "compensation.flatEur",
+          "label": "Indemnity per parcel when the sender bought no transport insurance",
+          "value": "up to 750 EUR per parcel",
+          "status": "verified",
+          "sourceUrl": "https://www.gls-pakete.de/downloads/AGB_GLS_Germany_2025-01_DE_2024-10-25_FINAL-WEB.pdf",
+          "checkedOn": "2026-10-28",
+          "note": "Clause 10.2 (edition of January 2025): GLS refunds the value of the goods, limited to the sender's purchase price (the time value for used goods), and at most 750 EUR per parcel. Applies when the sender has no transport insurance."
+        },
+        {
+          "key": "compensation.capEur",
+          "label": "Cap per parcel (standard terms)",
+          "value": "750 EUR",
+          "status": "verified",
+          "sourceUrl": "https://www.gls-pakete.de/downloads/AGB_GLS_Germany_2025-01_DE_2024-10-25_FINAL-WEB.pdf",
+          "checkedOn": "2026-10-28",
+          "note": "Same clause. The order only carries the sale price, so the ceiling computed here uses the sale price and the real indemnity may be lower."
+        },
+        {
+          "key": "reserveDeadlineHours",
+          "label": "Damage report window after delivery (statutory, applied by GLS clause 10.6)",
+          "value": "168 hours (7 days)",
+          "status": "verified",
+          "sourceUrl": "https://www.gesetze-im-internet.de/hgb/__438.html",
+          "checkedOn": "2026-10-28",
+          "note": "GLS publishes no deadline of its own: clause 10.6 says the statutory report deadlines apply. § 438 HGB: damage visible from outside must be reported at delivery, other damage within 7 days; a late report makes the carrier presume the parcel arrived undamaged, which can still be rebutted. So a late report is a warning here, never a block."
+        },
+        {
+          "key": "claimDeadlineDays",
+          "label": "Limitation period for the claim (statutory, from delivery)",
+          "value": "1 year after delivery",
+          "status": "verified",
+          "sourceUrl": "https://www.gesetze-im-internet.de/hgb/__439.html",
+          "checkedOn": "2026-10-28",
+          "note": "GLS clause 1.2 applies the HGB freight law; § 439 gives one year from delivery (three years for gross negligence, not modelled). Counted as 365 days."
+        }
+      ],
+      "notes": [
+        "Figures are for GLS Germany's public terms for business customers, for parcels within Germany. A merchant with a negotiated GLS contract may have other limits (not public). UNVERIFIED for those merchants.",
+        "Scope: these terms cover a parcel sent from and to an address in Germany. A parcel shipped from France to Germany is cross-border and not covered by this file. The order does not carry the origin, so the code only checks the destination country.",
+        "GLS excludes insufficient packaging and goods that need special handling, such as fragile goods, from carriage (clause 4.1), and a \"Vorsicht Glas\" label does not count as telling GLS (clause 4.5). For glass and ceramics expect GLS to look hard at the packaging.",
+        "The 750 EUR level is GLS's limit without transport insurance; GLS also excludes parcels worth over 5,000 EUR and jewellery, watches and art worth over 750 EUR (clause 4.1). A high-value parcel must go to a human.",
+        "GLS does not pay consequential losses such as lost profit or replacement costs (clause 10.3).",
+        "The 7-day and one-year periods are not GLS figures: they come from the HGB, which clause 10.6 (report deadlines) and clause 1.2 (freight law) make applicable. GLS makes no statement of its own to check them against.",
+        "How to file, per GLS: the business shipper reports damage through the GLS business contact form or in the customer portal under \"Paketschäden\"; the portal helps GLS assign the claim faster. No claim API was found."
+      ],
+      "compensationCaveat": "GLS refunds the sender's purchase price, up to 750 EUR per parcel without transport insurance. This ceiling uses the order's sale price, so the final indemnity may be lower."
     }
   }
 }

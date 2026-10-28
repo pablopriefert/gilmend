@@ -53,7 +53,7 @@ function makeAssessment(overrides: Partial<DamageAssessment> = {}): DamageAssess
 const joined = (reasons: string[]) => reasons.join("\n");
 
 describe("carrier rules file", () => {
-  it.each<CarrierId>(["colissimo", "mondial_relay", "chronopost"])(
+  it.each<CarrierId>(["colissimo", "mondial_relay", "chronopost", "dhl_paket", "gls"])(
     "%s has dated sources and a status on every figure",
     (carrier) => {
       const rules = getCarrierRulesDetailed(carrier);
@@ -88,6 +88,45 @@ describe("carrier rules file", () => {
     });
     const chrono = getCarrierRulesDetailed("chronopost");
     expect(chrono.compensationVariants[0].compensation).toEqual({ perKgEur: 23, capEur: 690 });
+    // The German carriers (28 Oct 2026), read in their own terms and in the HGB they apply.
+    expect(getCarrierRules("dhl_paket")).toMatchObject({
+      reserveDeadlineHours: 168,
+      claimDeadlineDays: 7,
+      compensation: { flatEur: 500, capEur: 500 },
+    });
+    expect(getCarrierRules("gls")).toMatchObject({
+      reserveDeadlineHours: 168,
+      claimDeadlineDays: 365,
+      compensation: { flatEur: 750, capEur: 750 },
+    });
+  });
+
+  it("names the country each carrier's rules cover", () => {
+    for (const id of ["colissimo", "mondial_relay", "chronopost"] as const) {
+      expect(getCarrierRulesDetailed(id).domestic.name).toBe("France");
+    }
+    for (const id of ["dhl_paket", "gls"] as const) {
+      expect(getCarrierRulesDetailed(id).domestic).toEqual({ name: "Germany", aliases: ["de", "germany", "deutschland"] });
+    }
+  });
+
+  it("gives every German source a link to a page read on the review date, and says where a figure is statutory", () => {
+    for (const id of ["dhl_paket", "gls"] as const) {
+      const rules = getCarrierRulesDetailed(id);
+      expect(rules.sources.length).toBeGreaterThanOrEqual(3);
+      expect(rules.sources.every((x) => x.checkedOn === "2026-10-28")).toBe(true);
+      // Official hosts only: the carrier's own pages or the federal statute database.
+      for (const x of rules.sources) {
+        expect(new URL(x.url).hostname, x.url).toMatch(/^(www\.dhl\.de|www\.gls-pakete\.de|www\.gesetze-im-internet\.de)$/);
+      }
+    }
+    // GLS publishes no deadline of its own: the figure must say it is the HGB's, not GLS's.
+    const gls = getCarrierRulesDetailed("gls");
+    const reserve = gls.figures.find((f) => f.key === "reserveDeadlineHours")!;
+    expect(reserve.label).toMatch(/statutory/);
+    expect(reserve.sourceUrl).toMatch(/gesetze-im-internet\.de/);
+    expect(reserve.note).toMatch(/GLS publishes no deadline of its own/);
+    expect(joined(gls.notes)).toMatch(/not GLS figures/);
   });
 
   it("marks what could not be confirmed instead of hiding it", () => {
@@ -96,6 +135,9 @@ describe("carrier rules file", () => {
     expect(joined(getCarrierRules("colissimo").notes)).toMatch(/DATED SOURCE/);
     expect(figuresNeedingCheck("mondial_relay")).toEqual([]);
     expect(figuresNeedingCheck("chronopost")).toEqual([]);
+    // Every German figure was read on 2026-10-28 in an official text: nothing is left unverified.
+    expect(figuresNeedingCheck("dhl_paket")).toEqual([]);
+    expect(figuresNeedingCheck("gls")).toEqual([]);
   });
 
   it("returns a copy so a caller cannot change the rules for everybody", () => {
@@ -331,6 +373,148 @@ describe("computeClaim: Chronopost", () => {
     // Deadline is 3 days after 10:00; 67 h remain, which is 2 whole days.
     expect(c.daysLeft).toBe(2);
     expect(c.claimDeadline).toBe("2026-10-23T10:00:00.000Z");
+  });
+});
+
+// DHL Paket and GLS, Germany (28 Oct 2026). Same delivery date as above: Tuesday 2026-10-20 at 10:00.
+describe("computeClaim: DHL Paket", () => {
+  const order = makeOrder({
+    carrier: "dhl_paket",
+    service: "DHL Paket",
+    weightKg: 1.8,
+    lineItems: [{ sku: "C1", title: "Cut-glass water carafe, 1.5 L", quantity: 1, unitPrice: 54 }],
+    shippingAddress: { city: "Hamburg", country: "DE" },
+  });
+  const assessment = makeAssessment({ item: "glass carafe" });
+
+  it("pays the item value when it is below the 500 EUR DHL does not hold to the statutory limit", () => {
+    const c = computeClaim(order, assessment, reportAfter(3 * HOUR), afterDelivery(4 * HOUR));
+    expect(c.eligible).toBe(true);
+    expect(c.maxCompensationEur).toBe(54);
+    expect(c.basis).toMatchObject({ termsLabel: "DHL Paket (Germany, standard terms)", flatEur: 500, capEur: 500, itemValueEur: 54 });
+    expect(c.basis?.perKgEur).toBeUndefined();
+    expect(joined(c.reasons)).toMatch(/min\(item value 54\.00 EUR, 500\.00 EUR per parcel, cap 500\.00 EUR\) = 54\.00 EUR/);
+  });
+
+  it("caps an expensive parcel at 500 EUR, whatever the weight", () => {
+    const dear = makeOrder({ ...order, weightKg: 12, lineItems: [{ sku: "C1", title: "Cut-glass water carafe, 1.5 L", quantity: 1, unitPrice: 800 }] });
+    const c = computeClaim(dear, assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
+    expect(c.maxCompensationEur).toBe(500);
+  });
+
+  it("needs no weight: the amount is flat, so a missing weight does not block it", () => {
+    const c = computeClaim(makeOrder({ ...order, weightKg: 0 }), assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
+    expect(c.eligible).toBe(true);
+    expect(c.maxCompensationEur).toBe(54);
+  });
+
+  it("is in time exactly 7 days after delivery, with under 24 h warning, and late a millisecond later", () => {
+    const inTime = computeClaim(order, assessment, reportAfter(7 * DAY), afterDelivery(7 * DAY));
+    expect(inTime.eligible).toBe(true);
+    expect(inTime.claimDeadline).toBe("2026-10-27T10:00:00.000Z");
+    expect(inTime.reserveDeadline).toBe("2026-10-27T10:00:00.000Z");
+    expect(joined(inTime.reasons)).toMatch(/Warning: less than 24 h left/);
+    const late = computeClaim(order, assessment, reportAfter(HOUR), afterDelivery(7 * DAY + 1));
+    expect(late.eligible).toBe(false);
+    expect(late.claimDeadline).toBeNull();
+    expect(joined(late.reasons)).toMatch(/claim deadline of DHL Paket \(Germany, standard terms\) passed on 2026-10-27T10:00Z \(7 days after delivery\)/);
+  });
+
+  it("blocks a damage report made after the 7 days DHL gives, because DHL says it must be reported within them", () => {
+    const c = computeClaim(order, assessment, reportAfter(7 * DAY + HOUR), afterDelivery(7 * DAY + 2 * HOUR));
+    expect(c.eligible).toBe(false);
+    expect(joined(c.reasons)).toMatch(/after the 168 h reserve window of DHL Paket/);
+  });
+
+  it("is reported 3 days after delivery without a warning about the window", () => {
+    const c = computeClaim(order, assessment, reportAfter(3 * DAY), afterDelivery(3 * DAY + HOUR));
+    expect(c.eligible).toBe(true);
+    expect(joined(c.reasons)).toMatch(/72 h after delivery, inside the 168 h reserve window/);
+    expect(joined(c.reasons)).not.toMatch(/prudential/);
+  });
+
+  it("covers parcels within Germany only, whatever the spelling of the country", () => {
+    for (const country of ["DE", "de", "Germany", "Deutschland", " germany "]) {
+      const c = computeClaim(makeOrder({ ...order, shippingAddress: { city: "Berlin", country } }), assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
+      expect(c.eligible, country).toBe(true);
+    }
+    const france = computeClaim(makeOrder({ ...order, shippingAddress: { city: "Lyon", country: "FR" } }), assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
+    expect(france.eligible).toBe(false);
+    expect(joined(france.reasons)).toMatch(/within Germany only/);
+    expect(france.claimDeadline).toBeNull();
+  });
+
+  it("does not ask whether the parcel was refused (that is Mondial Relay's rule)", () => {
+    const c = computeClaim(order, assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
+    expect(joined(c.reasons)).not.toMatch(/refused/);
+  });
+
+  it("adds the 500 EUR caveat to an eligible claim and states the packing clause it read", () => {
+    const c = computeClaim(order, assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
+    expect(joined(c.reasons)).toMatch(/Note: DHL pays at most 500 EUR per parcel without the optional transport insurance/);
+    const warned = computeClaim(order, makeAssessment({ item: "glass carafe", packagingAdequate: false }), reportAfter(HOUR), afterDelivery(2 * HOUR));
+    expect(warned.eligible).toBe(true);
+    expect(joined(warned.reasons)).toMatch(/terms we read exclude unsuitable packaging/);
+  });
+
+  it("sends a claim in another currency to a person", () => {
+    const c = computeClaim(makeOrder({ ...order, currency: "CHF" }), assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
+    expect(c.eligible).toBe(false);
+    expect(joined(c.reasons)).toMatch(/in CHF/);
+  });
+});
+
+describe("computeClaim: GLS Germany", () => {
+  const order = makeOrder({
+    carrier: "gls",
+    service: "GLS Paket",
+    weightKg: 2.4,
+    lineItems: [{ sku: "V1", title: "Stoneware vase, tall", quantity: 1, unitPrice: 120 }],
+    shippingAddress: { city: "Munich", country: "DE" },
+  });
+  const assessment = makeAssessment({ item: "stoneware vase" });
+
+  it("pays the item value up to 750 EUR per parcel", () => {
+    const c = computeClaim(order, assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
+    expect(c.eligible).toBe(true);
+    expect(c.maxCompensationEur).toBe(120);
+    expect(c.basis).toMatchObject({ termsLabel: "GLS Germany (business terms)", flatEur: 750, capEur: 750 });
+    const dear = makeOrder({ ...order, lineItems: [{ sku: "V1", title: "Stoneware vase, tall", quantity: 1, unitPrice: 900 }] });
+    expect(computeClaim(dear, assessment, reportAfter(HOUR), afterDelivery(2 * HOUR)).maxCompensationEur).toBe(750);
+  });
+
+  it("adds the purchase-price caveat, because GLS refunds what the sender paid", () => {
+    const c = computeClaim(order, assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
+    expect(joined(c.reasons)).toMatch(/Note: GLS refunds the sender's purchase price, up to 750 EUR per parcel without transport insurance/);
+  });
+
+  it("only warns about a report after the 7 days, because the window is the statutory one", () => {
+    const c = computeClaim(order, assessment, reportAfter(10 * DAY), afterDelivery(10 * DAY));
+    expect(c.eligible).toBe(true);
+    expect(joined(c.reasons)).toMatch(/Warning: .*240 h after delivery.*prudential reserve window \(a statutory window: a late report weakens the claim for GLS Germany \(business terms\) without ending it\)/);
+    // And it is not the Colissimo wording, which says the window itself is not confirmed.
+    expect(joined(c.reasons)).not.toMatch(/not confirmed for/);
+  });
+
+  it("is in time up to one year after delivery and not after", () => {
+    const inTime = computeClaim(order, assessment, reportAfter(HOUR), new Date("2027-10-20T10:00:00.000Z"));
+    expect(inTime.eligible).toBe(true);
+    expect(inTime.claimDeadline).toBe("2027-10-20T10:00:00.000Z");
+    const late = computeClaim(order, assessment, reportAfter(HOUR), new Date("2027-10-20T10:00:00.001Z"));
+    expect(late.eligible).toBe(false);
+    expect(joined(late.reasons)).toMatch(/claim deadline of GLS Germany \(business terms\) passed on 2027-10-20T10:00Z \(365 days after delivery\)/);
+  });
+
+  it("covers parcels within Germany only", () => {
+    const c = computeClaim(makeOrder({ ...order, shippingAddress: { city: "Vienna", country: "AT" } }), assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
+    expect(c.eligible).toBe(false);
+    expect(joined(c.reasons)).toMatch(/within Germany only/);
+  });
+
+  it("states the packing clause it read, since GLS excludes unsuitable packaging", () => {
+    const warned = computeClaim(order, makeAssessment({ item: "stoneware vase", packagingAdequate: false }), reportAfter(HOUR), afterDelivery(2 * HOUR));
+    expect(warned.eligible).toBe(true);
+    expect(joined(warned.reasons)).toMatch(/terms we read exclude unsuitable packaging/);
   });
 });
 

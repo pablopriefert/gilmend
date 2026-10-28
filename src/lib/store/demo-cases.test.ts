@@ -11,8 +11,8 @@ const HOUR = 3_600_000;
 describe("demo cases", () => {
   const cases = loadDemoCases(NOW);
 
-  it("holds the six cases of the spec", () => {
-    expect(cases).toHaveLength(6);
+  it("holds the six cases of the spec and the German case of the Europe lot", () => {
+    expect(cases).toHaveLength(7);
     expect(cases.map((c) => c.id)).toEqual([
       "demo-1-vase-broken",
       "demo-2-carton-crushed",
@@ -20,6 +20,7 @@ describe("demo cases", () => {
       "demo-4-opened-missing",
       "demo-5-expensive-escalation",
       "demo-6-late-report",
+      "demo-7-german-carafe",
     ]);
   });
 
@@ -83,15 +84,20 @@ describe("demo cases", () => {
     expect(order.service).not.toMatch(/declared|insur|assur/i);
   });
 
-  it("each case has one photo path under data/photos, all distinct", () => {
+  it("each case has one photo path under data/photos, and only the German case reuses one", () => {
     const photos = cases.flatMap((c) => c.report.photos);
-    expect(photos).toHaveLength(6);
+    expect(photos).toHaveLength(7);
+    // Six distinct pictures: the German carafe is the photo of case 6, under its own order and customer.
     expect(new Set(photos).size).toBe(6);
+    const german = cases.find((c) => c.id === "demo-7-german-carafe")!;
+    expect(german.report.photos).toEqual(cases.find((c) => c.id === "demo-6-late-report")!.report.photos);
+    expect(german.report.orderNumber).not.toBe(cases.find((c) => c.id === "demo-6-late-report")!.report.orderNumber);
     for (const p of photos) expect(p).toMatch(/^data\/photos\/[a-z0-9-]+\.jpg$/);
   });
 
-  it("mixes languages: one customer writes in French", () => {
+  it("mixes languages: one customer writes in French, one in German", () => {
     expect(cases.filter((c) => c.report.language === "fr")).toHaveLength(1);
+    expect(cases.filter((c) => c.report.language === "de")).toHaveLength(1);
   });
 
   it("keeps reports relative to now", () => {
@@ -100,7 +106,7 @@ describe("demo cases", () => {
   });
 
   it("missingDemoPhotos lists photos not shot yet", () => {
-    expect(missingDemoPhotos("/nonexistent-root", cases)).toHaveLength(6);
+    expect(missingDemoPhotos("/nonexistent-root", cases)).toHaveLength(7);
   });
 
   describe("parseDemoCases rejects bad data", () => {

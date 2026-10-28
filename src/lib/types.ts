@@ -9,7 +9,10 @@
 //  - amounts and deadlines NEVER come from the model: they come from carriers.ts rules
 //    and computeClaim (deterministic code).
 
-export type CarrierId = "colissimo" | "mondial_relay" | "chronopost";
+// Colissimo, Mondial Relay and Chronopost cover shipments within France; DHL Paket and GLS cover
+// shipments within Germany (28 Oct 2026, Europe lot). Each carrier's domestic scope is in
+// data/carriers.json (`domestic`); computeClaim sends a parcel outside it to a person.
+export type CarrierId = "colissimo" | "mondial_relay" | "chronopost" | "dhl_paket" | "gls";
 
 /**
  * Which engine produced a case. 'demo-mock' is the deterministic mock provider (no key).

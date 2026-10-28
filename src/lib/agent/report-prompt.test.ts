@@ -16,6 +16,24 @@ describe("report prompt", () => {
     });
   });
 
+  it.each([
+    ["en", "English"],
+    ["fr", "French"],
+    ["de", "German"],
+    ["es", "Spanish"],
+    ["it", "Italian"],
+  ])("names the reply language next to the code (%s: %s), and still round-trips the code", (code, name) => {
+    const text = formatReportMessage(makeReport({ language: code }), [0]);
+    expect(text).toContain(`Customer language: ${code}\nReply language: ${name}\n`);
+    expect(parseReportMessage(text)?.language).toBe(code);
+  });
+
+  it("adds no reply-language line for a code outside the supported list, and keeps the code", () => {
+    const text = formatReportMessage(makeReport({ language: "nl" }), [0]);
+    expect(text).not.toContain("Reply language:");
+    expect(parseReportMessage(text)?.language).toBe("nl");
+  });
+
   it("says 'none' when no photo is attached", () => {
     const parsed = parseReportMessage(formatReportMessage(makeReport({ photos: [] }), []));
     expect(parsed?.photoIndexes).toEqual([]);

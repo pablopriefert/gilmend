@@ -7,10 +7,10 @@ const NOW = new Date("2026-10-30T12:00:00.000Z");
 const HOUR = 3_600_000;
 
 describe("fixture orders", () => {
-  it("the bundled file validates and holds 8 to 10 orders", () => {
+  it("the bundled file validates and holds 8 to 11 orders", () => {
     const fixtures = loadFixtureOrders();
     expect(fixtures.length).toBeGreaterThanOrEqual(8);
-    expect(fixtures.length).toBeLessThanOrEqual(10);
+    expect(fixtures.length).toBeLessThanOrEqual(11);
   });
 
   it("covers the three carriers, two orders each at least", () => {
@@ -19,6 +19,46 @@ describe("fixture orders", () => {
     for (const carrier of ["colissimo", "mondial_relay", "chronopost"] as const) {
       expect(counts.get(carrier) ?? 0).toBeGreaterThanOrEqual(2);
     }
+  });
+
+  it("holds the German order of the Europe lot: DHL Paket, within Germany, delivered, with a fictitious customer", () => {
+    const order = listFixtureOrders(NOW).find((o) => o.id === "#1011")!;
+    expect(order).toMatchObject({
+      carrier: "dhl_paket",
+      service: "DHL Paket",
+      currency: "EUR",
+      email: "jonas.weber@example.org",
+      shippingAddress: { city: "Hamburg", country: "DE" },
+    });
+    expect(order.deliveredAt).not.toBeNull();
+    expect(order.lineItems).toHaveLength(1);
+    // The demo case reports it 3 h ago: the order must have been delivered before that (a test of
+    // demo-cases.test.ts checks it for every case; this keeps the German one honest on its own).
+    expect(Date.parse(order.deliveredAt!)).toBeLessThan(NOW.getTime() - 3 * HOUR);
+  });
+
+  it("accepts the two German carriers and still rejects an unknown one", () => {
+    const base = (carrier: string) => ({
+      orders: [
+        {
+          id: "#2001",
+          name: "Test Person",
+          email: "test.person@example.com",
+          carrier,
+          service: "S",
+          trackingNumber: "T1",
+          weightKg: 1,
+          currency: "EUR",
+          lineItems: [{ sku: "A", title: "Item", quantity: 1, unitPrice: 10 }],
+          shippingEur: 0,
+          shippingAddress: { city: "Berlin", country: "DE" },
+          timing: { orderedHoursAgo: 10, deliveredHoursAgo: 2 },
+        },
+      ],
+    });
+    expect(parseFixtureOrders(base("dhl_paket"))[0].carrier).toBe("dhl_paket");
+    expect(parseFixtureOrders(base("gls"))[0].carrier).toBe("gls");
+    expect(() => parseFixtureOrders(base("ups"))).toThrow(/unknown carrier "ups"/);
   });
 
   it("only uses reserved example domains, so no fixture is a real mailbox", () => {
