@@ -20,6 +20,7 @@
     "real:follow-up": "tsx --env-file=.env.local scripts/run-real-follow-up.ts",
     "probe": "tsx --env-file=.env.local scripts/probe-engine.ts",
     "sam-probe": "tsx --env-file=.env.local scripts/sam-probe.ts",
+    "sweep": "tsx --env-file=.env.local scripts/run-sweep.ts",
     "showcase:build": "tsx scripts/build-showcase.ts"
   },
   "dependencies": {

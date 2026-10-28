@@ -1,3 +1,4 @@
+import { claimIsFileable } from "@/lib/claim-filing";
 import { getCase, updateCase } from "@/lib/store/cases";
 import type { CaseRecord, CaseStatus, TraceStep } from "@/lib/types";
 import { requireAccessCode } from "../../_lib/access";
@@ -29,9 +30,12 @@ export async function GET(_request: Request, { params }: RouteContext): Promise<
 
 /**
  * PATCH /api/cases/[id]: the human's actions on a case.
- * Body: `{ status?: "approved" | "rejected" | "needs_review", customerReply?: string }`.
+ * Body: `{ status?: "approved" | "rejected" | "needs_review", customerReply?: string, claimFiled?: boolean }`.
  * Approving only marks the case approved ("ready to send"); nothing is sent to a carrier or
- * a customer. Editing replaces the drafted customer reply. Every change is added to the trace.
+ * a customer. Editing replaces the drafted customer reply. `claimFiled: true` is the merchant's note
+ * that they filed the carrier claim themselves (only on an approved case with an eligible claim):
+ * Gilmend files nothing, it only stops the morning sweep from reminding them. `false` clears the
+ * note. Every change is added to the trace.
  * When DAMAGE_DESK_ACCESS_CODE is set, the `x-access-code` header must carry it (else 401, and
  * 429 after too many wrong codes).
  */
@@ -52,10 +56,13 @@ export async function PATCH(request: Request, { params }: RouteContext): Promise
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return errorResponse(400, "invalid_body", "The body must be a JSON object.");
   }
-  const { status, customerReply } = body as { status?: unknown; customerReply?: unknown };
+  const { status, customerReply, claimFiled } = body as { status?: unknown; customerReply?: unknown; claimFiled?: unknown };
 
-  if (status === undefined && customerReply === undefined) {
-    return errorResponse(400, "invalid_body", "Nothing to change: send `status` and/or `customerReply`.");
+  if (status === undefined && customerReply === undefined && claimFiled === undefined) {
+    return errorResponse(400, "invalid_body", "Nothing to change: send `status`, `customerReply` and/or `claimFiled`.");
+  }
+  if (claimFiled !== undefined && typeof claimFiled !== "boolean") {
+    return errorResponse(400, "invalid_body", "`claimFiled` must be true or false.");
   }
   if (status !== undefined && !SETTABLE_STATUSES.includes(status as CaseStatus)) {
     return errorResponse(
@@ -84,6 +91,17 @@ export async function PATCH(request: Request, { params }: RouteContext): Promise
       return errorResponse(409, "no_decision", "This case has no decision yet: there is nothing to approve or edit.");
     }
 
+    // Marking a claim as filed makes sense only where a claim is waiting to be filed (the same test the
+    // morning sweep uses, claimIsFileable). Clearing the note is always allowed: a mistaken click is
+    // undone from the Today panel and from the case page.
+    if (claimFiled === true && !claimIsFileable(current)) {
+      return errorResponse(
+        409,
+        "claim_not_fileable",
+        "Only an approved case with an eligible claim can be marked as filed.",
+      );
+    }
+
     const now = new Date().toISOString();
     // Only the lines this request adds: the store appends them to the trace it reads under
     // its lock, so a concurrent change from another tab keeps its own line.
@@ -105,6 +123,17 @@ export async function PATCH(request: Request, { params }: RouteContext): Promise
               : "Merchant reopened the case for review.",
         at: now,
       });
+    }
+    if (claimFiled === true && !current.claimFiledAt) {
+      patch.claimFiledAt = now;
+      added.push({
+        step: "Merchant marked the carrier claim as filed. Gilmend filed nothing: this only stops the reminder.",
+        at: now,
+      });
+    } else if (claimFiled === false && current.claimFiledAt) {
+      // null, not undefined: the store drops undefined fields from a patch.
+      patch.claimFiledAt = null;
+      added.push({ step: "Merchant cleared the \"claim filed\" note.", at: now });
     }
     if (Object.keys(patch).length === 0) {
       return Response.json({ case: current }, { headers: NOCACHE });

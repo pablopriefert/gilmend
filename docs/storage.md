@@ -25,6 +25,7 @@ Two things address it:
 | Cases on an object store | `src/lib/store/object-case-store.ts` | One JSON object per case under `cases/` |
 | Files on an object store | `src/lib/storage/runtime-files.ts` | Local disk stays the working copy; each file is copied out after it is written and copied back when another instance asks for it |
 | Showcase under any store | `src/lib/store/layered-store.ts` | Recorded runs are listed with the stored cases; the first change to one stores a copy |
+| The latest morning sweep | `src/lib/sweep/store.ts` | One JSON object, `sweep/latest.json`, replaced on every sweep (or `<runtime dir>/sweep/latest.json` on local files). Without the shared store a sweep run by the cron on one instance is not seen from another |
 | In-memory test backend | `src/lib/storage/faux-object-store.ts` | Behaves like a bucket (atomic replace, ETags, conditional writes) |
 
 `src/app/api/shared-storage.test.ts` runs the real routes against that fake: a report filed on one
@@ -82,7 +83,11 @@ The deployed app has no accounts. Everything the pages show is readable by anyon
   the carrier rules. `GET /api/cases` returns all of it as JSON. Whatever a visitor types in the report
   form is visible to every other visitor: **never type real customer data on the public URL** (the form
   says so).
-- **Not public:** the Meta key, the access code, the storage token, `.env.local`. They are only read on
+- **The morning sweep** (`GET /api/sweep`, the "Today" panel) is public like the case list: it holds order
+  numbers, item titles, carriers, deadlines, amounts and two kinds of text a model or a script wrote (a
+  briefing paragraph and nudge drafts). It holds no customer name, e-mail, address or message, and none
+  was sent to the model. Running one (`POST /api/sweep`) needs the access code.
+- **Not public:** the Meta key, the cron secret (`CRON_SECRET`), the access code, the storage token, `.env.local`. They are only read on
   the server and never sent to the browser. Approving, editing or rejecting a case needs the access
   code when `DAMAGE_DESK_ACCESS_CODE` is set; so does every new report (demo mode included, so that a
   stranger cannot put text and photos on the page the judges look at) and every dictation. Wrong codes

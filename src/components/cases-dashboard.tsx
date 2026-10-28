@@ -1,26 +1,32 @@
 import { TriangleAlert } from "lucide-react";
 import { buildInsights } from "@/lib/impact/insights";
 import { summarizeRecordedRuns } from "@/lib/store/summary";
+import type { SweepResult } from "@/lib/sweep/types";
 import type { CaseRecord } from "@/lib/types";
 import { CaseList } from "./case-list";
 import { CasesHeader } from "./cases-header";
 import { EmptyState } from "./dashboard/empty-state";
 import { HowItWorks } from "./dashboard/how-it-works";
 import { InsightsSection } from "./insights/insights-section";
+import { TodayPanel } from "./today/today-panel";
 
 /**
  * The Cases screen: the hero band, the insights (per carrier, deadlines, decisions), a one-line
  * "how it works", then the list. `error` is set when the case store could not be read: the page
  * says so instead of showing an empty list that would look like "no damage reported".
+ * `today` (the latest morning sweep and what the panel needs to run another) puts the "Today" panel
+ * under the hero band; without it the page is as it was before the sweep existed.
  */
 export function CasesDashboard({
   cases,
   error,
   now,
+  today,
 }: {
   cases: CaseRecord[];
   error: string | null;
   now: Date;
+  today?: { sweep: SweepResult | null; accessCodeRequired: boolean; storageEphemeral: boolean };
 }) {
   // Both readings are computed here, on the server, and the section only picks one (see InsightsSection).
   const showInsights = !error && cases.length > 0;
@@ -28,6 +34,14 @@ export function CasesDashboard({
   return (
     <div className="flex flex-col gap-10">
       <CasesHeader cases={cases} now={now} />
+      {today && (
+        <TodayPanel
+          sweep={today.sweep}
+          now={now.toISOString()}
+          accessCodeRequired={today.accessCodeRequired}
+          storageEphemeral={today.storageEphemeral}
+        />
+      )}
       {showInsights && (
         <InsightsSection
           live={buildInsights(cases, now, { includeRecorded: false })}

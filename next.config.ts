@@ -10,6 +10,9 @@ const SHOWCASE_ROUTES = [
   "/api/cases/\\[id\\]",
   "/api/cases/\\[id\\]/pdf",
   "/api/files",
+  // The sweep lists every case (the recorded runs too, when it is asked to read them).
+  "/api/sweep",
+  "/api/sweep/cron",
 ];
 
 const nextConfig: NextConfig = {
