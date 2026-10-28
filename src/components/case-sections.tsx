@@ -653,11 +653,14 @@ export function DecisionSection({
   const deadlineTone = DEADLINE_TONE[deadline.tone];
   const recoverable = claim?.eligible === true && claim.maxCompensationEur > 0;
 
+  // shrink-0: the card sits in a flex column that scrolls (case-view.tsx). overflow-hidden turns its automatic
+  // minimum height into 0, so without it the card was shrunk and cropped (confidence, deadline and maximum
+  // amount hidden, "Ask for more" cut mid-word at 1440x900) instead of letting the column scroll. Found 28 Oct 2026.
   return (
     <section
       aria-labelledby="decision-title"
       style={riseStyle(0)}
-      className="animate-rise overflow-hidden rounded-2xl border border-border bg-surface shadow-raised"
+      className="animate-rise shrink-0 overflow-hidden rounded-2xl border border-border bg-surface shadow-raised"
     >
       <div className="p-5 sm:p-6">
         <h2 id="decision-title" className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">

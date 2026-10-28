@@ -371,6 +371,16 @@ describe("case page: the decision card and the layout", () => {
     expect(review.compareDocumentPosition(evidence) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("keeps the decision card at its full height in the scrolling right column (shrink-0, 28 Oct 2026)", () => {
+    // jsdom has no layout: this pins the class that stops the column from cropping the card.
+    // Without it, overflow-hidden lets flex shrink the card to ~236 px and hides the confidence,
+    // the deadline and the maximum amount at 1440x900.
+    render(<CaseView caseRecord={makeCase()} rules={makeRules()} now={NOW} />);
+    const card = screen.getByRole("region", { name: "Decision" });
+    expect(card).toHaveClass("shrink-0");
+    expect(card.parentElement).toHaveClass("flex-col", "lg:overflow-y-auto");
+  });
+
   it("shows the decision as a word, the carrier claim as yes or no, and the money with its deadline", () => {
     render(<CaseView caseRecord={makeCase()} rules={makeRules()} now={NOW} />);
     const card = screen.getByRole("region", { name: "Decision" });

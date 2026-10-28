@@ -102,21 +102,21 @@ with their label on screen; never as the live shot.
 | File | What it is | Source |
 |---|---|---|
 | `screens/cases.png`, `cases-list.png` | Cases: counter, recorded-run tile, the list | Deployed site (71d8cf2) |
-| `screens/case-decision-and-sam.png` | Recorded run of the vase: decision card and SAM outline | Deployed site, recorded run |
-| `screens/case-round-2-blurry-lamp.png` | Rounds of the lamp, "What changed since round 1", "Simulated reply" | Deployed site, real run of 28 Oct, simulated reply |
-| `screens/case-integrity-signal.png` | Integrity row with one signal | Deployed site, real run of 28 Oct |
+| `screens/case-decision-and-sam.png` | Recorded run of the vase: decision card and SAM outline. **Decision card cropped** (layout bug, fixed in the code after the capture): recapture before use | Deployed site, recorded run |
+| `screens/case-round-2-blurry-lamp.png` | Rounds of the lamp, "What changed since round 1", "Simulated reply". **Decision card cropped**, recapture before use | Deployed site, real run of 28 Oct, simulated reply |
+| `screens/case-integrity-signal.png` | Integrity row with one signal. **Decision card cropped** ("Ask for more" cut off), recapture before use | Deployed site, real run of 28 Oct |
 | `screens/impact.png`, `screens/eval.png` | `/impact`, `/eval` | Deployed site |
-| `screens/live-run-demo-mode.png`, `live-run.gif` | The live timeline of one **DEMO MODE** run: no model, no SAM, steps labelled "scripted" | Local server, demo mode: not Muse, not production |
+| `screens/live-run-demo-mode.png`, `live-run-demo-mode.gif` (about 12.75 s, 153 frames) | The live timeline of one **DEMO MODE** run: no model, no SAM, steps labelled "scripted" | Local server, demo mode: not Muse, not production |
 | `social-card.png` | The 1200x630 link-preview card | Rendered from `src/app/opengraph-image.tsx` |
 
 ## Shot list
 
 | Time | On screen | Voice-over |
 |---|---|---|
-| 0:00 – 0:17 | **New report**, the "Broken vase" scenario: the customer's message, order #1001. Cut to the carrier rules card of a case; highlight "72 hours" (Mondial Relay) and "3 days" (Chronopost). | "A customer writes: my vase arrived broken. For a small shop, that is two jobs. Make her whole, then chase the carrier for the money, before the deadline kills the claim. Mondial Relay gives you 72 hours. Chronopost, three days." |
+| 0:00 – 0:17 | **New report**, the "Broken vase" scenario: the customer's message, order #1001. Then two cut-aways, each on the **carrier rules card** of its own case: recorded case 4 (opened parcel, Mondial Relay) for "72 hours", recorded case 5 (headphones, Chronopost) for "3 days". Both rows are `verified` in `data/carriers.json`. Never highlight the vase's own Colissimo "72 h (prudential)" row: it is `unverified`. | "A customer writes: my vase arrived broken. For a small shop, that is two jobs. Make her whole, then chase the carrier for the money, before the deadline kills the claim. Mondial Relay gives you 72 hours. Chronopost, three days." |
 | 0:17 – 0:27 | **Only if the microphone works.** Click the microphone in the message box, speak ("My vase arrived broken. Order 1001."), the transcript fills the box (check the order number on screen). | "She can just say it. Muse Voice Transcribe turns the clip into the message, still editable, and the case records that it was dictated." |
 | 0:27 – 0:51 | Engine **Muse Spark 1.3 (Model API)**; attach the photo; caption "Demo photos generated with Muse Image". Send. The **live timeline**: one row per real step with the server's clock (`+4.2 s`), the order card, the photo check, the SAM image fading in, the claim amount rolling up in gold. Caption "sped up" over the wait. | "This is Gilmend: an agent on Muse Spark 1.3, through the Meta Model API. Watch the run, live. Every row is a real step with the server's clock: the order, the photo check, the reading of the photo, the SAM outline, the carrier's rules. The photos are generated with Muse Image, so no real customer appears." |
-| 0:51 – 1:16 | **Case view** (the case the live run opened): "What the agent saw", the **annotated photo** (what SAM outlined) next to the raw one, then the **Decision card**: reship, carrier claim yes, the confidence. Zoom on the maximum compensation and its source. If the trace shows "Evidence fallback", the code asked SAM, not Muse: skip the line or say so. | "Here is the case. SAM 3.1 outlined [what it matched] on the photo, as evidence for the claim: context, not a verdict. Decision: reship, and claim the carrier, confidence [confidence]. The maximum compensation is [amount] euros, from the carrier's published terms, with the source and its date next to it. The model never writes an amount or a deadline." |
+| 0:51 – 1:16 | **Case view** (the case the live run opened): "What the agent saw", the **annotated photo** (what SAM outlined) next to the raw one, then the **Decision card**: reship, carrier claim yes, the confidence. Zoom on the maximum compensation and its source. If the trace shows "Evidence fallback", the code asked SAM, not Muse: skip the line or say so. | "Here is the case. SAM 3.1 outlined [what it matched] on the photo, as evidence for the claim: context, not a verdict. Decision: reship, and claim the carrier, confidence [confidence]. The maximum compensation is [amount] euros, from the carrier's published terms, with the source and its date next to it. The model never writes an amount or a deadline." For a take on a Colissimo case (the vase), say instead: "...from Colissimo's published terms of 2020, the latest public edition, with the source next to it." The general wording is only for a carrier whose figure is `verified` (Mondial Relay, Chronopost). |
 | 1:16 – 1:32 | **Claim document**: the PDF preview, the e-mail to the carrier, the drafted reply. End on **Approve**; click it. Banner: "Approved: ready to send. Gilmend sends nothing by itself." | "Gilmend builds the claim PDF and the e-mail to the carrier, and drafts the reply in the customer's language. Guardrails in code can only make a decision stricter. It sends nothing: the merchant clicks Approve." |
 | 1:32 – 1:59 | **The blurry lamp**, recorded run: "Ask for more photos", no claim. **Demo: simulate the customer's reply**, **Run the agent again (round 2)** ("sped up"). The new case: **Rounds of this case**, "Simulated reply" badge, "What changed since round 1" (decision, damage read, photo quality, carrier claim). | "A blurry photo is not a dead end. On this lamp, the agent asks for a sharper one. The customer replies, here a simulated reply with a photo generated for the demo, and the agent runs again on the same case, with everything it knew: [round 2 decision and claim]. The deadline still counts from the delivery date, not from the reply." |
 | 1:59 – 2:16 | The case filed with the vase photo for order #1002: the **Integrity** row, "1 signal: a person must look", the photo found "like a demo photo filed for another order". Then the Decision card marked "Needs your judgement". | "And it checks the evidence before it believes it. The same demo photo, filed for a different order, is flagged: not rejected, not accusing anyone. The case goes to a human, with the reason in plain words." |
@@ -126,7 +126,8 @@ with their label on screen; never as the live shot.
 ## Spoken text, in one piece (for the recording take)
 
 Real mode, with the voice shot (the second paragraph); cut it if the microphone fails. Replace each `[bracket]`
-with the figure or the words read from the screen of the take.
+with the figure or the words read from the screen of the take. The "terms of 2020" bracket is for a Colissimo case (the vase); on a
+carrier whose figure is `verified` say "from the carrier's published terms, with the source and its date next to it".
 
 > A customer writes: my vase arrived broken. For a small shop, that is two jobs. Make her whole,
 > then chase the carrier for the money, before the deadline kills the claim. Mondial Relay gives you
@@ -142,8 +143,8 @@ with the figure or the words read from the screen of the take.
 >
 > Here is the case. SAM 3.1 outlined [what it matched] on the photo, as evidence for the claim:
 > context, not a verdict. Decision: reship, and claim the carrier, confidence [confidence]. The
-> maximum compensation is [amount] euros, from the carrier's published terms, with the source and
-> its date next to it. The model never writes an amount or a deadline.
+> maximum compensation is [amount] euros, [from Colissimo's published terms of 2020, the latest
+> public edition, with the source next to it]. The model never writes an amount or a deadline.
 >
 > Gilmend builds the claim PDF and the e-mail to the carrier, and drafts the reply in the customer's
 > language. Guardrails in code can only make a decision stricter. It sends nothing: the merchant
@@ -171,7 +172,7 @@ with the figure or the words read from the screen of the take.
 | Claim in the voice-over | Where it is true |
 |---|---|
 | Two jobs: make the customer whole, chase the carrier | `src/lib/agent/` (decision plus claim); README "The problem" |
-| 72 hours Mondial Relay, three days Chronopost | `data/carriers.json` (both marked verified) |
+| 72 hours Mondial Relay (recorded case 4), three days Chronopost (recorded case 5) | `data/carriers.json` (both marked verified; Colissimo's 72 h is `unverified`, never the one on screen for this line) |
 | Muse Voice Transcribe turns the clip into the message; the case records it was dictated | `src/lib/voice/`, `src/app/api/transcribe/route.ts`, `src/components/voice-recorder.tsx`; verified with real API calls, **not yet with a real microphone in a browser** (item 3) |
 | An agent on Muse Spark 1.3, through the Meta Model API (Standard mode) | `src/lib/config.ts` (`muse-spark-1.3`, `assertStandardModel`) |
 | Live run: every row is a real step with the server's clock | `src/lib/agent/events.ts`, `src/components/report/live-run.tsx`; NDJSON stream of `POST /api/reports`. In DEMO MODE the rows say "scripted" and show no clock: only the real-mode take may use this line |
@@ -195,12 +196,13 @@ with the figure or the words read from the screen of the take.
 
 ## Things the narrator must not say
 
-- "Muse analysed the image" in any take recorded in demo mode, and never call `docs/assets/live-run.gif` or
+- "Muse analysed the image" in any take recorded in demo mode, and never call `docs/assets/live-run-demo-mode.gif` or
   `screens/live-run-demo-mode.png` a Muse run: they are a scripted DEMO MODE run on a local server.
 - That Gilmend files, sends or submits anything on its own.
 - Any amount or percentage that is not on screen or in the committed evaluation (no "recovers X percent", no market
   figures, no figure from the `/impact` defaults as if it were a statistic: they are examples the visitor replaces).
-- That Colissimo's figures are current: they come from the 2020 terms, the 2026 terms are not public.
+- That Colissimo's figures are current: they come from the 2020 terms, the 2026 terms are not public. On a Colissimo case, say the amount is from the 2020 terms; the date is on screen but the voice must say it too.
+- "72 hours" over the Colissimo row of the vase case: that figure is an unverified prudential value. Say it only over the Mondial Relay or Chronopost card.
 - That the open-weights run exists or was tested (it was not run live; it is out of this cut).
 - That the demo photos are real photographs: they are generated with Muse Image.
 - That the voice report was tested with real customers or accents, or that a recorded run is live. The six recorded
