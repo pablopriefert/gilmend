@@ -112,7 +112,8 @@ describe("a customer replies to a recorded run", () => {
     expect(fork.engineDetail?.short).toBe("DEMO MODE");
     expect(fork.decision).toMatchObject({ decision: "reship", carrierClaim: true });
     expect(fork.claim?.eligible).toBe(true);
-    expect(fork.document?.pdfPath).toMatch(new RegExp(`${body.caseId}-round-2\\.pdf$`));
+    // The public record holds the route of the PDF, not the file name on the server disk.
+    expect(fork.document?.pdfPath).toBe(`/api/cases/${body.caseId}/pdf`);
     // The fork is no longer the recording; round 1 of it still is, as a real Muse run.
     expect(fork.recorded).toBeUndefined();
     expect(fork.previousRounds).toHaveLength(1);
@@ -197,8 +198,8 @@ describe("a customer replies to a recorded run", () => {
     expect(pdf.status).toBe(200);
     expect(Buffer.from(await pdf.arrayBuffer()).subarray(0, 5).toString()).toBe("%PDF-");
 
-    const rel = (p: string) => p.replace(/^.*[\\/]uploads[\\/]/, "uploads/").split(path.sep).join("/");
-    const added = await getFile(new Request(`http://x/api/files?p=${encodeURIComponent(rel(fork.followUps![0].photos[0]))}`));
+    // The case holds the URL the page loads the photo from: the test follows it as the browser does.
+    const added = await getFile(new Request(`http://x${fork.followUps![0].photos[0]}`));
     expect(added.status).toBe(200);
     expect(added.headers.get("Content-Type")).toBe("image/png");
     const original = await getFile(new Request(`http://x/api/files?p=${encodeURIComponent("showcase/photos/lamp-blurry.webp")}`));

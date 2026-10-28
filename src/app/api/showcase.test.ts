@@ -72,10 +72,10 @@ describe("the recorded runs through the API, with an empty store", () => {
 
   it("serves the customer photo and the annotated evidence from data/showcase, as images", async () => {
     const c = ((await (await getCase(new Request("http://x"), ctx(ID))).json()) as { case: CaseRecord }).case;
-    const photo = await files(c.report.photos[0].replace("data/showcase/", "showcase/"));
+    const photo = await getFile(new Request(`http://x${c.report.photos[0]}`));
     expect(photo.status).toBe(200);
     expect(photo.headers.get("Content-Type")).toBe("image/webp");
-    const annotated = await files(c.evidence[0].annotatedPhoto!.replace("data/showcase/", "showcase/"));
+    const annotated = await getFile(new Request(`http://x${c.evidence[0].annotatedPhoto!}`));
     expect(annotated.status).toBe(200);
     expect(annotated.headers.get("Content-Type")).toBe("image/jpeg");
   });

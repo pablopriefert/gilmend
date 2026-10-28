@@ -1,4 +1,5 @@
 import { claimIsFileable } from "@/lib/claim-filing";
+import { toPublicCase } from "@/lib/public-case";
 import { getCase, updateCase } from "@/lib/store/cases";
 import type { CaseRecord, CaseStatus, TraceStep } from "@/lib/types";
 import { requireAccessCode } from "../../_lib/access";
@@ -15,14 +16,14 @@ const MAX_REPLY_CHARS = 4000;
 
 const NOCACHE = { "Cache-Control": "no-store" };
 
-/** GET /api/cases/[id]: one case, or 404. */
+/** GET /api/cases/[id]: one case (file locations as app references, see src/lib/public-case.ts), or 404. */
 export async function GET(_request: Request, { params }: RouteContext): Promise<Response> {
   const { id } = await params;
   if (!isValidCaseId(id)) return errorResponse(404, "not_found", "Case not found.");
   try {
     const found = await getCase(id);
     if (!found) return errorResponse(404, "not_found", "Case not found.");
-    return Response.json({ case: found }, { headers: NOCACHE });
+    return Response.json({ case: toPublicCase(found) }, { headers: NOCACHE });
   } catch (err) {
     return failureResponse(err, "Loading the case");
   }
@@ -136,10 +137,10 @@ export async function PATCH(request: Request, { params }: RouteContext): Promise
       added.push({ step: "Merchant cleared the \"claim filed\" note.", at: now });
     }
     if (Object.keys(patch).length === 0) {
-      return Response.json({ case: current }, { headers: NOCACHE });
+      return Response.json({ case: toPublicCase(current) }, { headers: NOCACHE });
     }
     const updated = await updateCase(id, patch, { appendTrace: added });
-    return Response.json({ case: updated }, { headers: NOCACHE });
+    return Response.json({ case: toPublicCase(updated) }, { headers: NOCACHE });
   } catch (err) {
     return failureResponse(err, "Updating the case");
   }

@@ -4,6 +4,7 @@ import { CircleAlert, ServerOff } from "lucide-react";
 import { BackLink, BUTTON_PRIMARY, IconTile } from "@/components/case/ui";
 import { CaseView } from "@/components/case-view";
 import { describeEngine, resolveEngine } from "@/lib/config";
+import { toPublicCase } from "@/lib/public-case";
 import { getCarrierRules } from "@/lib/rules/carriers";
 import { storageIsEphemeral } from "@/lib/storage";
 import { getCase } from "@/lib/store/cases";
@@ -78,7 +79,7 @@ export default async function CasePage({ params }: { params: Promise<{ id: strin
   const followUpEngine = resolveEngine(found.engine);
   return (
     <CaseView
-      caseRecord={found}
+      caseRecord={toPublicCase(found)}
       rules={rules}
       now={new Date()}
       accessCodeRequired={accessCodeRequired()}

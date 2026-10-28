@@ -89,7 +89,7 @@ describe("a case filed on one instance and opened on another", () => {
     expect((await getCase(new Request("http://x"), ctx(caseId))).status).toBe(200);
 
     // The photo and the PDF are downloaded into this instance's empty disk on first request.
-    const photo = await getFile(new Request(`http://x/api/files?p=${encodeURIComponent(stored.report.photos[0])}`));
+    const photo = await getFile(new Request(`http://x${stored.report.photos[0]}`));
     expect(photo.status).toBe(200);
     expect(photo.headers.get("Content-Type")).toBe("image/png");
     expect(Buffer.from(await photo.arrayBuffer()).equals(await png())).toBe(true);

@@ -44,6 +44,24 @@ describe("GET /api/cases/[id]", () => {
     expect((await res.json()).case.id).toBe("case-1");
   });
 
+  it("returns app references, never a server path (production validation of 28 Oct 2026)", async () => {
+    const stored = makeCase();
+    getCase.mockResolvedValue({
+      ...stored,
+      report: { ...stored.report, photos: ["/tmp/damage-desk/uploads/rpt-1/photo-1.jpg"] },
+      evidence: [
+        { photo: "/tmp/damage-desk/uploads/rpt-1/photo-1.jpg", annotatedPhoto: "/tmp/damage-desk/evidence/rpt-1/photo-1-annotated.png", method: "sam-3.1", note: "" },
+      ],
+      document: { ...stored.document!, pdfPath: "/tmp/damage-desk/claims/case-1.pdf" },
+    });
+    const res = await GET(new Request("http://localhost/api/cases/case-1"), ctx("case-1"));
+    const text = await res.text();
+    expect(text).not.toContain("/tmp/");
+    const body = JSON.parse(text);
+    expect(body.case.report.photos[0]).toBe("/api/files?p=uploads%2Frpt-1%2Fphoto-1.jpg");
+    expect(body.case.document.pdfPath).toBe("/api/cases/case-1/pdf");
+  });
+
   it("answers 404 for an unknown id", async () => {
     getCase.mockResolvedValue(null);
     expect((await GET(new Request("http://x"), ctx("nope"))).status).toBe(404);

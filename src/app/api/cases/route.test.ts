@@ -28,6 +28,16 @@ describe("GET /api/cases", () => {
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 
+  it("lists app references, never a server path", async () => {
+    const stored = makeCase({ id: "a" });
+    listCases.mockResolvedValue([
+      { ...stored, document: { ...stored.document!, pdfPath: "/tmp/damage-desk/claims/a.pdf" } },
+    ]);
+    const text = await (await GET()).text();
+    expect(text).not.toContain("/tmp/");
+    expect(JSON.parse(text).cases[0].document.pdfPath).toBe("/api/cases/a/pdf");
+  });
+
   it("answers an empty list, not an error, when there are no cases", async () => {
     listCases.mockResolvedValue([]);
     const body = await (await GET()).json();

@@ -1,4 +1,5 @@
 import { CasesDashboard } from "@/components/cases-dashboard";
+import { toPublicCases } from "@/lib/public-case";
 import { storageIsEphemeral } from "@/lib/storage";
 import { listCases } from "@/lib/store/cases";
 import { loadLatestSweep } from "@/lib/sweep/store";
@@ -31,7 +32,7 @@ export default async function CasesPage() {
   }
   return (
     <CasesDashboard
-      cases={cases}
+      cases={toPublicCases(cases)}
       error={error}
       now={new Date()}
       today={{ sweep, accessCodeRequired: accessCodeRequired(), storageEphemeral: storageIsEphemeral() }}

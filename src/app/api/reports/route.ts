@@ -10,6 +10,7 @@ import {
 } from "@/lib/agent/events";
 import { runAgent } from "@/lib/agent/run-agent";
 import { resolveEngine } from "@/lib/config";
+import { toPublicStreamEvent } from "@/lib/public-case";
 import { parseVoiceNote } from "@/lib/voice/note";
 import { persistRuntimeFile } from "@/lib/storage/runtime-files";
 import { saveCase } from "@/lib/store/cases";
@@ -325,7 +326,7 @@ function streamRun({
   const send = (event: StreamEvent) => {
     if (!open || !controllerRef) return;
     try {
-      controllerRef.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      controllerRef.enqueue(encoder.encode(`${JSON.stringify(toPublicStreamEvent(event))}\n`));
     } catch {
       // The reader is gone: stop sending, keep running.
       open = false;
