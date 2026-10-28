@@ -5,6 +5,7 @@ import { extractPdfText } from "../documents/test-helpers";
 import { buildClaimEmail } from "../documents/claim-email";
 import { loadDemoCases } from "../store/demo-cases";
 import { resolveDemoPhoto } from "../store/demo-photos";
+import { detectLanguage } from "../../app/api/_lib/language";
 import { runAgent } from "./run-agent";
 
 // The Europe lot's demo case (data/demo-cases.json, "demo-7-german-carafe"): a German customer writes in
@@ -38,6 +39,8 @@ describe("the German demo case, demo-mock engine, real modules", () => {
     expect(demo.report.language).toBe("de");
     expect(demo.report.message).toMatch(/Guten Tag/);
     expect(demo.report.orderNumber).toBe("#1011");
+    // The case sets German itself; the rationale also says Auto-detect finds it, so keep that true.
+    expect(detectLanguage(demo.report.message)).toBe("de");
   });
 
   it("reships and claims DHL Paket, with the item value as the ceiling", async () => {
@@ -45,9 +48,10 @@ describe("the German demo case, demo-mock engine, real modules", () => {
     expect(c.order).toMatchObject({ id: "#1011", carrier: "dhl_paket", shippingAddress: { country: "DE" } });
     expect(c.decision).toMatchObject({ decision: "reship", carrierClaim: true, needsHuman: false });
     expect(c.claim).toMatchObject({ eligible: true, maxCompensationEur: 54 });
-    expect(c.claim?.basis).toMatchObject({ termsLabel: "DHL Paket (Germany, standard terms)", flatEur: 500, capEur: 500 });
-    // Delivered 18 h before NOW and reported 3 h before it: 7 days minus 18 h are left, rounded down to 6.
-    expect(c.claim?.daysLeft).toBe(6);
+    expect(c.claim?.basis).toMatchObject({ termsLabel: "DHL Paket (Germany, standard terms)", flatEur: 500, flatKind: "limit", capEur: 500 });
+    // Delivered 18 h before NOW: the claim stays open for one year after delivery (HGB § 439), so 365 days minus
+    // 18 h are left, rounded down to 364. (The 7 days are the report window, which only warns.)
+    expect(c.claim?.daysLeft).toBe(364);
     expect(demo.expected).toMatchObject({ decision: "reship", carrierClaim: true, claimEligible: true });
   });
 
@@ -74,7 +78,9 @@ describe("the German demo case, demo-mock engine, real modules", () => {
     expect(c.document).not.toBeNull();
     const mail = buildClaimEmail(c, { name: "Maison Démo", address: "12 rue de la Démo, 75011 Paris, France", email: "contact@demo.example" });
     expect(mail.subject).toMatch(/parcel 00340434990010110017 - order #1011/);
-    expect(mail.body).toMatch(/Carrier: DHL Paket \(DHL Paket\)/);
+    // The service is not repeated when it only says the carrier's own name again.
+    expect(mail.body).toMatch(/^- Carrier: DHL Paket$/m);
+    expect(mail.body).not.toMatch(/DHL Paket \(DHL Paket\)/);
     expect(mail.body).toMatch(/Compensation claimed: €54\.00/);
     // Nothing of the German customer's message goes to the carrier.
     expect(mail.body).not.toMatch(/Karaffe|Riss|Guten Tag/);
@@ -85,7 +91,9 @@ describe("the German demo case, demo-mock engine, real modules", () => {
     const text = extractPdfText(await readFile(path.resolve(c.document!.pdfPath)));
     expect(text).toContain("00340434990010110017");
     expect(text).toContain("Terms applied: DHL Paket (Germany, standard terms).");
-    expect(text).toContain("Flat rate: €500.00 per parcel.");
+    // DHL clause 6(3) is a ceiling, not a fixed payment: the file must not call it a flat rate.
+    expect(text).toContain("Liability limit: €500.00 per parcel.");
+    expect(text).not.toMatch(/Flat rate|flat rate/);
     expect(text).toContain("€54.00");
     expect(text).toContain("gesetze-im-internet.de");
     expect(text).toContain("checked on 2026-10-28");

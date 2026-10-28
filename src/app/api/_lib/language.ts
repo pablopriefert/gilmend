@@ -1,7 +1,7 @@
 // Cheap language guess for the customer's message, used to pick the language of the reply
 // when the form does not say. English, French, German, Spanish and Italian (the last three since
 // 28 Oct 2026, src/lib/languages.ts); anything we cannot tell defaults to English. The agent may
-// refine it (it follows the language of the message), this is just the starting point.
+// refine it (it follows the language of the message among these five), this is just the starting point.
 //
 // Method: every language has a short list of frequent words that the others do not share, plus a
 // few letters only it uses (ä ö ü ß for German, ñ ¿ ¡ for Spanish...). The language with the most
@@ -48,6 +48,27 @@ const ITALIAN_WORDS = new Set([
   "allegata", "allegato", "per", "favore", "con", "senza", "il", "lo", "gli", "un", "una",
   "e", "non", "che", "cordiali", "saluti", "vaso", "tazza", "tazze", "oggi", "ma", "molto",
   "rimborso", "spedizione",
+  // The very frequent ones that were missing (28 Oct 2026): "la lampada ha una crepa" has no accent and
+  // few listed words, and used to go to Spanish on a tie.
+  "la", "le", "ha", "ho", "hanno", "di", "del", "della", "dello", "nel", "nella", "dei", "delle",
+  "lampada", "crepa", "crepato", "scheggiato", "rovinato", "arrivata", "ricevuto", "salve",
+]);
+
+// A word listed for several non-English languages ("un", "una", "con", "la", "ha"...) says little about
+// which one the message is in, and the first of LANGUAGES used to win the tie it created (Spanish for an
+// Italian "la lampada ha una crepa", 28 Oct 2026). Such a word now counts 1 / (number of languages that
+// list it) for each of them, so only a word that belongs to one language can break a tie. English is left
+// out of this (it is the default the others must beat).
+function weigh(lists: Set<string>[]): Map<string, number>[] {
+  const seen = new Map<string, number>();
+  for (const list of lists) for (const w of list) seen.set(w, (seen.get(w) ?? 0) + 1);
+  return lists.map((list) => new Map([...list].map((w) => [w, 1 / (seen.get(w) ?? 1)])));
+}
+const [FRENCH_WEIGHTS, GERMAN_WEIGHTS, SPANISH_WEIGHTS, ITALIAN_WEIGHTS] = weigh([
+  FRENCH_WORDS,
+  GERMAN_WORDS,
+  SPANISH_WORDS,
+  ITALIAN_WORDS,
 ]);
 
 // Letters that point to one language. The French set is the one the guess always used (é and è
@@ -60,11 +81,11 @@ const SPANISH_LETTERS = /[ñ¿¡áíóú]/;
 type Guess = Exclude<LanguageCode, "en">;
 
 // The order is the tie-break among non-English languages.
-const LANGUAGES: { code: Guess; words: Set<string>; letters: RegExp | null; letterScore: number }[] = [
-  { code: "fr", words: FRENCH_WORDS, letters: FRENCH_LETTERS, letterScore: 2 },
-  { code: "de", words: GERMAN_WORDS, letters: GERMAN_LETTERS, letterScore: 2 },
-  { code: "es", words: SPANISH_WORDS, letters: SPANISH_LETTERS, letterScore: 2 },
-  { code: "it", words: ITALIAN_WORDS, letters: null, letterScore: 0 },
+const LANGUAGES: { code: Guess; words: Map<string, number>; letters: RegExp | null; letterScore: number }[] = [
+  { code: "fr", words: FRENCH_WEIGHTS, letters: FRENCH_LETTERS, letterScore: 2 },
+  { code: "de", words: GERMAN_WEIGHTS, letters: GERMAN_LETTERS, letterScore: 2 },
+  { code: "es", words: SPANISH_WEIGHTS, letters: SPANISH_LETTERS, letterScore: 2 },
+  { code: "it", words: ITALIAN_WEIGHTS, letters: null, letterScore: 0 },
 ];
 
 export function detectLanguage(message: string): LanguageCode {
@@ -75,11 +96,15 @@ export function detectLanguage(message: string): LanguageCode {
   let en = 0;
   for (const word of lower.split(/[^\p{L}'-]+/u)) {
     if (ENGLISH_WORDS.has(word)) en += 1;
-    for (const l of LANGUAGES) if (l.words.has(word)) scores.set(l.code, (scores.get(l.code) ?? 0) + 1);
+    for (const l of LANGUAGES) {
+      const weight = l.words.get(word);
+      if (weight !== undefined) scores.set(l.code, (scores.get(l.code) ?? 0) + weight);
+    }
   }
   let best: Guess | null = null;
   for (const l of LANGUAGES) {
     if (best === null || (scores.get(l.code) ?? 0) > (scores.get(best) ?? 0)) best = l.code;
   }
-  return best !== null && (scores.get(best) ?? 0) > en ? best : "en";
+  // A lone shared word (0.5 at most) never decides the language.
+  return best !== null && (scores.get(best) ?? 0) > en && (scores.get(best) ?? 0) >= 1 ? best : "en";
 }

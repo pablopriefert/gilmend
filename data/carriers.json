@@ -34,6 +34,7 @@
       "requiresRefusal": false,
       "claimDeadlineFrom": "shipment",
       "reserveDeadlineBinding": false,
+      "reserveDeadlineBasis": "prudential",
       "compensationVariants": [
         {
           "id": "colissimo-signature",
@@ -142,11 +143,13 @@
       "claimDeadlineDays": 3,
       "compensation": {
         "flatEur": 25,
-        "capEur": 25
+        "capEur": 25,
+        "kind": "flat"
       },
       "requiresRefusal": true,
       "claimDeadlineFrom": "delivery",
       "reserveDeadlineBinding": true,
+      "reserveDeadlineBasis": "carrier",
       "compensationVariants": [],
       "figures": [
         {
@@ -220,11 +223,13 @@
       "claimDeadlineDays": 3,
       "compensation": {
         "flatEur": 250,
-        "capEur": 250
+        "capEur": 250,
+        "kind": "flat"
       },
       "requiresRefusal": false,
       "claimDeadlineFrom": "delivery",
       "reserveDeadlineBinding": true,
+      "reserveDeadlineBasis": "carrier",
       "compensationVariants": [
         {
           "id": "chronopost-per-kg",
@@ -307,25 +312,32 @@
           "checkedOn": "2026-10-28"
         },
         {
-          "title": "DHL help page, my parcel was delivered but the content is damaged or missing (7-day report deadline, Schadensanzeige form)",
+          "title": "DHL help page, my parcel was delivered but the content is damaged or missing (asks for the damage to be reported within 7 days, Schadensanzeige form)",
           "url": "https://www.dhl.de/de/privatkunden/hilfe-kundenservice/empfangen/zustellung/paket-geliefert.html",
           "checkedOn": "2026-10-28"
         },
         {
-          "title": "German Commercial Code (HGB), § 438 Schadensanzeige (apparent damage at delivery, otherwise 7 days; the DHL terms apply the HGB freight law)",
+          "title": "German Commercial Code (HGB), § 438 Schadensanzeige (apparent damage at delivery, other damage within 7 days; a later report only creates a rebuttable presumption that the parcel arrived undamaged; the DHL terms apply the HGB freight law)",
           "url": "https://www.gesetze-im-internet.de/hgb/__438.html",
+          "checkedOn": "2026-10-28"
+        },
+        {
+          "title": "German Commercial Code (HGB), § 439 Verjährung (one-year limitation for freight claims, from delivery)",
+          "url": "https://www.gesetze-im-internet.de/hgb/__439.html",
           "checkedOn": "2026-10-28"
         }
       ],
       "reserveDeadlineHours": 168,
-      "claimDeadlineDays": 7,
+      "claimDeadlineDays": 365,
       "compensation": {
         "flatEur": 500,
-        "capEur": 500
+        "capEur": 500,
+        "kind": "limit"
       },
       "requiresRefusal": false,
       "claimDeadlineFrom": "delivery",
-      "reserveDeadlineBinding": true,
+      "reserveDeadlineBinding": false,
+      "reserveDeadlineBasis": "statutory",
       "compensationVariants": [],
       "figures": [
         {
@@ -348,25 +360,26 @@
         },
         {
           "key": "claimDeadlineDays",
-          "label": "Time limit to report damage after delivery",
-          "value": "7 days after delivery",
+          "label": "Limitation period for the claim (statutory, from delivery)",
+          "value": "1 year after delivery",
           "status": "verified",
-          "sourceUrl": "https://www.dhl.de/de/privatkunden/hilfe-kundenservice/empfangen/zustellung/paket-geliefert.html",
+          "sourceUrl": "https://www.gesetze-im-internet.de/hgb/__439.html",
           "checkedOn": "2026-10-28",
-          "note": "DHL's help page says damage to the contents must be reported to DHL within 7 days of delivery. The HGB says the same for damage that is not visible from outside (§ 438(2)). The page is written for recipients; the merchant's own contract is not public. Counted in calendar days."
+          "note": "The DHL terms apply the HGB freight law; § 439 gives one year from delivery (three years for intent or equivalent fault, not modelled) and § 439(4) lets standard terms neither shorten nor extend it. Counted as 365 days. DHL's help page asks for the report within 7 days, which is a different thing: the report window below, not a filing deadline. The merchant's own contract is not public."
         },
         {
           "key": "reserveDeadlineHours",
-          "label": "Reserve window after delivery",
+          "label": "Damage report window after delivery (statutory, § 438 HGB; DHL's help page repeats it)",
           "value": "168 hours (7 days)",
           "status": "verified",
-          "sourceUrl": "https://www.dhl.de/de/privatkunden/hilfe-kundenservice/empfangen/zustellung/paket-geliefert.html",
+          "sourceUrl": "https://www.gesetze-im-internet.de/hgb/__438.html",
           "checkedOn": "2026-10-28",
-          "note": "Same 7-day clause as the claim deadline. Damage visible from outside should be shown to the courier at delivery (§ 438(1) HGB: otherwise the carrier may presume the parcel arrived undamaged); the order does not record that, so the code cannot check it."
+          "note": "§ 438 HGB: damage visible from outside must be shown at delivery, other damage reported within 7 days; a late report makes the carrier presume the parcel arrived undamaged (\"so wird vermutet\"), which can still be rebutted. § 449(1) HGB stops standard terms from making §§ 425 to 438 stricter. DHL's help page (read on 2026-10-28) asks recipients for the same 7 days. So a late report is a warning here, never a block. The order does not record whether the damage was shown to the courier at delivery, so the code cannot check that."
         }
       ],
       "notes": [
         "Figures are for DHL's public standard terms for parcels within Germany (AGB Paket/Express National). A merchant with a negotiated DHL business contract may have other limits and deadlines (not public). UNVERIFIED for those merchants.",
+        "The 7-day report window and the one-year limitation period are the HGB's (§ 438(2), § 439), which the DHL terms apply; DHL's help page repeats the 7 days for recipients. A report after day 7 is therefore a warning for the merchant (DHL may presume an undamaged delivery, § 438 HGB), not a reason to stop: the claim stays open for a year. Prudent target: report and file within the 7 days.",
         "Scope: the national terms cover a parcel sent from and to an address in Germany (a German warehouse, for example). A parcel shipped from France to Germany is cross-border and is not covered by this file. The order does not carry the origin, so the code only checks the destination country.",
         "Edition: dhl.de links an edition of the national terms dated \"Maßgeblicher Stand: 01/2027\" (read on 2026-10-28). Its parcel figures (500 EUR) match the 07/2025 edition, so nothing modelled depends on the difference. Check dhl.de again in January 2027.",
         "The sender must pack the goods so that they are protected from damage (clause 3(4), § 411 HGB), and the optional transport insurance excludes damage caused by missing or poor packaging (clause 7(3)). Expect DHL to look at the packaging.",
@@ -413,11 +426,13 @@
       "claimDeadlineDays": 365,
       "compensation": {
         "flatEur": 750,
-        "capEur": 750
+        "capEur": 750,
+        "kind": "limit"
       },
       "requiresRefusal": false,
       "claimDeadlineFrom": "delivery",
       "reserveDeadlineBinding": false,
+      "reserveDeadlineBasis": "statutory",
       "compensationVariants": [],
       "figures": [
         {

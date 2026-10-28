@@ -92,7 +92,7 @@ const DEMO_ORDER_SCENARIOS: Record<string, Scenario> = {
   "1004": "missing_or_opened",
   "1005": "broken",
   "1006": "broken",
-  // Added on 28 Oct 2026: the German customer of the Europe lot (DHL Paket, a broken vase).
+  // Added on 28 Oct 2026: the German customer of the Europe lot (DHL Paket, a cracked water carafe).
   "1011": "broken",
 };
 

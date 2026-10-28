@@ -75,4 +75,47 @@ describe("validateCarrierRulesFile", () => {
     delete f.carriers.dhl_paket;
     expect(() => validateCarrierRulesFile(f)).toThrow(/carriers\.dhl_paket/);
   });
+
+  it("needs a reserveDeadlineBasis, and only a basis of \"carrier\" can block a late report", () => {
+    const a = clone();
+    delete a.carriers.dhl_paket.reserveDeadlineBasis;
+    expect(() => validateCarrierRulesFile(a)).toThrow(/reserveDeadlineBasis/);
+    const b = clone();
+    b.carriers.gls.reserveDeadlineBasis = "law";
+    expect(() => validateCarrierRulesFile(b)).toThrow(/reserveDeadlineBasis/);
+    // A statutory window cannot be binding (HGB § 438 is a presumption): the DHL mistake of the first draft.
+    const c = clone();
+    c.carriers.dhl_paket.reserveDeadlineBinding = true;
+    expect(() => validateCarrierRulesFile(c)).toThrow(/binding exactly when reserveDeadlineBasis is "carrier"/);
+    const d = clone();
+    d.carriers.mondial_relay.reserveDeadlineBinding = false;
+    expect(() => validateCarrierRulesFile(d)).toThrow(/binding exactly when/);
+  });
+
+  it("says where each shipped window comes from", () => {
+    const basis = Object.fromEntries(Object.entries(carriersFile.carriers).map(([id, c]) => [id, c.reserveDeadlineBasis]));
+    expect(basis).toEqual({
+      colissimo: "prudential",
+      mondial_relay: "carrier",
+      chronopost: "carrier",
+      dhl_paket: "statutory",
+      gls: "statutory",
+    });
+  });
+
+  it("needs to know whether a per-parcel amount is a fixed payment or a ceiling", () => {
+    const a = clone();
+    delete a.carriers.dhl_paket.compensation.kind;
+    expect(() => validateCarrierRulesFile(a)).toThrow(/dhl_paket\.compensation\.kind/);
+    const b = clone();
+    b.carriers.gls.compensation.kind = "cap";
+    expect(() => validateCarrierRulesFile(b)).toThrow(/gls\.compensation\.kind/);
+    const c = clone();
+    c.carriers.colissimo.compensation.kind = "flat";
+    expect(() => validateCarrierRulesFile(c)).toThrow(/only goes with flatEur/);
+    const kinds = Object.fromEntries(
+      Object.entries(carriersFile.carriers).map(([id, c]) => [id, (c.compensation as { kind?: string }).kind ?? null]),
+    );
+    expect(kinds).toEqual({ colissimo: null, mondial_relay: "flat", chronopost: "flat", dhl_paket: "limit", gls: "limit" });
+  });
 });

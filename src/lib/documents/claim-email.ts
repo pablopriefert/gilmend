@@ -91,6 +91,10 @@ export function buildClaimEmail(caseRecord: CaseRecord, merchant: Merchant): Cla
   if (!order || !claim) throw new Error("buildClaimEmail needs an order and a claim computation");
 
   const carrierName = CARRIER_LABELS[order.carrier];
+  // "DHL Paket (DHL Paket)" looks careless in a document meant for the carrier: the service is added
+  // only when it says something the label does not.
+  const service = order.service?.trim() ?? "";
+  const carrierLine = service && service.toLowerCase() !== carrierName.toLowerCase() ? `${carrierName} (${service})` : carrierName;
   const kind = claimKind(assessment);
   const subject = `${kind.subjectPrefix} - parcel ${order.trackingNumber} - order ${order.id}`;
 
@@ -99,7 +103,7 @@ export function buildClaimEmail(caseRecord: CaseRecord, merchant: Merchant): Cla
     "",
     `I am writing on behalf of ${merchant.name}, sender of the parcel below, to report ${kind.declaration}.`,
     "",
-    `- Carrier: ${carrierName} (${order.service})`,
+    `- Carrier: ${carrierLine}`,
     `- Tracking number: ${order.trackingNumber}`,
     `- Order: ${order.id}`,
     `- Weight: ${formatKg(order.weightKg)}`,

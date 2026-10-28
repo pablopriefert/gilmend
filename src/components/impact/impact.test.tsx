@@ -277,9 +277,11 @@ describe("Sources section", () => {
     const dhl = screen.getByTestId("rules-dhl_paket");
     expect(dhl).toHaveTextContent("DHL Paket");
     expect(dhl).toHaveTextContent("€500 per parcel, capped at €500");
-    expect(dhl).toHaveTextContent("7 days after delivery");
-    expect(dhl).toHaveTextContent("168 h reserve window");
-    expect(dhl).not.toHaveTextContent("prudential"); // DHL says damage must be reported within the 7 days
+    // The claim stays open for a year (HGB § 439); the 7 days are the statutory report window, which only warns.
+    expect(dhl).toHaveTextContent("365 days after delivery");
+    expect(dhl).toHaveTextContent("168 h reserve window (statutory)");
+    expect(dhl).not.toHaveTextContent("prudential");
+    expect(dhl).not.toHaveTextContent("7 days after delivery");
     expect(within(dhl).getByRole("link", { name: /DHL Paket\/Express National general terms/ })).toHaveAttribute(
       "href",
       expect.stringMatching(/^https:\/\/www\.dhl\.de\/dam\//),
@@ -288,7 +290,7 @@ describe("Sources section", () => {
     expect(gls).toHaveTextContent("GLS");
     expect(gls).toHaveTextContent("€750 per parcel, capped at €750");
     expect(gls).toHaveTextContent("365 days after delivery");
-    expect(gls).toHaveTextContent("168 h reserve window (prudential)");
+    expect(gls).toHaveTextContent("168 h reserve window (statutory)");
     // The statutory basis of the GLS windows is one of the two links shown, not hidden behind a third.
     expect(within(gls).getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual([
       expect.stringMatching(/gls-pakete\.de\/downloads\/AGB_GLS_Germany/),

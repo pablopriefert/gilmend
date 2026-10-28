@@ -142,6 +142,8 @@ export interface CarrierRules {
   compensation: {
     perKgEur?: number;
     flatEur?: number;
+    /** What flatEur is: "flat" (a fixed amount per parcel) or "limit" (a ceiling per parcel). */
+    kind?: "flat" | "limit";
     capEur: number;
   };
   /** True when the carrier expects the customer to refuse the damaged parcel. */
@@ -178,6 +180,12 @@ export interface ClaimBasis {
   weightKg: number;
   perKgEur?: number;
   flatEur?: number;
+  /**
+   * What flatEur is in the carrier's terms: "flat" (the carrier pays a fixed amount) or "limit" (a
+   * ceiling per parcel, the indemnity being the value of the goods up to it). Absent on a case stored
+   * before the field existed; the claim PDF then says neither.
+   */
+  flatKind?: "flat" | "limit";
   capEur: number;
 }
 

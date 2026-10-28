@@ -23,6 +23,16 @@ describe("buildClaimEmail", () => {
     expect(buildClaimEmail(without, merchant).body).not.toContain("Reserve");
   });
 
+  it("names the service next to the carrier only when it adds something", () => {
+    const base = sampleCase();
+    const line = (carrier: "colissimo" | "dhl_paket", service: string) =>
+      buildClaimEmail(sampleCase({ order: { ...base.order!, carrier, service } }), merchant).body.split("\n").find((l) => l.startsWith("- Carrier:"));
+    expect(line("dhl_paket", "DHL Paket")).toBe("- Carrier: DHL Paket");
+    expect(line("dhl_paket", " dhl paket ")).toBe("- Carrier: DHL Paket");
+    expect(line("colissimo", "Colissimo Domicile sans signature")).toBe("- Carrier: Colissimo (La Poste) (Colissimo Domicile sans signature)");
+    expect(line("dhl_paket", "")).toBe("- Carrier: DHL Paket");
+  });
+
   it("describes the damage in English from the structured assessment", () => {
     const { body } = buildClaimEmail(sampleCase(), merchant);
     expect(body).toContain("Ceramic vase (product broken or damaged, product beyond repair)");

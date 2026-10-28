@@ -334,6 +334,30 @@ export function extractDates(text: string): FoundDate[] {
     const [d, mo, y] = [Number(m[1]), Number(m[2]), Number(m[3])];
     if (validMd(mo, d)) out.push({ text: m[0], year: y, month: mo, day: d });
   }
+  // The numeric date without a year, the usual way to write a deadline in German, Spanish and Italian
+  // ("bis zum 05.11.", "spätestens Mittwoch, 4.11.", "entro il 5/11"). It is also the shape of a decimal
+  // ("1.5 L", "54.00") or a fraction, so it is guarded (28 Oct 2026):
+  //  - "d.m." with a closing dot is taken as a date when no digit follows ("05.11.2026" is the full date
+  //    above) and no currency sign or "EUR" comes before it;
+  //  - "d.mm" or "d/m" without a closing dot only when no unit or currency follows ("1.5 L", "2.5 kg",
+  //    "12.50 EUR", "10.30 Uhr" are not dates). A lone "d.m" (single-digit month, no closing dot) is too
+  //    close to a decimal to be read as one, so it is left alone.
+  // Day and month must be valid. A wrongly read decimal only sends a reply to a person, never lets one through.
+  for (const m of text.matchAll(/(?<![\d./€$£-])(?<![€$£]\s)(?<!\b(?:eur|usd)\s)(\d{1,2})\.(\d{1,2})\.(?!\d)/gi)) {
+    const [d, mo] = [Number(m[1]), Number(m[2])];
+    if (validMd(mo, d)) out.push({ text: m[0], year: null, month: mo, day: d });
+  }
+  const UNIT_AFTER = `\\s?(?:kg|g|l|cl|ml|cm|mm|m|km|%|€|eur|euros?|usd|uhr|h|x|mal|st[uü]ck|pcs|items?|units?|lit(?:re|er)s?)\\b`;
+  const yearless = new RegExp(
+    `(?<![\\d./€$£-])(?<![€$£]\\s)(?<!\\b(?:eur|usd)\\s)(\\d{1,2})(?:\\.(\\d{2})|/(\\d{1,2}))(?![\\d/-])(?!\\.\\d)(?!${UNIT_AFTER})(?!\\s?[€$£])`,
+    "gi",
+  );
+  for (const m of text.matchAll(yearless)) {
+    // "4.11." is already the dotted form above; a closing dot here is just a full stop after "5/11".
+    if (m[2] !== undefined && text[(m.index ?? 0) + m[0].length] === ".") continue;
+    const [d, mo] = [Number(m[1]), Number(m[2] ?? m[3])];
+    if (validMd(mo, d)) out.push({ text: m[0], year: null, month: mo, day: d });
+  }
   // "15th November", "15 de noviembre de 2026" (Spanish), "15. November 2026" (German: a dot after the day).
   const dayFirst = new RegExp(
     `\\b(\\d{1,2})(?:st|nd|rd|th|er)?\\.?\\s+(?:of\\s+|de\\s+|del\\s+)?(${MONTH_ALT})\\b(?:,?\\s+(?:de\\s+)?(\\d{4}))?`,

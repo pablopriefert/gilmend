@@ -40,8 +40,26 @@ describe("detectLanguage", () => {
   });
 
   it("gives a tie between two non-English languages to the first (French, then German, Spanish, Italian)", () => {
-    // "con" is on both the Spanish and the Italian list: one hit each, Spanish comes first.
-    expect(detectLanguage("con")).toBe("es");
+    // One word of each, and neither shared: the first of the order wins.
+    expect(detectLanguage("hola ciao")).toBe("es");
+    expect(detectLanguage("ciao hallo")).toBe("de");
+  });
+
+  it("does not let a word that two languages share decide, nor break a tie between them", () => {
+    // "con" is on both the Spanish and the Italian list: half a hit each, which decides nothing alone.
+    expect(detectLanguage("con")).toBe("en");
+    // Shared words count for both, so the one distinctive word wins whatever the order of the languages.
+    expect(detectLanguage("una con rotto")).toBe("it");
+    expect(detectLanguage("una con roto")).toBe("es");
+  });
+
+  it("finds a short Italian message with no accented letter, which used to go to Spanish on a tie", () => {
+    expect(detectLanguage("Buongiorno, la lampada ha una crepa")).toBe("it");
+    expect(detectLanguage("Il vaso ha una crepa e non lo voglio")).toBe("it");
+    expect(detectLanguage("Salve, ho ricevuto la lampada del mio ordine con una crepa nel vetro")).toBe("it");
+    // And the Spanish and French ones around it are not pulled the other way.
+    expect(detectLanguage("Hola, la lámpara tiene una grieta")).toBe("es");
+    expect(detectLanguage("La lampe a une fissure")).toBe("fr");
   });
 
   it("does not turn a reply language into the language of a quoted order number or e-mail", () => {

@@ -202,8 +202,14 @@ export function detectCarrier(text: string | null | undefined): CarrierId | null
   if (/colissimo|la\s*poste|laposte/i.test(text)) return "colissimo";
   if (/mondial\s*-?\s*relay|mondialrelay/i.test(text)) return "mondial_relay";
   if (/chronopost|chrono\s*(13|18|classic|relais)/i.test(text)) return "chronopost";
-  // "DHL" alone is not enough: DHL Express and DHL eCommerce follow other terms than DHL Paket.
-  if (/dhl\s*-?\s*(paket|parcel)/i.test(text)) return "dhl_paket";
+  // "DHL" alone is not enough: DHL Express and DHL eCommerce follow other terms than DHL Paket. "DHL
+  // Parcel" is not DHL Paket either: it is the brand of DHL's Benelux, UK, Spanish and Polish parcel
+  // networks, with their own terms, so it stays unmapped (the merchant sets the carrier by hand). The
+  // exact tracking-company string Shopify sends for DHL Germany was not confirmed, hence only the name.
+  if (/dhl\s*-?\s*paket/i.test(text)) return "dhl_paket";
+  // A bare "GLS" also covers GLS France, Italy or Spain, whose terms are not modelled: the claim is then
+  // refused for its destination or left to a person, and computeClaim's message says the rules are GLS
+  // Germany's.
   if (/\bgls\b|general\s+logistics\s+systems/i.test(text)) return "gls";
   return null;
 }

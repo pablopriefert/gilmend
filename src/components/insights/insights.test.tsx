@@ -157,6 +157,13 @@ describe("Insights: deadline timeline", () => {
     expect(reserve).not.toHaveTextContent("€");
   });
 
+  it("names a statutory reserve window (DHL Paket, GLS) as statutory, not as prudential", () => {
+    render(section([claimCase("dhl", "dhl_paket", 54, 24 * 300, { reserveHours: 50 })]));
+    const reserve = screen.getByTestId("deadline-dhl-reserve");
+    expect(reserve).toHaveTextContent("statutory: a later report only adds a warning");
+    expect(reserve).not.toHaveTextContent("prudential");
+  });
+
   it("draws the strips for the eye only: the list carries the same events as text", () => {
     render(section(live()));
     const chart = screen.getByTestId("timeline-chart");

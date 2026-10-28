@@ -91,7 +91,7 @@ describe("carrier rules file", () => {
     // The German carriers (28 Oct 2026), read in their own terms and in the HGB they apply.
     expect(getCarrierRules("dhl_paket")).toMatchObject({
       reserveDeadlineHours: 168,
-      claimDeadlineDays: 7,
+      claimDeadlineDays: 365,
       compensation: { flatEur: 500, capEur: 500 },
     });
     expect(getCarrierRules("gls")).toMatchObject({
@@ -391,9 +391,9 @@ describe("computeClaim: DHL Paket", () => {
     const c = computeClaim(order, assessment, reportAfter(3 * HOUR), afterDelivery(4 * HOUR));
     expect(c.eligible).toBe(true);
     expect(c.maxCompensationEur).toBe(54);
-    expect(c.basis).toMatchObject({ termsLabel: "DHL Paket (Germany, standard terms)", flatEur: 500, capEur: 500, itemValueEur: 54 });
+    expect(c.basis).toMatchObject({ termsLabel: "DHL Paket (Germany, standard terms)", flatEur: 500, flatKind: "limit", capEur: 500, itemValueEur: 54 });
     expect(c.basis?.perKgEur).toBeUndefined();
-    expect(joined(c.reasons)).toMatch(/min\(item value 54\.00 EUR, 500\.00 EUR per parcel, cap 500\.00 EUR\) = 54\.00 EUR/);
+    expect(joined(c.reasons)).toMatch(/min\(item value 54\.00 EUR, limit 500\.00 EUR per parcel, cap 500\.00 EUR\) = 54\.00 EUR/);
   });
 
   it("caps an expensive parcel at 500 EUR, whatever the weight", () => {
@@ -408,22 +408,29 @@ describe("computeClaim: DHL Paket", () => {
     expect(c.maxCompensationEur).toBe(54);
   });
 
-  it("is in time exactly 7 days after delivery, with under 24 h warning, and late a millisecond later", () => {
-    const inTime = computeClaim(order, assessment, reportAfter(7 * DAY), afterDelivery(7 * DAY));
+  it("is in time up to one year after delivery (HGB § 439), with under 24 h warning, and late a millisecond later", () => {
+    const inTime = computeClaim(order, assessment, reportAfter(HOUR), afterDelivery(365 * DAY));
     expect(inTime.eligible).toBe(true);
-    expect(inTime.claimDeadline).toBe("2026-10-27T10:00:00.000Z");
+    expect(inTime.claimDeadline).toBe("2027-10-20T10:00:00.000Z");
     expect(inTime.reserveDeadline).toBe("2026-10-27T10:00:00.000Z");
     expect(joined(inTime.reasons)).toMatch(/Warning: less than 24 h left/);
-    const late = computeClaim(order, assessment, reportAfter(HOUR), afterDelivery(7 * DAY + 1));
+    const late = computeClaim(order, assessment, reportAfter(HOUR), afterDelivery(365 * DAY + 1));
     expect(late.eligible).toBe(false);
     expect(late.claimDeadline).toBeNull();
-    expect(joined(late.reasons)).toMatch(/claim deadline of DHL Paket \(Germany, standard terms\) passed on 2026-10-27T10:00Z \(7 days after delivery\)/);
+    expect(joined(late.reasons)).toMatch(/claim deadline of DHL Paket \(Germany, standard terms\) passed on 2027-10-20T10:00Z \(365 days after delivery\)/);
   });
 
-  it("blocks a damage report made after the 7 days DHL gives, because DHL says it must be reported within them", () => {
-    const c = computeClaim(order, assessment, reportAfter(7 * DAY + HOUR), afterDelivery(7 * DAY + 2 * HOUR));
-    expect(c.eligible).toBe(false);
-    expect(joined(c.reasons)).toMatch(/after the 168 h reserve window of DHL Paket/);
+  it("does not block a damage report made after the 7 days: HGB § 438 only lets DHL presume an undamaged delivery", () => {
+    // Reported on day 8, a millisecond past 7 days, and an hour past: the claim is still open and eligible.
+    for (const lateBy of [1, HOUR, DAY + HOUR]) {
+      const c = computeClaim(order, assessment, reportAfter(7 * DAY + lateBy), afterDelivery(7 * DAY + lateBy + HOUR));
+      expect(c.eligible, `${lateBy} ms late`).toBe(true);
+      expect(c.maxCompensationEur).toBe(54);
+      expect(c.claimDeadline).toBe("2027-10-20T10:00:00.000Z");
+      expect(joined(c.reasons)).toMatch(/Warning: the customer reported the damage .* h after delivery, beyond the 168 h statutory report window of DHL Paket \(Germany, standard terms\) \(a late report lets the carrier presume an undamaged delivery, which can be rebutted/);
+      // Neither the old block nor a statement DHL's terms do not make.
+      expect(joined(c.reasons)).not.toMatch(/rejects such claims|reserve window of DHL Paket .* closed/);
+    }
   });
 
   it("is reported 3 days after delivery without a warning about the window", () => {
@@ -478,7 +485,7 @@ describe("computeClaim: GLS Germany", () => {
     const c = computeClaim(order, assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
     expect(c.eligible).toBe(true);
     expect(c.maxCompensationEur).toBe(120);
-    expect(c.basis).toMatchObject({ termsLabel: "GLS Germany (business terms)", flatEur: 750, capEur: 750 });
+    expect(c.basis).toMatchObject({ termsLabel: "GLS Germany (business terms)", flatEur: 750, flatKind: "limit", capEur: 750 });
     const dear = makeOrder({ ...order, lineItems: [{ sku: "V1", title: "Stoneware vase, tall", quantity: 1, unitPrice: 900 }] });
     expect(computeClaim(dear, assessment, reportAfter(HOUR), afterDelivery(2 * HOUR)).maxCompensationEur).toBe(750);
   });
@@ -491,7 +498,7 @@ describe("computeClaim: GLS Germany", () => {
   it("only warns about a report after the 7 days, because the window is the statutory one", () => {
     const c = computeClaim(order, assessment, reportAfter(10 * DAY), afterDelivery(10 * DAY));
     expect(c.eligible).toBe(true);
-    expect(joined(c.reasons)).toMatch(/Warning: .*240 h after delivery.*prudential reserve window \(a statutory window: a late report weakens the claim for GLS Germany \(business terms\) without ending it\)/);
+    expect(joined(c.reasons)).toMatch(/Warning: .*240 h after delivery, beyond the 168 h statutory report window of GLS Germany \(business terms\) \(a late report lets the carrier presume an undamaged delivery, which can be rebutted, so it weakens the claim without ending it\)/);
     // And it is not the Colissimo wording, which says the window itself is not confirmed.
     expect(joined(c.reasons)).not.toMatch(/not confirmed for/);
   });
@@ -509,6 +516,8 @@ describe("computeClaim: GLS Germany", () => {
     const c = computeClaim(makeOrder({ ...order, shippingAddress: { city: "Vienna", country: "AT" } }), assessment, reportAfter(HOUR), afterDelivery(2 * HOUR));
     expect(c.eligible).toBe(false);
     expect(joined(c.reasons)).toMatch(/within Germany only/);
+    // A bare "GLS" is also GLS France or Italy: the message says whose rules are modelled.
+    expect(joined(c.reasons)).toMatch(/the GLS Germany \(business terms\) rules modelled here cover shipments within Germany only/);
   });
 
   it("states the packing clause it read, since GLS excludes unsuitable packaging", () => {

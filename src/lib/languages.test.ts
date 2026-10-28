@@ -24,9 +24,11 @@ describe("supported languages", () => {
     expect(languageName("nl")).toBe("NL");
   });
 
-  it("are told to the agent, which is to answer in the language of a message that is clearly in another one", () => {
+  it("are told to the agent, which is to send a message that is clearly in another language to a person", () => {
     expect(SYSTEM_PROMPT).toMatch(/"Reply language" line/);
     for (const name of ["English", "French", "German", "Spanish", "Italian"]) expect(SYSTEM_PROMPT).toContain(name);
-    expect(SYSTEM_PROMPT).toMatch(/clearly written in another language, answer in the language of the message/);
+    expect(SYSTEM_PROMPT).toMatch(/clearly written in another language, write the reply in English and set needsHuman to true/);
+    // The guardrail reads dates and amounts in the five languages only: the prompt says why other ones go to a person.
+    expect(SYSTEM_PROMPT).toMatch(/checks amounts and dates only in those five languages/);
   });
 });

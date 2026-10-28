@@ -124,7 +124,7 @@
         "carrierClaim": true,
         "needsHuman": false,
         "claimEligible": true,
-        "rationale": "The Europe lot's case: a German customer writes in German, so the customer reply must be in German (the language is detected, not chosen). Clear crack on a 54 EUR item, reported 3 h after delivery, well inside the 7-day DHL Paket damage-report window: reship, then claim DHL Paket, whose standard terms pay the item value up to 500 EUR, so the 54 EUR item value is the ceiling. It reuses the photo of the carafe of case 6 on purpose, under its own order and customer, so the integrity check does not flag it. It assumes the parcel was shipped from within Germany (a German fulfilment centre): the DHL national terms do not cover a parcel sent from France."
+        "rationale": "The Europe lot's case: a German customer writes in German, so the customer reply must be in German (the language is set to German on the demo card, and Auto-detect also finds German for this message). Clear crack on a 54 EUR item, reported about 15 h after delivery, well inside the 7-day statutory damage-report window (HGB § 438) that DHL Paket asks for: reship, then claim DHL Paket, whose standard terms pay the item value up to 500 EUR, so the 54 EUR item value is the ceiling. It reuses the photo of the carafe of case 6 on purpose, under its own order and customer, so the integrity check does not flag it. It assumes the parcel was shipped from within Germany (a German fulfilment centre): the DHL national terms do not cover a parcel sent from France."
       }
     }
   ]
