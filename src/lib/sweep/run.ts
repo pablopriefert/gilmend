@@ -13,12 +13,14 @@ import {
   REFUSAL_NOTE,
   acceptModelText,
   askModel,
-  briefingFacts,
+  briefingInput,
   inputKey,
-  nudgeFacts,
+  modelMayWriteNudge,
+  nudgeInput,
   templateBriefing,
   templateNudge,
   type ModelAnswer,
+  type TextInput,
 } from "./text";
 import type { SweepItem, SweepPlan, SweepResult, SweepText } from "./types";
 
@@ -30,8 +32,13 @@ import type { SweepItem, SweepPlan, SweepResult, SweepText } from "./types";
 //    never makes more than SWEEP_MAX_MODEL_CALLS (6) calls, each a short text with no image;
 //  - a sweep that needs at least one call takes ONE slot of the daily ceiling on real runs (the one
 //    POST /api/reports counts on), and past the ceiling it writes with the labelled demo script;
-//  - texts are cached for the (Paris) day: the same facts for the same engine reuse today's text,
-//    so "Run the sweep now" twice in a row costs one sweep, and a sweep with no change costs none.
+//  - texts are cached for the (Paris) day: the same facts and the same figures for the same engine
+//    reuse today's text, so "Run the sweep now" twice in a row costs one sweep, and a sweep whose plan
+//    did not change costs none. The facts hold no countdown (a deadline is an absolute moment), so
+//    the key moves only when the plan does: a new case, another rank, a changed deadline or amount.
+//    The cache day is the Paris day and the ceiling's day is the UTC day: they differ for two hours.
+//  - a nudge is asked of the model only in English and French, the two languages the fence can
+//    check (text.ts); another language gets the labelled template and costs nothing.
 
 export const SWEEP_MAX_NUDGES = 5;
 export const SWEEP_MAX_MODEL_CALLS = 1 + SWEEP_MAX_NUDGES;
@@ -121,7 +128,7 @@ export async function runSweep(options: RunSweepOptions): Promise<RunSweepOutcom
   interface Job {
     kind: "briefing" | "nudge";
     system: string;
-    facts: string;
+    input: TextInput;
     key: string;
     /** Template that stands in when the model is not used or its text is refused. */
     fallback: () => string;
@@ -130,14 +137,14 @@ export async function runSweep(options: RunSweepOptions): Promise<RunSweepOutcom
     reused?: SweepText;
   }
   const jobs: Job[] = [];
-  const keyFor = (kind: "briefing" | "nudge", facts: string) => inputKey(engine === "demo-mock" ? "demo-mock" : writerId(), kind, facts);
+  const keyFor = (kind: "briefing" | "nudge", input: TextInput) => inputKey(engine === "demo-mock" ? "demo-mock" : writerId(), kind, input);
 
-  const briefingJobFacts = briefingFacts(plan, now);
+  const briefingJobInput = briefingInput(plan);
   const briefing: Job = {
     kind: "briefing",
     system: BRIEFING_SYSTEM,
-    facts: briefingJobFacts,
-    key: keyFor("briefing", briefingJobFacts),
+    input: briefingJobInput,
+    key: keyFor("briefing", briefingJobInput),
     fallback: () => templateBriefing(plan, now),
   };
   // Nothing due: there is nothing to write about, so no call (and no slot of the daily ceiling).
@@ -146,6 +153,7 @@ export async function runSweep(options: RunSweepOptions): Promise<RunSweepOutcom
 
   const items: SweepItem[] = plan.items.map((i) => ({ ...i }));
   const privateNudges: number[] = [];
+  const unchecked: number[] = [];
   const overCap: number[] = [];
   let withModel = 0;
   items.forEach((item, index) => {
@@ -155,17 +163,23 @@ export async function runSweep(options: RunSweepOptions): Promise<RunSweepOutcom
       privateNudges.push(index);
       return;
     }
+    if (!modelMayWriteNudge(item)) {
+      // The fence is a list of English and French words: a nudge in another language is not asked of
+      // the model, because nothing could check that it promises no refund and names no deadline.
+      unchecked.push(index);
+      return;
+    }
     if (withModel >= SWEEP_MAX_NUDGES) {
       overCap.push(index);
       return;
     }
     withModel += 1;
-    const facts = nudgeFacts(item);
+    const input = nudgeInput(item);
     jobs.push({
       kind: "nudge",
       system: NUDGE_SYSTEM,
-      facts,
-      key: keyFor("nudge", facts),
+      input,
+      key: keyFor("nudge", input),
       fallback: () => templateNudge(item).text,
       index,
     });
@@ -206,7 +220,7 @@ export async function runSweep(options: RunSweepOptions): Promise<RunSweepOutcom
       else modelCalls.nudges += 1;
       let answer: ModelAnswer;
       try {
-        answer = await askModel(provider, job.system, job.facts);
+        answer = await askModel(provider, job.system, job.input.facts);
       } catch (err) {
         console.error(`[gilmend] sweep: the ${job.kind} call failed:`, errorLine(err));
         written.set(job, templateText(job.fallback(), job.key, "the model call failed, so a template stands in"));
@@ -217,7 +231,7 @@ export async function runSweep(options: RunSweepOptions): Promise<RunSweepOutcom
         usage.completionTokens += answer.usage.completionTokens;
         usage.any = true;
       }
-      const accepted = acceptModelText(answer.text, job.facts, job.kind);
+      const accepted = acceptModelText(answer.text, job.kind, job.input.values);
       if (accepted.ok) {
         written.set(job, { text: accepted.text, source: "model", model: provider.model, inputKey: job.key });
       } else {
@@ -233,11 +247,20 @@ export async function runSweep(options: RunSweepOptions): Promise<RunSweepOutcom
   for (const job of jobs) {
     if (job.kind === "nudge" && job.index !== undefined) items[job.index].nudge = written.get(job) ?? null;
   }
-  const nudgeKey = (item: SweepItem) => inputKey("template", "nudge", nudgeFacts(item));
+  const nudgeKey = (item: SweepItem) => inputKey("template", "nudge", nudgeInput(item));
   for (const index of privateNudges) {
     const item = items[index];
     const t = templateNudge(item);
     items[index].nudge = templateText(t.text, nudgeKey(item), "this case ran privately, so its data is not sent to the Meta Model API: a template is used");
+  }
+  for (const index of unchecked) {
+    const item = items[index];
+    const t = templateNudge(item);
+    items[index].nudge = templateText(
+      t.text,
+      nudgeKey(item),
+      "the model only writes nudges in English and French, the two languages the code can check for a promise or a deadline: a template is used",
+    );
   }
   for (const index of overCap) {
     const item = items[index];

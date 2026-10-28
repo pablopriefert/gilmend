@@ -1,3 +1,4 @@
+import { claimIsFileable } from "@/lib/claim-filing";
 import { getCase, updateCase } from "@/lib/store/cases";
 import type { CaseRecord, CaseStatus, TraceStep } from "@/lib/types";
 import { requireAccessCode } from "../../_lib/access";
@@ -90,9 +91,10 @@ export async function PATCH(request: Request, { params }: RouteContext): Promise
       return errorResponse(409, "no_decision", "This case has no decision yet: there is nothing to approve or edit.");
     }
 
-    // Marking a claim as filed makes sense only where a claim is waiting to be filed. Clearing the
-    // note is always allowed (a mistaken click must be undoable).
-    if (claimFiled === true && !(current.status === "approved" && current.claim?.eligible)) {
+    // Marking a claim as filed makes sense only where a claim is waiting to be filed (the same test the
+    // morning sweep uses, claimIsFileable). Clearing the note is always allowed: a mistaken click is
+    // undone from the Today panel and from the case page.
+    if (claimFiled === true && !claimIsFileable(current)) {
       return errorResponse(
         409,
         "claim_not_fileable",

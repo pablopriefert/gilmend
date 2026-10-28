@@ -453,3 +453,43 @@ describe("case page: the decision card and the layout", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/Could not copy/);
   });
 });
+
+describe("case page: the merchant's note that the claim was filed", () => {
+  const filed = () => makeCase({ status: "approved", claimFiledAt: "2026-10-28T09:00:00.000Z" });
+
+  it("shows when the merchant marked it, says Gilmend filed nothing, and offers an undo", () => {
+    render(<CaseView caseRecord={filed()} rules={makeRules()} now={NOW} />);
+    const note = screen.getByTestId("claim-filed-note");
+    expect(note).toHaveTextContent("Claim marked as filed by you on 28 Oct 2026, 10:00.");
+    expect(note).toHaveTextContent("Gilmend filed nothing");
+    expect(within(note).getByRole("button", { name: "Undo: I did not file it" })).toBeEnabled();
+  });
+
+  it("is absent when no note was made", () => {
+    render(<CaseView caseRecord={makeCase({ status: "approved" })} rules={makeRules()} now={NOW} />);
+    expect(screen.queryByTestId("claim-filed-note")).not.toBeInTheDocument();
+  });
+
+  it("undoes the note with claimFiled false, with the access code, and refreshes the page", async () => {
+    const fetchMock = mockPatch({ ok: true, body: { case: makeCase({ status: "approved" }) } });
+    render(<CaseView caseRecord={filed()} rules={makeRules()} now={NOW} accessCodeRequired />);
+    fireEvent.change(screen.getByLabelText("Access code"), { target: { value: "judges-2026" } });
+    fireEvent.click(screen.getByRole("button", { name: "Undo: I did not file it" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/cases/case-1");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ claimFiled: false });
+    expect((init.headers as Record<string, string>)["x-access-code"]).toBe("judges-2026");
+  });
+
+  it("says why when the undo is refused, and keeps the note", async () => {
+    mockPatch({ ok: false, status: 401, body: { error: "access_code_required", message: "Enter the access code of this demo to change a case." } });
+    render(<CaseView caseRecord={filed()} rules={makeRules()} now={NOW} />);
+    fireEvent.click(screen.getByRole("button", { name: "Undo: I did not file it" }));
+    const note = screen.getByTestId("claim-filed-note");
+    expect(await within(note).findByRole("alert")).toHaveTextContent(/access code/);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Access code")).toBeInTheDocument();
+  });
+});

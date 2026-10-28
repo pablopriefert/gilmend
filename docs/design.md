@@ -116,21 +116,34 @@ sweep found, ranked by the code. Same card language as the rest (white card, hai
    with a triangle ("Claim deadline passed"), anything further off is plain ink with a calendar icon. The
    date sits under it. The countdown follows the browser's clock, one minute at a time, starting from the
    server's so the first render matches; a recorded run included on purpose is read as of its recording day
-   and says "after the recording" instead of ticking.
+   and says "after the recording" instead of ticking. The "soon" threshold is the sweep's own horizon. A
+   stored sweep is up to a day old: once an item's claim deadline passes, its amount is struck through in
+   plain ink ("deadline passed, no longer claimable"; gold is only money that can still be claimed), the total
+   and the closing-soon count are recomputed without it, and a note says how many deadlines passed since the
+   sweep ran and that the paragraph was written before. The code's sentences never say "in 17 h" (they name
+   the moment), so nothing static contradicts the ticking countdown.
 3. **Say who wrote each text.** Under the briefing and inside every nudge: "written by muse-spark-1.3",
    "DEMO MODE: this paragraph comes from a script, not from Muse", or "Template text, not the model's:
    <why>". A DEMO MODE sweep also gets the amber note and the engine badge. The ranking, the deadlines and
-   the amounts are the code's in every case, and the footer line says so.
+   the amounts are the code's in every case, and the footer line says what is really checked: the model never
+   writes a figure (the code fills in every order number, date and amount), a text that states one, promises
+   money or names a deadline is refused, and nudge drafts are checked in English and French only.
 4. **Nothing is sent.** A nudge is a draft in a closed `<details>` with a Copy button; there is no send
    button anywhere on the panel, and every draft says "Nothing is sent: copy it into your own mailbox".
 5. **One verb per case** (nudge the customer, file the claim, review the case, check the failed run), the
    reasons as plain sentences under it, and one link to the case. "I filed it: mark as filed" appears only
    on an approved case whose claim is waiting to be filed, and only notes it (`claimFiled` on PATCH): Gilmend
-   files nothing.
-6. **Honest empty and error states.** Before the first sweep: a dashed card with one sentence and the run
+   files nothing. Once marked, the pill gets an Undo button, and the case page shows "Claim marked as filed by
+   you on <date>" with the same undo.
+6. **Honest empty and error states, and a voice for a screen reader.** The sr-only status line says "Running the
+   sweep." and then what was found ("Sweep done: 6 cases need you, 3 close within 72 h"), and focus moves to the
+   new paragraph after a successful run.
+7. **Honest empty and error states.** Before the first sweep: a dashed card with one sentence and the run
    button. Nothing due: "Nothing is due" in a sentence. A refused run (access code, rate limit, no
    connection) is an alert in the panel and the plan on screen stays.
 
 Layout checked on 28 Oct 2026 in a browser at 375 and 1280 px (the real component under the real Tailwind
 build, in a harness: no horizontal scroll at 375 px, the run controls stack below `lg`). Not
 checked: the real page under Next, and the Arc badge's own CSS (its CSS module was not loaded in the harness).
+The stale-sweep note, the struck-through amount, the Undo buttons and the case page's "claim marked as filed"
+card were added after that check (29 Oct) and are covered by jsdom tests only: not looked at in a browser.

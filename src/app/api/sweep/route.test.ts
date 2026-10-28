@@ -18,7 +18,7 @@ const chat = vi.fn(async (params: { messages: { content: unknown }[] }) => ({
     {
       message: {
         role: "assistant",
-        content: params.messages[0].content === BRIEFING_SYSTEM ? "Start with item 1." : "Hello,\n\nWe are still waiting for sharper photos. Thank you!",
+        content: params.messages[0].content === BRIEFING_SYSTEM ? "Start with {order:1}." : "Hello,\n\nWe are still waiting for sharper photos. Thank you!",
       },
     },
   ],

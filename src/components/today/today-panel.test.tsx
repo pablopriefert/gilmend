@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeEngine } from "@/lib/config";
 import type { Provider } from "@/lib/providers";
 import { runSweep } from "@/lib/sweep/run";
-import { SWEEP_NOW, claimOf, openCase, waitingCase } from "@/lib/sweep/plan-helpers";
+import { SWEEP_NOW, at, claimOf, openCase, waitingCase } from "@/lib/sweep/plan-helpers";
 import { BRIEFING_SYSTEM } from "@/lib/sweep/text";
 import type { SweepResult } from "@/lib/sweep/types";
 import type { CaseRecord } from "@/lib/types";
@@ -15,6 +15,10 @@ import { TodayPanel } from "./today-panel";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/" }));
 
 const NOW_ISO = SWEEP_NOW.toISOString();
+let emptySweep: SweepResult;
+beforeAll(async () => {
+  emptySweep = await sweepOf([]);
+});
 const store = { load: async () => null, save: async () => {} };
 
 async function sweepOf(cases: CaseRecord[], extra: { provider?: Provider; includeRecorded?: boolean } = {}): Promise<SweepResult> {
@@ -35,7 +39,7 @@ const fakeMuse = (answers: { briefing?: string; nudge?: string } = {}): Provider
             role: "assistant",
             content:
               params.messages[0].content === BRIEFING_SYSTEM
-                ? (answers.briefing ?? "Start with item 1. The rest can wait.")
+                ? (answers.briefing ?? "Start with {order:1}. The rest can wait.")
                 : (answers.nudge ?? "Hello,\n\nWe are still waiting for sharper photos so we can move forward. Thank you!"),
           },
         },
@@ -82,8 +86,8 @@ describe("the plan", () => {
   it("says why each case is there, in the code's sentences", async () => {
     panel(await sweepOf(cases()));
     const [first, second] = screen.getAllByTestId("today-item");
-    expect(within(first).getByText(/The claim deadline of Mondial Relay \(Offre Start\) closes Thu 29 Oct, 04:00, in 17 h\./)).toBeInTheDocument();
-    expect(within(second).getByText(/Waiting for the customer: the request was approved 2 d 22 h ago/)).toBeInTheDocument();
+    expect(within(first).getByText(/The claim deadline of Mondial Relay \(Offre Start\) closes Thu 29 Oct, 04:00\./)).toBeInTheDocument();
+    expect(within(second).getByText(/Waiting for the customer: the request was approved Sun 25 Oct, 13:00 and no reply was added/)).toBeInTheDocument();
     expect(within(second).getByText("Nudge the customer")).toBeInTheDocument();
   });
 
@@ -108,6 +112,93 @@ describe("the plan", () => {
     expect(screen.getByText("Claim deadline in 14 h")).toBeInTheDocument();
     act(() => void vi.advanceTimersByTime(15 * 3_600_000));
     expect(screen.getByText("Claim deadline passed")).toBeInTheDocument();
+  });
+
+  describe("a stored sweep read after a deadline passed (the cron runs once a day)", () => {
+    const HOUR = 3_600_000;
+    /** 1004 closes in 17 h and holds 25 EUR; 1005 closes in 60 h and holds 100 EUR. */
+    const twoClaims = () => [
+      openCase("1004", { deadlineHours: 17, eur: 25, carrier: "mondial_relay" }),
+      openCase("1005", { deadlineHours: 60, eur: 100 }),
+    ];
+
+    it("takes the amount of an item whose deadline passed out of the item and out of the total", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(SWEEP_NOW);
+      panel(await sweepOf(twoClaims()));
+      const counts = screen.getByTestId("today-counts");
+      expect(counts).toHaveTextContent("€125.00");
+      expect(within(counts).getByText("Closing in 72 h").nextSibling).toHaveTextContent("2");
+      expect(screen.queryByTestId("today-stale")).not.toBeInTheDocument();
+
+      // 18 h later: 1004 closed 1 h ago, 1005 is still open.
+      act(() => void vi.advanceTimersByTime(18 * HOUR));
+      const [first, second] = screen.getAllByTestId("today-item");
+      expect(within(first).getByText("Claim deadline passed")).toBeInTheDocument();
+      expect(within(first).queryByTestId("today-amount")).not.toBeInTheDocument();
+      const lost = within(first).getByTestId("today-amount-expired");
+      expect(lost).toHaveTextContent("up to €25.00");
+      expect(lost).toHaveTextContent("deadline passed, no longer claimable");
+      expect(lost.querySelector("s")).not.toBeNull();
+      expect(within(second).getByTestId("today-amount")).toHaveTextContent("up to €100.00");
+      // The total no longer counts the lost 25 EUR; the closing-soon count no longer counts that item.
+      expect(counts).toHaveTextContent("€100.00");
+      expect(counts).not.toHaveTextContent("€125.00");
+      expect(within(counts).getByText("Closing in 72 h").nextSibling).toHaveTextContent("1");
+      // And the panel says the sweep is out of date, instead of presenting the paragraph as current.
+      expect(screen.getByTestId("today-stale")).toHaveTextContent(/1 deadline has passed since this sweep ran/);
+
+      act(() => void vi.advanceTimersByTime(45 * HOUR));
+      expect(counts).toHaveTextContent("€0.00");
+      expect(within(counts).getByText("Closing in 72 h").nextSibling).toHaveTextContent("0");
+      expect(screen.getByTestId("today-stale")).toHaveTextContent(/2 deadlines have passed/);
+    });
+
+    it("counts an item that came inside the horizon since the sweep as closing soon", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(SWEEP_NOW);
+      panel(await sweepOf([openCase("far", { deadlineHours: 80, eur: 10 })]));
+      const counts = screen.getByTestId("today-counts");
+      expect(within(counts).getByText("Closing in 72 h").nextSibling).toHaveTextContent("0");
+      act(() => void vi.advanceTimersByTime(10 * HOUR));
+      expect(within(counts).getByText("Closing in 72 h").nextSibling).toHaveTextContent("1");
+    });
+
+    it("keeps the amount when only a reserve window passed: the claim deadline is the amount's", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(SWEEP_NOW);
+      const colis = openCase("colis", { deadlineHours: 4000, eur: 40 });
+      const withReserve = { ...colis, claim: claimOf({ claimDeadline: at(4000), reserveDeadline: at(20), maxCompensationEur: 40 }) };
+      panel(await sweepOf([withReserve]));
+      act(() => void vi.advanceTimersByTime(21 * HOUR));
+      const [item] = screen.getAllByTestId("today-item");
+      expect(within(item).getByText("Reserve window passed")).toBeInTheDocument();
+      expect(within(item).getByTestId("today-amount")).toHaveTextContent("up to €40.00");
+      expect(screen.getByTestId("today-counts")).toHaveTextContent("€40.00");
+    });
+
+    it("never ticks a recorded run's amount against today's clock", async () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(SWEEP_NOW);
+      const recorded: CaseRecord = {
+        ...openCase("rec", { deadlineHours: 5 }),
+        recorded: { recordedOn: "2026-10-27" },
+        createdAt: "2026-10-27T16:00:00.000Z",
+        claim: claimOf({ claimDeadline: "2026-10-29T10:00:00.000Z", maxCompensationEur: 25 }),
+      };
+      panel(await sweepOf([recorded], { includeRecorded: true }));
+      act(() => void vi.advanceTimersByTime(100 * HOUR));
+      expect(screen.getByTestId("today-amount")).toHaveTextContent("up to €25.00");
+      expect(screen.queryByTestId("today-stale")).not.toBeInTheDocument();
+    });
+
+    it("takes the 'closing soon' threshold from the sweep, not from a number of its own", async () => {
+      const sweep = { ...(await sweepOf([openCase("1004", { deadlineHours: 30 })])), horizonHours: 24 };
+      panel(sweep);
+      const pill = screen.getByText("Claim deadline in 1 d 6 h");
+      expect(pill.className).not.toMatch(/warning/);
+      expect(within(screen.getByTestId("today-counts")).getByText("Closing in 24 h").nextSibling).toHaveTextContent("0");
+    });
   });
 
   it("shows the counts and the most that could still be claimed, without calling it a promise", async () => {
@@ -176,7 +267,7 @@ describe("who wrote the text", () => {
 
   it("names the model when the model wrote it, and shows no DEMO MODE note", async () => {
     panel(await sweepOf(cases(), { provider: fakeMuse() }));
-    expect(screen.getByTestId("today-briefing")).toHaveTextContent("Start with item 1. The rest can wait.");
+    expect(screen.getByTestId("today-briefing")).toHaveTextContent("Start with #1004. The rest can wait.");
     expect(screen.getByTestId("today-briefing-source")).toHaveTextContent("This paragraph was written by muse-spark-1.3.");
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
     expect(screen.queryByText(/DEMO MODE/)).not.toBeInTheDocument();
@@ -184,7 +275,7 @@ describe("who wrote the text", () => {
 
   it("says a template stands in, and why, when the model's text was refused", async () => {
     panel(await sweepOf(cases(), { provider: fakeMuse({ briefing: "Claim 999 EUR now." }) }));
-    expect(screen.getByTestId("today-briefing-source")).toHaveTextContent(/Template text, not the model's: the model's text stated a figure the code did not give it/);
+    expect(screen.getByTestId("today-briefing-source")).toHaveTextContent(/Template text, not the model's: the model's text stated a figure of its own/);
     expect(screen.getByTestId("today-briefing").textContent).not.toMatch(/999/);
   });
 });
@@ -295,6 +386,28 @@ describe("Run the sweep now", () => {
   });
 });
 
+describe("what a screen reader hears", () => {
+  it("announces the end of a run with what it found, and moves focus to the new paragraph", async () => {
+    const next = await sweepOf(cases());
+    fetchMock(() => ({ body: { sweep: next, stored: true } }));
+    panel(null);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("");
+    fireEvent.click(screen.getByRole("button", { name: "Run the sweep now" }));
+    await waitFor(() =>
+      expect(status).toHaveTextContent("Sweep done: 3 cases need you, 1 close within 72 h, texts written by the DEMO MODE script."),
+    );
+    await waitFor(() => expect(screen.getByTestId("today-briefing")).toHaveFocus());
+  });
+
+  it("says when nothing is due, and when the result was not saved", async () => {
+    fetchMock(() => ({ body: { sweep: emptySweep, stored: false } }));
+    panel(null);
+    fireEvent.click(screen.getByRole("button", { name: "Run the sweep now" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Sweep done: nothing is due, texts written by the DEMO MODE script. The result was not saved."));
+  });
+});
+
 describe("approved cases whose claim is not marked as filed", () => {
   const approved = () => ({ ...openCase("ap", { deadlineHours: 200, eur: 52.9 }), status: "approved" as const });
 
@@ -308,6 +421,30 @@ describe("approved cases whose claim is not marked as filed", () => {
     expect(url).toBe("/api/cases/ap");
     expect(init.method).toBe("PATCH");
     expect(JSON.parse(init.body as string)).toEqual({ claimFiled: true });
+  });
+
+  it("lets the merchant undo a mistaken click: Undo sends claimFiled false and brings the button back", async () => {
+    const mock = fetchMock(() => ({ body: { case: {} } }));
+    panel(await sweepOf([approved()]));
+    fireEvent.click(screen.getByRole("button", { name: /I filed it: mark as filed/ }));
+    await screen.findByText(/Marked as filed: it leaves the plan at the next sweep/);
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(await screen.findByRole("button", { name: /I filed it: mark as filed/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Marked as filed/)).not.toBeInTheDocument();
+    expect(mock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(mock.mock.calls[1][1].body as string)).toEqual({ claimFiled: false });
+    expect(mock.mock.calls[1][1].method).toBe("PATCH");
+  });
+
+  it("keeps the filed note when the undo fails, and says why", async () => {
+    let calls = 0;
+    fetchMock(() => (++calls === 1 ? { body: { case: {} } } : { status: 500, body: { message: "The store is down." } }));
+    panel(await sweepOf([approved()]));
+    fireEvent.click(screen.getByRole("button", { name: /mark as filed/ }));
+    await screen.findByText(/Marked as filed/);
+    fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("The store is down.");
+    expect(screen.getByText(/Marked as filed/)).toBeInTheDocument();
   });
 
   it("shows the server's reason when the note cannot be saved", async () => {

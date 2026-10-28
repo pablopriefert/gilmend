@@ -16,6 +16,7 @@ import {
   MessageSquareReply,
   Play,
   TriangleAlert,
+  Undo2,
   type LucideIcon,
 } from "lucide-react";
 import { formatCountdown } from "@/lib/impact/insights";
@@ -82,6 +83,7 @@ export function TodayPanel({
   const baseId = useId();
   const codeId = `${baseId}-code`;
   const recordedId = `${baseId}-recorded`;
+  const briefingId = `${baseId}-briefing`;
   const nowMs = useNow(serverNow);
   const [sweep, setSweep] = useState<SweepResult | null>(initial);
   const [running, setRunning] = useState(false);
@@ -91,6 +93,14 @@ export function TodayPanel({
   const [code, setCode] = useAccessCode();
   // Cases the merchant marked as filed since this sweep ran: they leave the plan at the next sweep.
   const [filed, setFiled] = useState<ReadonlySet<string>>(new Set());
+  // What a screen reader hears once a run is over (the live region goes quiet after "Running").
+  const [lastResult, setLastResult] = useState("");
+  // Counts the successful runs: each one moves focus to the new paragraph, because the list under the
+  // button was replaced (the effect runs after the render that shows it).
+  const [runsDone, setRunsDone] = useState(0);
+  useEffect(() => {
+    if (runsDone > 0) document.getElementById(briefingId)?.focus();
+  }, [runsDone, briefingId]);
 
   async function runNow(): Promise<void> {
     if (running) return;
@@ -115,6 +125,8 @@ export function TodayPanel({
       setSweep(data.sweep);
       setNotStored(data.stored === false);
       setFiled(new Set());
+      setLastResult(describeRun(data.sweep, data.stored !== false));
+      setRunsDone((n) => n + 1);
     } catch {
       setError("Could not reach the server. Check your connection and try again. Nothing was changed.");
     } finally {
@@ -122,17 +134,23 @@ export function TodayPanel({
     }
   }
 
-  async function markFiled(caseId: string): Promise<void> {
+  /** The merchant's own note that they filed the claim (true), or that they did not after all (false). */
+  async function setClaimFiled(caseId: string, value: boolean): Promise<void> {
     const res = await fetch(`/api/cases/${encodeURIComponent(caseId)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", ...accessHeaders(code) },
-      body: JSON.stringify({ claimFiled: true }),
+      body: JSON.stringify({ claimFiled: value }),
     });
     if (!res.ok) {
       const data = (await res.json().catch(() => null)) as { message?: string } | null;
       throw new Error(data?.message ?? "The note could not be saved.");
     }
-    setFiled((prev) => new Set(prev).add(caseId));
+    setFiled((prev) => {
+      const next = new Set(prev);
+      if (value) next.add(caseId);
+      else next.delete(caseId);
+      return next;
+    });
   }
 
   return (
@@ -177,7 +195,7 @@ export function TodayPanel({
       </header>
 
       <p role="status" className="sr-only">
-        {running ? "Running the sweep." : ""}
+        {running ? "Running the sweep." : lastResult}
       </p>
       {error && (
         <div role="alert" className="flex items-start gap-3 rounded-2xl border border-danger/40 bg-danger-soft px-5 py-4 text-danger">
@@ -200,26 +218,74 @@ export function TodayPanel({
           )}
         </div>
       ) : (
-        <SweepView sweep={sweep} nowMs={nowMs} filed={filed} onMarkFiled={markFiled} notStored={notStored} />
+        <SweepView
+          sweep={sweep}
+          nowMs={nowMs}
+          filed={filed}
+          onSetFiled={setClaimFiled}
+          notStored={notStored}
+          briefingId={briefingId}
+        />
       )}
     </section>
   );
+}
+
+/** The sentence a screen reader hears when a run is over. */
+function describeRun(sweep: SweepResult, stored: boolean): string {
+  const { counts } = sweep;
+  const by = sweep.engine === "demo-mock" ? ", texts written by the DEMO MODE script" : "";
+  const kept = stored ? "" : " The result was not saved.";
+  if (sweep.items.length === 0) return `Sweep done: nothing is due${by}.${kept}`;
+  return `Sweep done: ${counts.due} ${counts.due === 1 ? "case needs" : "cases need"} you, ${counts.closingSoon} close within ${sweep.horizonHours} h${by}.${kept}`;
+}
+
+/**
+ * What the browser's clock says about a stored sweep. A sweep is up to a day old (the cron runs once a
+ * day), so deadlines that were ahead when it ran may have passed since: the amount of such an item is
+ * not claimable any more, and the totals must not count it. A recorded run is read as of its recording
+ * and never ticks against today's clock.
+ */
+function liveOf(item: SweepItem, nowMs: number, horizonHours: number) {
+  const recorded = item.recordedOn !== null;
+  const d = item.deadline;
+  const hoursLeft = d ? (recorded ? d.hoursLeft : (Date.parse(d.at) - nowMs) / HOUR_MS) : null;
+  const passed = hoursLeft !== null && hoursLeft < 0;
+  const soon = hoursLeft !== null && !passed && (recorded ? item.withinHorizon : hoursLeft <= horizonHours);
+  const claimEnds = item.claimDeadlineAt ? Date.parse(item.claimDeadlineAt) : null;
+  const amountExpired = !recorded && item.amountEur > 0 && claimEnds !== null && claimEnds <= nowMs;
+  return { hoursLeft, passed, soon, amountExpired };
 }
 
 function SweepView({
   sweep,
   nowMs,
   filed,
-  onMarkFiled,
+  onSetFiled,
   notStored,
+  briefingId,
 }: {
   sweep: SweepResult;
   nowMs: number;
   filed: ReadonlySet<string>;
-  onMarkFiled: (caseId: string) => Promise<void>;
+  onSetFiled: (caseId: string, value: boolean) => Promise<void>;
   notStored: boolean;
+  briefingId: string;
 }) {
   const { counts } = sweep;
+  // The totals as of now: the stored ones, minus what the listed items lost since the sweep ran, plus
+  // the listed items that came inside the horizon since. Items past the cap of the list cannot be
+  // recomputed and keep their stored figures (said below the paragraph when there are any).
+  const live = sweep.items.map((item) => ({ item, ...liveOf(item, nowMs, sweep.horizonHours) }));
+  const lostCents = live
+    .filter((l) => l.amountExpired && !l.item.simulatedReply)
+    .reduce((sum, l) => sum + Math.round(l.item.amountEur * 100), 0);
+  const moneyEur = Math.max(0, Math.round(sweep.moneyAtStakeEur * 100) - lostCents) / 100;
+  const closingSoon = Math.max(
+    0,
+    counts.closingSoon - live.filter((l) => l.item.withinHorizon).length + live.filter((l) => l.soon).length,
+  );
+  const deadlinesPassed = live.filter((l) => l.passed || l.amountExpired).length;
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-2xl border border-border bg-surface p-5 shadow-card sm:p-6">
@@ -229,19 +295,29 @@ function SweepView({
             Last sweep {formatDateTime(sweep.generatedAt)} ({sweep.trigger === "cron" ? "scheduled run" : "run on demand"})
           </span>
         </div>
-        <Briefing text={sweep.briefing} />
+        <Briefing text={sweep.briefing} id={briefingId} />
         <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4" data-testid="today-counts">
           <Count label="Need you" value={counts.due} />
-          <Count label={`Closing in ${sweep.horizonHours} h`} value={counts.closingSoon} />
+          <Count label={`Closing in ${sweep.horizonHours} h`} value={closingSoon} />
           <Count label="Customers not answering" value={counts.waitingOnCustomer} />
           <div>
             <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Could still be claimed</dt>
-            <dd className="tabular mt-1 font-display text-2xl text-gold-ink">{formatEur(sweep.moneyAtStakeEur, { whole: false })}</dd>
+            <dd className="tabular mt-1 font-display text-2xl text-gold-ink">{formatEur(moneyEur, { whole: false })}</dd>
             <dd className="mt-0.5 text-xs text-muted">At most, never a promise.</dd>
           </div>
         </dl>
       </div>
 
+      {deadlinesPassed > 0 && (
+        <Note tone="warn" icon={TriangleAlert} data-testid="today-stale">
+          <strong>
+            {deadlinesPassed} {deadlinesPassed === 1 ? "deadline has" : "deadlines have"} passed since this sweep ran.
+          </strong>{" "}
+          The amounts and the counts above leave {deadlinesPassed === 1 ? "it" : "them"} out, but the paragraph was written
+          before. Run the sweep again to refresh it.
+          {sweep.moreItems > 0 ? " Cases beyond the list are not recomputed here." : ""}
+        </Note>
+      )}
       {sweep.includeRecorded && (
         <Note tone="info" icon={Info}>
           <strong>Rehearsal.</strong> This sweep also read the recorded runs, each as of its own recording day, so their
@@ -269,8 +345,17 @@ function SweepView({
         </p>
       ) : (
         <ol aria-label="Today's plan" className="flex flex-col gap-3">
-          {sweep.items.map((item) => (
-            <PlanItem key={item.caseId} item={item} nowMs={nowMs} filed={filed.has(item.caseId)} onMarkFiled={onMarkFiled} />
+          {live.map(({ item, hoursLeft, passed, soon, amountExpired }) => (
+            <PlanItem
+              key={item.caseId}
+              item={item}
+              hoursLeft={hoursLeft}
+              passed={passed}
+              soon={soon}
+              amountExpired={amountExpired}
+              filed={filed.has(item.caseId)}
+              onSetFiled={onSetFiled}
+            />
           ))}
         </ol>
       )}
@@ -284,8 +369,9 @@ function SweepView({
         <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} />
         <span>
           The order, the deadlines and the amounts are worked out by code from the carrier rules. A model only writes the
-          paragraph above and the nudge drafts, and its text is refused if it states a figure the code did not give it.
-          Nothing is sent to anyone: a draft is for you to copy.
+          paragraph above and the nudge drafts: it never writes a figure (the code fills in every order number, date and
+          amount), and a text that states one, promises money or names a deadline is refused. Drafts are checked in
+          English and French only; another language gets a template. Nothing is sent to anyone: a draft is for you to copy.
           {sweep.modelCalls.total > 0
             ? ` This sweep made ${sweep.modelCalls.total} model ${sweep.modelCalls.total === 1 ? "call" : "calls"} (limit ${sweep.modelCalls.cap}).`
             : sweep.reusedTexts > 0
@@ -307,10 +393,10 @@ function Count({ label, value }: { label: string; value: number }) {
 }
 
 /** The paragraph, and who wrote it. */
-function Briefing({ text }: { text: SweepText }) {
+function Briefing({ text, id }: { text: SweepText; id: string }) {
   return (
     <div className="mt-4">
-      <p data-testid="today-briefing" className="max-w-3xl text-base leading-relaxed text-ink">
+      <p id={id} tabIndex={-1} data-testid="today-briefing" className="max-w-3xl rounded-sm text-base leading-relaxed text-ink">
         {text.text}
       </p>
       <p className="mt-2 text-xs leading-5 text-muted" data-testid="today-briefing-source">
@@ -331,9 +417,19 @@ function sourceLabel(text: SweepText, what: string): string {
   }
 }
 
-function Countdown({ item, nowMs }: { item: SweepItem; nowMs: number }) {
+function Countdown({
+  item,
+  hoursLeft,
+  passed,
+  soon,
+}: {
+  item: SweepItem;
+  hoursLeft: number | null;
+  passed: boolean;
+  soon: boolean;
+}) {
   const d = item.deadline;
-  if (!d) {
+  if (!d || hoursLeft === null) {
     return (
       <span className="inline-flex items-center gap-1.5 text-sm text-muted">
         <CalendarClock aria-hidden="true" className="h-4 w-4 shrink-0" strokeWidth={1.75} />
@@ -342,10 +438,6 @@ function Countdown({ item, nowMs }: { item: SweepItem; nowMs: number }) {
     );
   }
   const recorded = item.recordedOn !== null;
-  // A recorded run is read as of its recording: its countdown does not tick against today's clock.
-  const hoursLeft = recorded ? d.hoursLeft : (Date.parse(d.at) - nowMs) / HOUR_MS;
-  const passed = hoursLeft < 0;
-  const soon = !passed && (recorded ? item.withinHorizon : hoursLeft <= 72);
   const Icon = passed ? TriangleAlert : soon ? Clock3 : CalendarClock;
   const what = d.kind === "claim" ? "Claim deadline" : "Reserve window";
   return (
@@ -371,18 +463,25 @@ function Countdown({ item, nowMs }: { item: SweepItem; nowMs: number }) {
 
 function PlanItem({
   item,
-  nowMs,
+  hoursLeft,
+  passed,
+  soon,
+  amountExpired,
   filed,
-  onMarkFiled,
+  onSetFiled,
 }: {
   item: SweepItem;
-  nowMs: number;
+  hoursLeft: number | null;
+  passed: boolean;
+  soon: boolean;
+  /** The claim deadline passed since the sweep ran: the amount is not claimable any more. */
+  amountExpired: boolean;
   filed: boolean;
-  onMarkFiled: (caseId: string) => Promise<void>;
+  onSetFiled: (caseId: string, value: boolean) => Promise<void>;
 }) {
   const action = ACTIONS[item.action];
   const ActionIcon = action.icon;
-  const tone: Tone = item.action === "check_failed_run" ? "danger" : item.withinHorizon ? "warn" : "neutral";
+  const tone: Tone = item.action === "check_failed_run" ? "danger" : soon ? "warn" : "neutral";
   return (
     <li
       data-testid="today-item"
@@ -429,13 +528,20 @@ function PlanItem({
           </div>
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:items-end sm:text-right">
-          <Countdown item={item} nowMs={nowMs} />
-          {item.amountEur > 0 && (
-            <p className="tabular font-display text-xl text-gold-ink" data-testid="today-amount">
-              up to {formatEur(item.amountEur, { whole: false })}
-            </p>
-          )}
-          {item.simulatedReply && item.amountEur > 0 && <Pill icon={FlaskConical}>Simulated reply: not counted</Pill>}
+          <Countdown item={item} hoursLeft={hoursLeft} passed={passed} soon={soon} />
+          {item.amountEur > 0 &&
+            (amountExpired ? (
+              // Gold is money that can still be claimed: a lost amount is struck through and plain.
+              <p className="tabular text-sm text-muted" data-testid="today-amount-expired">
+                <s>up to {formatEur(item.amountEur, { whole: false })}</s>
+                <span className="ml-2 font-semibold text-ink-soft">deadline passed, no longer claimable</span>
+              </p>
+            ) : (
+              <p className="tabular font-display text-xl text-gold-ink" data-testid="today-amount">
+                up to {formatEur(item.amountEur, { whole: false })}
+              </p>
+            ))}
+          {item.simulatedReply && item.amountEur > 0 && !amountExpired && <Pill icon={FlaskConical}>Simulated reply: not counted</Pill>}
         </div>
       </div>
 
@@ -443,7 +549,7 @@ function PlanItem({
         <Link href={`/cases/${item.caseId}`} className={item.action === "nudge_customer" ? BUTTON_QUIET : BUTTON_PRIMARY}>
           Open the case
         </Link>
-        {item.action === "file_claim" && <MarkFiled caseId={item.caseId} filed={filed} onMarkFiled={onMarkFiled} />}
+        {item.action === "file_claim" && <MarkFiled caseId={item.caseId} filed={filed} onSetFiled={onSetFiled} />}
       </div>
 
       {item.nudge && <Nudge item={item} nudge={item.nudge} />}
@@ -454,43 +560,47 @@ function PlanItem({
 function MarkFiled({
   caseId,
   filed,
-  onMarkFiled,
+  onSetFiled,
 }: {
   caseId: string;
   filed: boolean;
-  onMarkFiled: (caseId: string) => Promise<void>;
+  onSetFiled: (caseId: string, value: boolean) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  function change(value: boolean) {
+    setBusy(true);
+    setError(null);
+    onSetFiled(caseId, value)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "The note could not be saved."))
+      .finally(() => setBusy(false));
+  }
+  const alert = error && (
+    <span role="alert" className="text-sm text-danger">
+      {error}
+    </span>
+  );
   if (filed) {
     return (
-      <Pill tone="ok" icon={Check}>
-        Marked as filed: it leaves the plan at the next sweep
-      </Pill>
+      <>
+        <Pill tone="ok" icon={Check}>
+          Marked as filed: it leaves the plan at the next sweep
+        </Pill>
+        <button type="button" className={BUTTON_QUIET} disabled={busy} onClick={() => change(false)}>
+          {busy ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:hidden" strokeWidth={2} /> : <Undo2 aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />}
+          Undo
+        </button>
+        {alert}
+      </>
     );
   }
   return (
     <>
-      <button
-        type="button"
-        className={BUTTON_QUIET}
-        disabled={busy}
-        onClick={() => {
-          setBusy(true);
-          setError(null);
-          onMarkFiled(caseId)
-            .catch((e: unknown) => setError(e instanceof Error ? e.message : "The note could not be saved."))
-            .finally(() => setBusy(false));
-        }}
-      >
+      <button type="button" className={BUTTON_QUIET} disabled={busy} onClick={() => change(true)}>
         {busy ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:hidden" strokeWidth={2} /> : <Check aria-hidden="true" className="h-4 w-4" strokeWidth={1.75} />}
         I filed it: mark as filed
       </button>
-      {error && (
-        <span role="alert" className="text-sm text-danger">
-          {error}
-        </span>
-      )}
+      {alert}
     </>
   );
 }

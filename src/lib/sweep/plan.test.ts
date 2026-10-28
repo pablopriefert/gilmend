@@ -58,6 +58,40 @@ describe("ranking: deadline first, money second", () => {
   });
 });
 
+describe("the sentences the code writes", () => {
+  it("name absolute moments and never a span like 'in 17 h', because a stored sweep is read a day later", () => {
+    const plan = buildSweepPlan(
+      [
+        openCase("claim", { deadlineHours: 17, carrier: "mondial_relay" }),
+        { ...openCase("colis", { deadlineHours: 4000 }), claim: claimOf({ claimDeadline: at(4000), reserveDeadline: at(20) }) },
+        waitingCase("wait", 70),
+        makeCase({ id: "stuck", status: "new", claim: null, decision: null, assessment: null, updatedAt: at(-5), createdAt: at(-5) }),
+      ],
+      SWEEP_NOW,
+    );
+    const texts = plan.items.flatMap((i) => i.reasons.map((r) => r.text));
+    expect(texts.length).toBeGreaterThanOrEqual(4);
+    for (const text of texts) expect(text, text).not.toMatch(/\bin \d+ ?(?:h|d)\b|\bago\b|\bfor \d+ ?h\b/);
+    expect(texts).toContain("The claim deadline of Mondial Relay (Offre Start) closes Thu 29 Oct, 04:00.");
+    expect(texts.find((t) => t.startsWith("Waiting for the customer"))).toMatch(/was approved \w{3} 25 Oct, \d\d:\d\d and no reply/);
+    expect(texts.find((t) => t.startsWith("The agent run did not finish"))).toMatch(/nothing since Wed 28 Oct, 0\d:\d\d\)/);
+  });
+});
+
+describe("the moment the amount stops being claimable", () => {
+  it("is the claim deadline, which can be later than the deadline the item counts down to (a reserve window)", () => {
+    const base = openCase("colis", { deadlineHours: 4000, eur: 40 });
+    const [item] = buildSweepPlan([{ ...base, claim: claimOf({ claimDeadline: at(4000), reserveDeadline: at(20) }) }], SWEEP_NOW).items;
+    expect(item.deadline?.kind).toBe("reserve");
+    expect(item.claimDeadlineAt).toBe(at(4000));
+  });
+
+  it("is null when there is no amount, or no claim deadline to lose it at", () => {
+    const none = buildSweepPlan([openCase("a", { deadlineHours: null, eur: 40 }), waitingCase("w", 70)], SWEEP_NOW).items;
+    expect(none.map((i) => [i.caseId, i.amountEur, i.claimDeadlineAt])).toEqual([["w", 0, null], ["a", 40, null]]);
+  });
+});
+
 describe("deadline windows", () => {
   it("flags a deadline inside 72 h and leaves one beyond it as a plain ranked date", () => {
     const plan = buildSweepPlan(
@@ -113,6 +147,47 @@ describe("deadline windows", () => {
     expect(early.reasons.map((r) => r.kind)).toEqual(["claim_deadline"]);
     const waiting = buildSweepPlan([waitingCase("w2", 60, { deadlineHours: 30 })], SWEEP_NOW).items[0];
     expect(waiting.deadline?.at).toBe(at(30));
+  });
+});
+
+describe("ranking on each case's own clock", () => {
+  it("ranks a recorded run by the hours left shown on its card, not by a calendar date that is already past", () => {
+    // Recorded 27 Oct 16:00, deadline 28 Oct 08:00 UTC: 16 h on its own clock, but earlier on the calendar
+    // than the live case below (28 Oct 20:00 UTC, 10 h from now). Ranking by calendar time put it first.
+    const recorded: CaseRecord = {
+      ...openCase("rec", { deadlineHours: -20 }),
+      recorded: { recordedOn: "2026-10-27" },
+      createdAt: "2026-10-27T16:00:00.000Z",
+      claim: claimOf({ claimDeadline: "2026-10-28T08:00:00.000Z", maxCompensationEur: 25 }),
+    };
+    const plan = buildSweepPlan([recorded, openCase("live", { deadlineHours: 10 })], SWEEP_NOW, { includeRecorded: true });
+    expect(plan.items.map((i) => [i.caseId, Math.round(i.deadline!.hoursLeft)])).toEqual([["live", 10], ["rec", 16]]);
+  });
+});
+
+describe("the order number", () => {
+  const unmatched = (orderNumber: string): CaseRecord => {
+    const base = openCase("u");
+    return { ...base, order: null, claim: null, report: { ...base.report, orderNumber } };
+  };
+  const orderIdOf = (c: CaseRecord) => buildSweepPlan([c], SWEEP_NOW).items[0].orderId;
+
+  it("is the matched order's id when an order was found", () => {
+    expect(orderIdOf(openCase("1004"))).toBe("#1004");
+  });
+
+  it("keeps what the customer quoted only when it looks like an order number", () => {
+    expect(orderIdOf(unmatched("#4521"))).toBe("#4521");
+    expect(orderIdOf(unmatched("4521"))).toBe("4521");
+    expect(orderIdOf(unmatched("FR-20481"))).toBe("FR-20481");
+  });
+
+  it("never carries an e-mail address, a name or a sentence typed as the order number", () => {
+    for (const typed of ["camille.laurent@example.com", "Camille Laurent", "Camille", "my order is the vase from Lyon", "#12", "0612345678 call me"]) {
+      expect(orderIdOf(unmatched(typed)), typed).toBe("unmatched order");
+    }
+    const text = JSON.stringify(buildSweepPlan([unmatched("camille.laurent@example.com")], SWEEP_NOW));
+    expect(text).not.toMatch(/camille|example\.com/i);
   });
 });
 
@@ -262,5 +337,17 @@ describe("totals and caps", () => {
 
   it("refuses an invalid clock", () => {
     expect(() => buildSweepPlan([], new Date("nope"))).toThrow(TypeError);
+  });
+});
+
+describe("one definition of a claim waiting to be filed", () => {
+  it("lists no 'file the claim' for an approved case whose claim the agent decided not to make, like the route", async () => {
+    const { claimIsFileable } = await import("../claim-filing");
+    const approved = { ...openCase("ap", { deadlineHours: 200, eur: 52.9 }), status: "approved" as const };
+    expect(claimIsFileable(approved)).toBe(true);
+    const declined = { ...approved, decision: { ...approved.decision!, carrierClaim: false } };
+    expect(claimIsFileable(declined)).toBe(false);
+    expect(buildSweepPlan([declined], SWEEP_NOW).items.every((i) => i.action !== "file_claim")).toBe(true);
+    expect(claimIsFileable({ ...approved, status: "needs_review" })).toBe(false);
   });
 });

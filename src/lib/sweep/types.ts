@@ -8,8 +8,9 @@ import type { MissingInfo } from "../rounds";
 //
 // Who writes what:
 //  - CODE: which cases are listed, in which order, every deadline, countdown and amount;
-//  - MODEL (or the labelled demo script): only the briefing paragraph and the nudge drafts, and a
-//    text that states a figure the code did not give it is thrown away (see text.ts).
+//  - MODEL (or the labelled demo script): only the briefing paragraph and the nudge drafts. It never
+//    writes a figure: it names placeholders the code fills in, and a text with a figure of its own is
+//    thrown away (see text.ts).
 
 /** Why a case is on the plan. A case can have several; they are listed most pressing first. */
 export type SweepReasonKind =
@@ -23,7 +24,10 @@ export type SweepReasonKind =
 
 export interface SweepReason {
   kind: SweepReasonKind;
-  /** One sentence of plain English written by the code, with its own figures. */
+  /**
+   * One sentence of plain English written by the code. It names absolute moments, never "in 17 h":
+   * a stored sweep is read up to a day later, so a relative span would be wrong by then.
+   */
   text: string;
 }
 
@@ -83,6 +87,12 @@ export interface SweepItem {
   withinHorizon: boolean;
   /** Most the carrier could pay (computeClaim), 0 when no claim is open or the amount is not known yet. */
   amountEur: number;
+  /**
+   * ISO date-time after which `amountEur` can no longer be claimed (the claim deadline), or null when
+   * there is no amount or no deadline. It can be later than `deadline` (a reserve window comes first).
+   * The panel reads it against the browser's clock, because a stored sweep is up to a day old.
+   */
+  claimDeadlineAt: string | null;
   /** Set when the case waits for the customer's reply (the request was approved and no reply was added). */
   waiting: { since: string; hours: number; missing: MissingInfo[] } | null;
   /**

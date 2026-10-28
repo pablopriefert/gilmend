@@ -43,13 +43,3 @@ export function formatDay(date: Date): string {
 export function eur(amount: number): string {
   return `${(Math.round((amount + Number.EPSILON) * 100) / 100).toFixed(2)} EUR`;
 }
-
-/** "17 h", "2 d 4 h": a span of hours, for the sentences the code writes. */
-export function spanOfHours(hours: number): string {
-  const whole = Math.max(0, Math.floor(hours));
-  if (whole < 1) return "under 1 h";
-  const d = Math.floor(whole / 24);
-  const h = whole % 24;
-  if (d === 0) return `${h} h`;
-  return h === 0 ? `${d} d` : `${d} d ${h} h`;
-}

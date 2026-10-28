@@ -47,6 +47,15 @@ describe("PATCH /api/cases/[id] with claimFiled", () => {
     expect(updateCase).not.toHaveBeenCalled();
   });
 
+  it("refuses it when the agent decided against a carrier claim: the same test as the morning sweep's plan", async () => {
+    const base = makeCase({ status: "approved" });
+    getCase.mockResolvedValue({ ...base, decision: { ...base.decision!, carrierClaim: false } });
+    const refused = await patch({ claimFiled: true });
+    expect(refused.status).toBe(409);
+    expect((await refused.json()).error).toBe("claim_not_fileable");
+    expect(updateCase).not.toHaveBeenCalled();
+  });
+
   it("clears the note with false (null, because the store drops undefined)", async () => {
     getCase.mockResolvedValue(makeCase({ status: "approved", claimFiledAt: "2026-10-28T09:00:00.000Z" }));
     expect((await patch({ claimFiled: false })).status).toBe(200);

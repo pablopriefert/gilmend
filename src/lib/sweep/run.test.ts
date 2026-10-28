@@ -39,7 +39,7 @@ function fakeProvider(answers: Answers = {}) {
     if (answers.delayMs) await new Promise((r) => setTimeout(r, answers.delayMs));
     const isBriefing = params.messages[0].content === BRIEFING_SYSTEM;
     const answer = isBriefing
-      ? (answers.briefing ?? "Start with item 1. Everything else can wait.")
+      ? (answers.briefing ?? "Start with {order:1}. Everything else can wait.")
       : (answers.nudge ?? "Hello,\n\nWe are still waiting for sharper photos so we can move forward. Thank you!");
     if (answer instanceof Error) throw answer;
     return { choices: [{ message: { role: "assistant", content: answer } }], usage: { prompt_tokens: 120, completion_tokens: 30 } };
@@ -66,7 +66,7 @@ describe("a sweep with the real engine", () => {
     expect(stored).toBe(true);
     expect(sweep.engine).toBe("muse-spark-1.3");
     expect(sweep.fellBackReason).toBeNull();
-    expect(sweep.briefing).toMatchObject({ source: "model", model: "muse-spark-1.3" });
+    expect(sweep.briefing).toMatchObject({ source: "model", model: "muse-spark-1.3", text: "Start with #1004. Everything else can wait." });
     expect(sweep.items.map((i) => i.caseId)).toEqual(["1004", "w0", "w1"]);
     expect(sweep.items[1].nudge).toMatchObject({ source: "model" });
     expect(sweep.items[0].nudge).toBeNull();
@@ -161,6 +161,22 @@ describe("cost caps", () => {
     expect(sweep.briefing.source).toBe("model");
   });
 
+  it("does not write again as the hours go by: the facts hold no countdown", async () => {
+    const env = { DAMAGE_DESK_REAL_RUNS_PER_DAY: "1" };
+    const store = memoryStore();
+    const cases = [openCase("1004", { deadlineHours: 17, eur: 25 }), ...waiters(2)];
+    const first = fakeProvider();
+    await runSweep({ ...base, env, provider: first.provider, cases, store });
+    expect(first.chat).toHaveBeenCalledTimes(3);
+
+    // Two and a half hours later (the same Paris day): every hour figure has moved, the plan has not.
+    const later = fakeProvider();
+    const { sweep } = await runSweep({ ...base, env, now: new Date(SWEEP_NOW.getTime() + 2.5 * 3_600_000), provider: later.provider, cases, store });
+    expect(later.chat).not.toHaveBeenCalled();
+    expect(sweep.reusedTexts).toBe(3);
+    expect(sweep.briefing.source).toBe("model");
+  });
+
   it("writes again the next day, and when the facts changed", async () => {
     const store = memoryStore();
     const cases = [openCase("1004", { deadlineHours: 17 })];
@@ -189,13 +205,37 @@ describe("cost caps", () => {
 });
 
 describe("what happens when the model's text cannot be used", () => {
-  it("replaces a briefing that states a figure the code did not give with the template, and says so", async () => {
+  it("replaces a briefing that states a figure of its own with the template, and says so", async () => {
     const { provider } = fakeProvider({ briefing: "Claim 999.99 EUR before Friday 13 Nov." });
     const { sweep } = await runSweep({ ...base, provider, cases: [openCase("1004", { deadlineHours: 17, eur: 25 })], store: memoryStore() });
     expect(sweep.briefing.source).toBe("template");
-    expect(sweep.briefing.note).toMatch(/figure the code did not give/);
+    expect(sweep.briefing.note).toMatch(/figure of its own/);
     expect(sweep.briefing.text).not.toMatch(/999/);
     expect(sweep.modelCalls.briefing).toBe(1);
+  });
+
+  it("refuses the wrong pairings of real figures that the first fence let through", async () => {
+    // #1004 = 25 EUR in 17 h, #1005 = 250 EUR in 31 h: every figure below is in the facts somewhere.
+    const cases = [openCase("1004", { deadlineHours: 17, eur: 25 }), openCase("1005", { deadlineHours: 31, eur: 250 })];
+    for (const briefing of [
+      "File #1004 first: up to 250 EUR, and it closes in 2 days.",
+      "It closes in three days and is worth twenty-five euros.",
+      "The carrier will pay 25 EUR.",
+    ]) {
+      const { provider } = fakeProvider({ briefing });
+      const { sweep } = await runSweep({ ...base, provider, cases, store: memoryStore() });
+      expect(sweep.briefing, briefing).toMatchObject({ source: "template" });
+    }
+  });
+
+  it("writes the figures itself: the model's placeholders are filled with the plan's own strings", async () => {
+    const cases = [openCase("1004", { deadlineHours: 17, eur: 25 }), openCase("1005", { deadlineHours: 31, eur: 250 })];
+    const { provider } = fakeProvider({ briefing: "File {order:1} first, up to {amount:1}, closing {deadline:1}. Then {order:2}, up to {amount:2}." });
+    const { sweep } = await runSweep({ ...base, provider, cases, store: memoryStore() });
+    expect(sweep.briefing).toMatchObject({
+      source: "model",
+      text: "File #1004 first, up to 25.00 EUR, closing Thu 29 Oct, 04:00. Then #1005, up to 250.00 EUR.",
+    });
   });
 
   it("falls back to the template when the call fails, without losing the rest of the sweep", async () => {
@@ -207,10 +247,29 @@ describe("what happens when the model's text cannot be used", () => {
     expect(sweep.items.map((i) => i.caseId)).toEqual(["1004", "w0"]);
   });
 
+  it("does not ask the model for a nudge in a language the fence cannot read, and uses the labelled template", async () => {
+    const { provider, chat } = fakeProvider({ nudge: "Hallo, danach erhalten Sie eine Rückerstattung." });
+    const { sweep } = await runSweep({
+      ...base,
+      provider,
+      cases: [waitingCase("de1", 70, { language: "de", deadlineHours: 100 }), waitingCase("en1", 71, { language: "en", deadlineHours: 101 })],
+      store: memoryStore(),
+    });
+    const byId = Object.fromEntries(sweep.items.map((i) => [i.caseId, i.nudge]));
+    expect(byId.de1).toMatchObject({ source: "template", note: expect.stringMatching(/only writes nudges in English and French/) });
+    expect(byId.de1?.text).toMatch(/^Hello,/);
+    expect(byId.de1?.note).toMatch(/written in English/);
+    expect(byId.de1?.text).not.toMatch(/Rückerstattung/);
+    expect(byId.en1?.source).toBe("model");
+    // The briefing and the English nudge only: the German one never reached the model.
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(sweep.nudgesOverCap).toBe(0);
+  });
+
   it("refuses a nudge that promises a refund", async () => {
     const { provider } = fakeProvider({ nudge: "Hello, we will refund you as soon as you reply." });
     const { sweep } = await runSweep({ ...base, provider, cases: waiters(1), store: memoryStore() });
-    expect(sweep.items[0].nudge).toMatchObject({ source: "template", note: expect.stringMatching(/money or a promise/) });
+    expect(sweep.items[0].nudge).toMatchObject({ source: "template", note: expect.stringMatching(/money, a promise or a deadline/) });
   });
 
   it("does not cache a template as if it were the model's", async () => {
@@ -266,6 +325,9 @@ describe("a case run privately", () => {
     // Only the briefing went out, and without the private case's order number or item.
     expect(chat).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(chat.mock.calls)).not.toMatch(/PRIV-9|Private lamp/);
+    // Not even its carrier, deadline or amount: the briefing names the position and nothing else.
+    const briefingCall = JSON.stringify(chat.mock.calls[0]);
+    expect(briefingCall).toContain('\\"private\\":true');
     // A private nudge does not use up one of the five.
     expect(sweep.nudgesOverCap).toBe(0);
   });

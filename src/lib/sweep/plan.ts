@@ -1,7 +1,8 @@
+import { claimIsOpen } from "../claim-filing";
 import { getCarrierRulesDetailed } from "../rules/carriers";
 import { followUpAvailability, hasSimulatedReply } from "../rounds";
 import type { CaseRecord, CaseStatus } from "../types";
-import { formatMoment, spanOfHours } from "./format";
+import { formatMoment } from "./format";
 import type {
   SweepAction,
   SweepCounts,
@@ -19,8 +20,9 @@ import type {
 // plain sort, so the same cases at the same moment always give the same plan.
 //
 // Ranking, in this order (a test pins each rule):
-//  1. the deadline still ahead, soonest first (a case with no deadline comes after every case that
-//     has one);
+//  1. the deadline still ahead, soonest first, counted in hours from the case's OWN clock (the sweep's
+//     time, or the recording's for a recorded run), so the order always matches the countdowns shown
+//     (a case with no deadline comes after every case that has one);
 //  2. the money, most first (cents, so 23.0 + 9.2 never ties on floating-point dust);
 //  3. what has to be done: nudge, then file, then review, then check a failed run;
 //  4. the customer who has waited longest;
@@ -75,6 +77,21 @@ function parseTime(iso: string | null | undefined): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
+/**
+ * What a customer typed as an order number, when no order was found for it. It is free text, so it is
+ * used only when it looks like an order number (digits, with at most a short prefix): a name, an
+ * e-mail address or a sentence typed there never reaches the plan, the model or the public sweep.
+ */
+export const UNMATCHED_ORDER = "unmatched order";
+
+const QUOTED_ORDER = /^#?[A-Za-z]{0,4}-?\d{3,12}$/;
+
+export function orderLabel(c: Pick<CaseRecord, "order" | "report">): string {
+  if (c.order) return cleanTitle(c.order.id, UNMATCHED_ORDER);
+  const quoted = (c.report.orderNumber ?? "").trim();
+  return QUOTED_ORDER.test(quoted) ? quoted : UNMATCHED_ORDER;
+}
+
 /** An item title is shown and may be sent to a model: one line, no control characters, bounded. */
 export function cleanTitle(raw: string | undefined | null, fallback = "the parcel"): string {
   const one = (raw ?? "").replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
@@ -104,8 +121,8 @@ function toCents(eur: number): number {
 
 interface Evaluated {
   item: SweepItem;
-  /** Sort keys. */
-  deadlineMs: number | null;
+  /** Sort keys. Hours from the case's own clock to its deadline. */
+  deadlineHours: number | null;
   cents: number;
   waitedMs: number;
 }
@@ -160,13 +177,15 @@ function evaluate(c: CaseRecord, now: Date, s: SweepSettings): Evaluated | null 
     if (hoursLeft > s.horizonHours) continue;
     const when = formatMoment(new Date(d.ms).toISOString());
     if (d.kind === "claim") {
-      add("claim_deadline", 0, `The claim deadline${carrierLabel ? ` of ${carrierLabel}` : ""} closes ${when}, in ${spanOfHours(hoursLeft)}.`);
+      // An absolute moment, never "in 17 h": the sweep is stored and read up to a day later, and the
+      // panel's own countdown carries the time left.
+      add("claim_deadline", 0, `The claim deadline${carrierLabel ? ` of ${carrierLabel}` : ""} closes ${when}.`);
     } else {
       const hours = c.order ? getCarrierRulesDetailed(c.order.carrier).reserveDeadlineHours : null;
       add(
         "reserve_window",
         1,
-        `The ${hours === null ? "" : `${hours} h `}reserve window${carrierLabel ? ` of ${carrierLabel}` : ""} closes ${when}, in ${spanOfHours(hoursLeft)}${
+        `The ${hours === null ? "" : `${hours} h `}reserve window${carrierLabel ? ` of ${carrierLabel}` : ""} closes ${when}${
           d.binding ? "" : " (a prudential window, not confirmed for this carrier)"
         }.`,
       );
@@ -174,13 +193,11 @@ function evaluate(c: CaseRecord, now: Date, s: SweepSettings): Evaluated | null 
   }
 
   // --- money --------------------------------------------------------------------------
-  const claimOpen =
-    claim !== null &&
-    claim.eligible &&
-    c.decision?.carrierClaim !== false &&
-    !filed &&
-    (claimMs === null || claimMs > clockMs);
-  const amountEur = claimOpen ? claim.maxCompensationEur : 0;
+  const claimOpen = claimIsOpen(c) && !filed && (claimMs === null || claimMs > clockMs);
+  const amountEur = claimOpen && claim ? claim.maxCompensationEur : 0;
+  // The moment the amount stops being claimable: the panel hides the amount when it passes, whichever
+  // deadline (a reserve window can come first) is the one it counts down to.
+  const claimDeadlineAt = claimOpen && claimMs !== null ? new Date(claimMs).toISOString() : null;
 
   // --- the customer is the one we wait for ----------------------------------------------
   let waiting: SweepItem["waiting"] = null;
@@ -195,7 +212,7 @@ function evaluate(c: CaseRecord, now: Date, s: SweepSettings): Evaluated | null 
         add(
           "waiting_on_customer",
           2,
-          `Waiting for the customer: the request was approved ${spanOfHours(waiting.hours)} ago and no reply was added to the case (Gilmend cannot see your inbox, only what you add).`,
+          `Waiting for the customer: the request was approved ${formatMoment(waiting.since)} and no reply was added to the case (Gilmend cannot see your inbox, only what you add).`,
         );
       }
     }
@@ -212,7 +229,11 @@ function evaluate(c: CaseRecord, now: Date, s: SweepSettings): Evaluated | null 
   if (c.status === "new") {
     const idleMs = clockMs - (parseTime(c.updatedAt) ?? parseTime(c.createdAt) ?? clockMs);
     if (idleMs >= s.stuckHours * HOUR_MS) {
-      add("stuck_run", 4, `The agent run did not finish (nothing for ${spanOfHours(idleMs / HOUR_MS)}): the report is stored, a person has to look at it.`);
+      add(
+        "stuck_run",
+        4,
+        `The agent run did not finish (nothing since ${formatMoment(new Date(clockMs - idleMs).toISOString())}): the report is stored, a person has to look at it.`,
+      );
     }
   }
   if (c.status === "needs_review") {
@@ -240,7 +261,7 @@ function evaluate(c: CaseRecord, now: Date, s: SweepSettings): Evaluated | null 
   const item: SweepItem = {
     rank: 0,
     caseId: c.id,
-    orderId: cleanTitle(c.order?.id ?? c.report.orderNumber, "unknown order"),
+    orderId: orderLabel(c),
     itemTitle: cleanTitle(claim?.basis?.itemTitle ?? c.assessment?.item ?? c.order?.lineItems[0]?.title),
     carrier: c.order?.carrier ?? null,
     carrierLabel,
@@ -253,18 +274,19 @@ function evaluate(c: CaseRecord, now: Date, s: SweepSettings): Evaluated | null 
     deadline,
     withinHorizon,
     amountEur,
+    claimDeadlineAt,
     waiting,
     simulatedReply: hasSimulatedReply(c),
     language: /^[a-z]{2}$/.test(c.report.language) ? c.report.language : "en",
     nudge: null,
   };
-  return { item, deadlineMs: first ? first.ms : null, cents: toCents(amountEur), waitedMs };
+  return { item, deadlineHours: deadline ? deadline.hoursLeft : null, cents: toCents(amountEur), waitedMs };
 }
 
 /** The ranking rules above, as a comparator. */
 function byPriority(a: Evaluated, b: Evaluated): number {
-  const da = a.deadlineMs ?? Number.POSITIVE_INFINITY;
-  const db = b.deadlineMs ?? Number.POSITIVE_INFINITY;
+  const da = a.deadlineHours ?? Number.POSITIVE_INFINITY;
+  const db = b.deadlineHours ?? Number.POSITIVE_INFINITY;
   if (da !== db) return da < db ? -1 : 1;
   if (a.cents !== b.cents) return b.cents - a.cents;
   const actions = ACTION_ORDER[a.item.action] - ACTION_ORDER[b.item.action];

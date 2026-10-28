@@ -3,7 +3,11 @@
 // text calls (one briefing, up to five nudges, no image: a few cents) and prints the plan, the
 // briefing, the nudge drafts and what it cost in calls and tokens. The key comes from .env.local
 // (loaded by `tsx --env-file`) and is never printed. Nothing is written to data/runtime/: the store
-// lives in a temporary folder that is removed at the end. The six cases are fictitious.
+// lives in a temporary folder that is removed at the end, and the sweep is handed an in-memory store,
+// so the result is never persisted (not even to `sweep/latest.json` of a shared Blob store). The
+// script also forces local files and drops any Blob token, and refuses to run if a shared store is
+// still configured (a `vercel env pull` can leave DAMAGE_DESK_STORAGE=blob in .env.local). The six
+// cases are fictitious.
 //
 // To show a nudge, one copy is changed in the temporary store: the blurry-lamp request is marked
 // approved 60 hours ago, as if the merchant had clicked "Approve" three days earlier. That is a
@@ -15,6 +19,8 @@ import os from "node:os";
 import path from "node:path";
 import { describeEngine, resolveEngine } from "../src/lib/config";
 import { listShowcaseCases } from "../src/lib/showcase/showcase";
+import { sharedObjects } from "../src/lib/storage";
+import type { SweepResult } from "../src/lib/sweep/types";
 import type { CaseRecord } from "../src/lib/types";
 
 async function main(): Promise<void> {
@@ -22,6 +28,14 @@ async function main(): Promise<void> {
   // the very thing being tested, so refuse instead.
   if (resolveEngine("muse-spark-1.3", process.env) !== "muse-spark-1.3") {
     console.error("MODEL_API_KEY is not set (see .env.example): nothing was sent.");
+    process.exit(1);
+  }
+  // A shared store in .env.local would turn the six copies below into live cases on the public
+  // deployment's store. Force local files, drop any Blob token, then check nothing shared is left.
+  process.env.DAMAGE_DESK_STORAGE = "file";
+  delete process.env.BLOB_READ_WRITE_TOKEN;
+  if (sharedObjects(process.env) !== null) {
+    console.error("A shared object store is still configured: the sweep script only runs on local files. Nothing was written.");
     process.exit(1);
   }
   const recorded = await listShowcaseCases();
@@ -61,7 +75,15 @@ async function main(): Promise<void> {
     console.log(`[sweep] REAL SWEEP on ${describeEngine("muse-spark-1.3").label}, ${now.toISOString()}`);
 
     const started = Date.now();
-    const { sweep, stored } = await runSweep({ trigger: "manual", now, env: process.env });
+    // In memory: nothing is persisted, and the second sweep below reads today's texts from it.
+    let kept: SweepResult | null = null;
+    const store = {
+      load: async () => kept,
+      save: async (s: SweepResult) => {
+        kept = s;
+      },
+    };
+    const { sweep, stored } = await runSweep({ trigger: "manual", now, env: process.env, store });
     const seconds = ((Date.now() - started) / 1000).toFixed(1);
 
     console.log(`engine: ${sweep.engine} (${sweep.engineDetail.label}) | fell back: ${sweep.fellBackReason ?? "no"} | stored: ${stored} | ${seconds} s`);
@@ -77,7 +99,7 @@ async function main(): Promise<void> {
     }
 
     // A second sweep right away must cost nothing: today's texts are reused.
-    const again = await runSweep({ trigger: "manual", now: new Date(), env: process.env });
+    const again = await runSweep({ trigger: "manual", now: new Date(), env: process.env, store });
     console.log(`second sweep: model calls ${again.sweep.modelCalls.total}, reused texts ${again.sweep.reusedTexts}`);
   } finally {
     rmSync(tmp, { recursive: true, force: true });

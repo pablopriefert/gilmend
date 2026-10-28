@@ -13,6 +13,7 @@ import {
   TraceSection,
   type RulesView,
 } from "./case-sections";
+import { ClaimFiledNote } from "./case/claim-filed";
 import { RoundsSection } from "./case/rounds";
 import { BackLink, Note, Pill, riseStyle } from "./case/ui";
 import { StatusChip } from "./case/status-chip";
@@ -169,6 +170,7 @@ export function CaseView({
           <div className="flex flex-col gap-6 lg:sticky lg:top-24 lg:order-2 lg:-mx-1 lg:max-h-[calc(100dvh-7.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:px-1 lg:pb-2">
             <DecisionSection decision={c.decision} claim={c.claim} now={clock} asOfRecording={Boolean(c.recorded)} />
             <ReviewActions />
+            {c.claimFiledAt && <ClaimFiledNote caseId={c.id} filedAt={c.claimFiledAt} />}
           </div>
           <div className="flex min-w-0 flex-col gap-6 lg:order-1">
             {followUp.available && (
