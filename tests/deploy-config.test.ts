@@ -17,6 +17,8 @@ describe("deployment configuration", () => {
       "/api/cases/\\[id\\]",
       "/api/cases/\\[id\\]/pdf",
       "/api/files",
+      "/api/sweep",
+      "/api/sweep/cron",
     ];
     for (const route of routes) expect(includes[route], route).toEqual(["./data/showcase/**/*"]);
     // The demo photos stay traced for the route that reads them by a computed name.

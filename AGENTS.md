@@ -81,3 +81,21 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   control go through `scrub`. The integrity tool's event holds counts and signal kinds only (`summarizeIntegrity`):
   never a hash, a case id or a signal's message, which describe other customers' cases. The timeline is only ever drawn from real events; keep the
   illustration (`agent-working.tsx`) labelled as one and only as the no-stream fallback.
+- **Morning sweep (29 Oct 2026, `src/lib/sweep/`).** An agent that acts without being prompted. `buildSweepPlan`
+  (`plan.ts`) is pure code: which open cases are due (a claim or reserve deadline inside 72 h, an approved
+  request with no reply for 48 h or more, an approved claim not marked filed, a case that needs a human, a run
+  stuck at "new"), ranked deadline first, money second, then action, then wait, then id. Every deadline is the one
+  `computeClaim` stored on the case, every amount its `maxCompensationEur`; recorded runs are left out unless the
+  caller asks, and are then read as of their recording day. The model (or the labelled DEMO MODE script) writes
+  ONLY the briefing paragraph and the nudge drafts (`text.ts`): it is given the code's facts and no customer
+  data, and a text that states a number the facts do not hold is refused and replaced by a template that says so
+  (`acceptModelText`). Never let it write a ranking, an amount or a date. A case run privately (open weights) is
+  never sent to the Meta Model API: its nudge is a template and its order and item stay out of the briefing's
+  facts. Cost is capped in code (`SWEEP_MAX_NUDGES` 5, `SWEEP_MAX_MODEL_CALLS` 6, one slot of the daily ceiling
+  on real runs per sweep, texts cached per Paris day by engine and facts). `POST /api/sweep` needs the access
+  code and is rate limited; `GET /api/sweep/cron` (vercel.json, 06:00 UTC) refuses every call without a
+  `CRON_SECRET` bearer and ignores the access code. The latest sweep is one object (`sweep/latest.json`) on the
+  same storage choice as the cases. A sweep result is sent to the browser as it is: keep customer names, e-mails,
+  addresses and messages out of `SweepResult`. `claimFiledAt` on a case is the merchant's own note that they
+  filed the claim (PATCH `claimFiled`); Gilmend files nothing. `npm run sweep` runs ONE real sweep on a throwaway
+  copy of the showcase (a few cents, a simulated approval of the blurry lamp, said in its output).

@@ -433,4 +433,10 @@ export interface CaseRecord {
    * the recording. The recording itself is never changed, so the demo can be played again.
    */
   followedFrom?: string;
+  /**
+   * ISO date-time the merchant marked the carrier claim as filed (29 Oct 2026, morning sweep). Gilmend
+   * files nothing: this is only the merchant's note, and it stops the "approved, claim not filed"
+   * reminder. null (or absent) means not marked. Set by PATCH /api/cases/[id] with `claimFiled`.
+   */
+  claimFiledAt?: string | null;
 }
