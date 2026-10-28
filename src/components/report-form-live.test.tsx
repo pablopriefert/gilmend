@@ -185,6 +185,39 @@ describe("the live timeline on the report page", () => {
     stream.end();
   });
 
+  it("turns the claim card into \"Not claimed\" when the decision comes without a carrier claim (28 Oct 2026)", async () => {
+    const stream = liveResponse();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.res));
+    send();
+    const panel = await screen.findByTestId("live-run");
+    await act(async () => {
+      stream.line(accepted());
+      stream.line(
+        ev({
+          type: "tool_end",
+          t: 21_000,
+          tool: "compute_claim",
+          turn: 3,
+          calledBy: "model",
+          ok: true,
+          ms: 3,
+          result: { tool: "compute_claim", eligible: true, maxCompensationEur: 89, claimDeadline: "2026-10-30T12:00:00.000Z", daysLeft: 2 },
+        }),
+      );
+    });
+    // Before the decision, the figure is the rules' answer, with its deadline.
+    expect(await within(panel).findByLabelText("Claim")).toHaveTextContent("Maximum compensation");
+    await act(async () => {
+      stream.line(ev({ type: "run_finished", t: 30_000, reachedDecision: true, decision: "ask_more_photos", confidence: 0.4, needsHuman: true, carrierClaim: false, ms: 30_000 }));
+    });
+    const claim = await within(panel).findByLabelText("Claim");
+    expect(claim).toHaveTextContent("Not claimed");
+    expect(claim).toHaveTextContent(/did not prepare a claim \(would have been up to\s*€89\)/);
+    expect(claim).not.toHaveTextContent("Maximum compensation");
+    expect(claim).not.toHaveTextContent("Claim by");
+    stream.end();
+  });
+
   it("ends on 'Open the case', saved and reachable, and opens it on a click", async () => {
     const stream = liveResponse();
     vi.stubGlobal("fetch", vi.fn(async () => stream.res));

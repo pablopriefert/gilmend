@@ -49,6 +49,7 @@ import type {
   TraceStep,
   VoiceNote,
 } from "@/lib/types";
+import { claimIsDeclined } from "@/lib/claim-filing";
 import { evidenceForPhotos } from "@/lib/evidence/merge";
 import { groupTraceByRound } from "@/lib/rounds";
 import { cn } from "@/lib/utils";
@@ -474,12 +475,16 @@ export function ClaimSection({
   claim,
   rules,
   now,
+  decision = null,
 }: {
   claim: ClaimComputation | null;
   rules: RulesView | null;
   now: Date;
+  /** The agent's decision: when it did not claim the carrier, the computed amount is "not claimed". */
+  decision?: Decision | null;
 }) {
   const deadline = deadlineInfo(claim, now);
+  const declined = claimIsDeclined({ claim, decision });
   return (
     <Panel id="claim-title" title="Carrier claim" icon={Calculator} index={5}>
       {!claim ? (
@@ -487,32 +492,44 @@ export function ClaimSection({
       ) : (
         <>
           <p className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-            {claim.eligible ? (
+            {declined ? (
+              <Pill tone="neutral" icon={FileX2}>Not claimed</Pill>
+            ) : claim.eligible ? (
               <Pill tone="ok" icon={CircleCheck}>Eligible</Pill>
             ) : (
               <Pill tone="neutral" icon={CircleX}>Not eligible</Pill>
             )}
             <span className="text-muted">Computed by code from the carrier&apos;s rules, not by the model.</span>
           </p>
+          {declined && (
+            <p className="mb-5 text-sm leading-relaxed text-ink-soft">
+              Not claimed: the agent did not prepare a claim for this case, so nothing is waiting to be filed and no
+              deadline is running. The amount below is what the carrier&apos;s rules would allow.
+            </p>
+          )}
           <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
-            <Fact label="Max. compensation">
-              <span className="tabular font-display text-3xl leading-none text-gold-ink">
+            <Fact label={declined ? "Would have been up to" : "Max. compensation"}>
+              <span className={cn("tabular font-display text-3xl leading-none", declined ? "text-ink-soft" : "text-gold-ink")}>
                 {formatEur(claim.maxCompensationEur)}
               </span>
             </Fact>
-            <Fact label="Claim deadline">
-              {claim.claimDeadline ? (
-                <>
-                  {formatDate(claim.claimDeadline)}
-                  <span className="mt-0.5 block text-xs text-muted">{deadline.text}</span>
-                </>
-              ) : (
-                "None"
-              )}
-            </Fact>
-            <Fact label="Reserves due by">
-              {claim.reserveDeadline ? formatDateTime(claim.reserveDeadline) : "Not applicable"}
-            </Fact>
+            {!declined && (
+              <>
+                <Fact label="Claim deadline">
+                  {claim.claimDeadline ? (
+                    <>
+                      {formatDate(claim.claimDeadline)}
+                      <span className="mt-0.5 block text-xs text-muted">{deadline.text}</span>
+                    </>
+                  ) : (
+                    "None"
+                  )}
+                </Fact>
+                <Fact label="Reserves due by">
+                  {claim.reserveDeadline ? formatDateTime(claim.reserveDeadline) : "Not applicable"}
+                </Fact>
+              </>
+            )}
           </dl>
           {claim.reasons.length > 0 && (
             <ul className="mt-5 space-y-2 border-t border-border pt-4 text-sm leading-relaxed text-ink-soft">
@@ -652,6 +669,8 @@ export function DecisionSection({
   const deadline = deadlineInfo(claim, now);
   const deadlineTone = DEADLINE_TONE[deadline.tone];
   const recoverable = claim?.eligible === true && claim.maxCompensationEur > 0;
+  // Eligible by the rules, but the agent did not claim: the amount is shown as "not claimed" (below).
+  const declined = claimIsDeclined({ claim: claim ?? null, decision });
 
   // shrink-0: the card sits in a flex column that scrolls (case-view.tsx). overflow-hidden turns its automatic
   // minimum height into 0, so without it the card was shrunk and cropped (confidence, deadline and maximum
@@ -674,7 +693,8 @@ export function DecisionSection({
             </span>
             <p className="min-w-0 pt-1 text-sm leading-relaxed text-ink-soft">
               <strong className="font-semibold text-ink">Needs your judgement.</strong> The agent flagged this case: low
-              confidence, high value or signs of fraud.
+              confidence, high value, or something in the report or the photos that needs a check. A flag is a
+              reason to look, not a verdict.
             </p>
           </div>
         )}
@@ -738,7 +758,23 @@ export function DecisionSection({
         )}
       </div>
 
-      {claim && (
+      {claim && declined && (
+        <div data-testid="claim-not-claimed" className="border-t border-border bg-surface-muted/60 p-5 sm:p-6">
+          <div className="rounded-2xl border border-border bg-surface px-5 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Not claimed</p>
+            <p className="mt-2 text-sm leading-relaxed text-ink">
+              The agent did not prepare a claim for this case (would have been up to{" "}
+              <span className="tabular font-semibold">{formatEur(claim.maxCompensationEur)}</span>).
+            </p>
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-muted">
+            The most the carrier&apos;s rules would allow, worked out by code. Nothing is waiting to be filed and no
+            deadline is running.
+          </p>
+        </div>
+      )}
+
+      {claim && !declined && (
         <div className="border-t border-border bg-surface-muted/60 p-5 sm:p-6">
           <BorderBeam color="var(--gold)" length={14} thickness={1.5} speed={7} className="rounded-2xl">
             <div className="rounded-2xl border border-gold/30 bg-gold-soft px-5 py-4">

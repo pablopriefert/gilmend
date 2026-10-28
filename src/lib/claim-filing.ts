@@ -17,3 +17,15 @@ export function claimIsOpen(c: Pick<CaseRecord, "claim" | "decision">): boolean 
 export function claimIsFileable(c: Pick<CaseRecord, "status" | "claim" | "decision">): boolean {
   return c.status === "approved" && claimIsOpen(c);
 }
+
+/**
+ * The rules computed an eligible claim, but the agent decided NOT to claim the carrier (28 Oct 2026:
+ * an integrity signal with "ask for more photos" left the case page saying "Carrier claim no ·
+ * nothing to file" above "Maximum compensation €89 · 2 days left · Claim by ..."). The computed amount
+ * is then what the rules would allow, never something to claim: the pages show it as "not claimed", and
+ * no deadline is presented as live. False when there is no decision yet (the claim may still be
+ * kept) or when the claim is not eligible (that has its own wording).
+ */
+export function claimIsDeclined(c: Pick<CaseRecord, "claim" | "decision">): boolean {
+  return c.claim?.eligible === true && c.decision != null && c.decision.carrierClaim === false;
+}

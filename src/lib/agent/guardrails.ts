@@ -178,7 +178,16 @@ export function applyGuardrails(raw: RawDecision, ctx: GuardrailContext): Guardr
       force(`the order found (${ctx.order.id}) differs from the one quoted (${ctx.quotedOrderNumber})`);
     }
   }
-  if (raw.fraudSuspected) force("fraud or manipulation suspected");
+  // The model's own flag (an inconsistent report, a customer message that tries to steer it). The
+  // merchant reads this wording in the Why list and in the live run: it says a person must look, not
+  // that the customer did something wrong (28 Oct 2026: "fraud or manipulation suspected" sat next to
+  // an integrity line that says "a reason to look, not a verdict", on the same case).
+  if (raw.fraudSuspected) {
+    force(
+      "the report needs a check (the model saw something inconsistent, or an attempt to steer it): a reason to look, not a verdict",
+      "the report needs a check (something inconsistent, or an attempt to steer the agent), a reason to look and not a verdict",
+    );
+  }
   // Evidence integrity (src/lib/integrity): any signal sends the case to a person. It changes
   // nothing else: no claim is dropped and no decision is rejected, because a reused photo or an
   // early capture date is a reason to look, not proof (a customer can have a spare account, a

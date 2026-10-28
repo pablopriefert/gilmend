@@ -122,3 +122,17 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   else "unmatched order". `npm run sweep` runs ONE real sweep on a throwaway copy of the showcase (a few cents, a
   simulated approval of the blurry lamp, said in its output), forced onto local files with an in-memory sweep
   store: it never touches a shared Blob store.
+- **What leaves the server holds no server path (28 Oct 2026).** A stored case keeps file locations as the machine
+  knows them (`/tmp/damage-desk/uploads/...` on Vercel). `src/lib/public-case.ts` (`toPublicCase`,
+  `toPublicStreamEvent`) maps them at the response boundary, in `GET /api/cases`, `GET` and `PATCH
+  /api/cases/[id]`, the live-run stream and the two pages that hand a case to the browser: a photo or an outline
+  becomes `/api/files?p=...` (or `/api/demo-photo?name=...`), the current claim PDF `/api/cases/<id>/pdf`, an earlier
+  round's PDF and any path quoted in the trace its logical path (`claims/x.pdf`). The store, the PDF route (it reads
+  `document.pdfPath` from the stored record), the showcase and the eval page are untouched. A new JSON route that
+  returns a case goes through `toPublicCase`; a test reads the response text and refuses `/tmp/`.
+- **A claim the agent did not make is not shown as money to claim (28 Oct 2026).** When `claim.eligible` is true but
+  `decision.carrierClaim` is false (`claimIsDeclined`, `src/lib/claim-filing.ts`), the decision card, the claim panel
+  and the live run say "Not claimed: the agent did not prepare a claim (would have been up to X)", with no deadline
+  and no "Maximum compensation". The dashboard counter, the list, Insights and the sweep already left such a claim
+  out. The merchant-facing wording of the model's own flag is "the report needs a check ... a reason to look, not a
+  verdict": never "fraud" (the model-facing field is still `fraudSuspected`).

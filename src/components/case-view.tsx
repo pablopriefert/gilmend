@@ -200,7 +200,7 @@ export function CaseView({
             />
             <AssessmentSection assessment={c.assessment} />
             <OrderSection order={c.order} />
-            <ClaimSection claim={c.claim} rules={rules} now={clock} />
+            <ClaimSection claim={c.claim} rules={rules} now={clock} decision={c.decision} />
             <DocumentSection caseId={c.id} document={c.document} />
             <ReplyCard index={7} />
             <TraceSection

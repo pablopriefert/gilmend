@@ -312,7 +312,7 @@ function EvidencePanel({ state, mock }: { state: LiveRunState; mock: boolean }) 
         </section>
       )}
       {outline && <OutlineFigure outline={outline} mock={mock} />}
-      {claim && <ClaimCard claim={claim} />}
+      {claim && <ClaimCard claim={claim} declined={claim.eligible && decision?.carrierClaim === false} />}
       {decision && (
         <section aria-label="Decision" className="animate-rise rounded-xl border border-border bg-surface p-4">
           <Eyebrow>Decision</Eyebrow>
@@ -379,8 +379,22 @@ function CountUp({ value, decimals }: { value: number; decimals: number }) {
   return <AnimatedCounter value={shown} prefix="€" decimals={decimals} />;
 }
 
-function ClaimCard({ claim }: { claim: NonNullable<LiveRunState["claim"]> }) {
+function ClaimCard({ claim, declined }: { claim: NonNullable<LiveRunState["claim"]>; declined: boolean }) {
   const recoverable = claim.eligible && claim.maxCompensationEur > 0;
+  // The rules said eligible, then the decision came without a carrier claim: what stood here as
+  // "Maximum compensation ... Claim by" becomes "Not claimed" (28 Oct 2026, same fix as the case page).
+  if (declined) {
+    return (
+      <section aria-label="Claim" className="animate-rise rounded-xl border border-border bg-surface p-4">
+        <Eyebrow>Not claimed</Eyebrow>
+        <p className="mt-2 text-sm leading-5 text-ink">
+          The agent did not prepare a claim (would have been up to{" "}
+          <span className="tabular font-semibold">{formatEur(claim.maxCompensationEur)}</span>).
+        </p>
+        <p className="mt-2 text-xs leading-5 text-muted">Worked out by code from the carrier&apos;s rules. No deadline is running.</p>
+      </section>
+    );
+  }
   return (
     <section aria-label="Claim" className="animate-rise">
       <BorderBeam color="var(--gold)" length={14} thickness={1.5} speed={7} className="rounded-2xl">

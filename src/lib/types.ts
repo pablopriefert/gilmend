@@ -197,7 +197,7 @@ export interface Decision {
   /** 0 to 1. */
   confidence: number;
   reasons: string[];
-  /** Low confidence, high value or fraud signals force this to true. */
+  /** Low confidence, high value or a signal that needs a check (the model's flag, a photo integrity signal) force this to true. */
   needsHuman: boolean;
   /** Reply to the customer, in the customer's language. Never sent without a click. */
   customerReply: string;

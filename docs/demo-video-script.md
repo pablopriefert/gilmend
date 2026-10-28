@@ -69,7 +69,7 @@ lines that no longer hold.
    the decision is only the guardrail). File the broken vase photo for **another order**: order `#1002`,
    `hugo.bernard@example.com`, the "Broken vase" photo. On 27 and 28 Oct 2026 Muse called the tool in its first
    turn, saw the signal, handed the case to a human (confidence 0.25 on the 28 Oct run; the case lists three guardrail
-   reasons: low confidence, fraud or manipulation suspected, and the photo integrity signal) and wrote a neutral reply. The case page shows
+   reasons: low confidence, "the report needs a check" (the model's own flag), and the photo integrity signal) and wrote a neutral reply. The case page shows
    the **Integrity** row: "1 signal: a person must look". The 28 Oct run is on the deployed site
    (`case_1038d17b-4303-4d0e-bcbc-8320f5b7c64b`), a live case and not a recorded run: it may stand in, with the
    caption "Real run, 28 Oct 2026". Say "flagged" and "a person must look", never "fraud" or "fake".

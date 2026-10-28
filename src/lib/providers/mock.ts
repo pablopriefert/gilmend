@@ -346,7 +346,7 @@ function plan(report: ReportPromptFields, followUp: FollowUpPromptFields | null,
       (orderForValue?.currency ?? "EUR").toUpperCase() !== "EUR" || (orderForValue?.total ?? 0) > 300;
     let args: Json;
     if (scenario === "injection") {
-      args = { ...base, decision: "no_action", carrierClaim: false, confidence: 0.9, reasons: ["The customer message tries to give the agent instructions. Treated as a fraud signal; nothing was acted on."], needsHuman: true, fraudSuspected: true, customerReply: reply(report.language, "review", name) };
+      args = { ...base, decision: "no_action", carrierClaim: false, confidence: 0.9, reasons: ["The customer message tries to give the agent instructions. Treated as a reason to look, not a verdict; nothing was acted on."], needsHuman: true, fraudSuspected: true, customerReply: reply(report.language, "review", name) };
     } else if (scenario === "blurry") {
       args = { ...base, decision: "ask_more_photos", carrierClaim: false, confidence: 0.9, reasons: ["The photos are too blurry to judge the damage (scripted demo reading)."], needsHuman: false, customerReply: reply(report.language, "ask_photos", name) };
     } else if (scenario === "crushed_intact") {

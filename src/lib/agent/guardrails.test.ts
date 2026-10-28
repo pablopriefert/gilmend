@@ -103,8 +103,15 @@ describe("applyGuardrails", () => {
     expect(noClaim.decision.needsHuman).toBe(false);
   });
 
-  it("forces needsHuman on suspected fraud", () => {
-    expect(applyGuardrails(raw({ fraudSuspected: true }), ctx()).decision.needsHuman).toBe(true);
+  it("forces needsHuman when the model flags the report, and says so without accusing the customer (28 Oct 2026)", () => {
+    const r = applyGuardrails(raw({ fraudSuspected: true }), ctx());
+    expect(r.decision.needsHuman).toBe(true);
+    // The logic is unchanged: the claim stays, a person looks.
+    expect(r.decision.carrierClaim).toBe(true);
+    const merchantText = [...r.decision.reasons, ...r.notes.map((n) => n.why)].join(" ");
+    expect(r.decision.reasons.join(" ")).toMatch(/Guardrail: the report needs a check .* a reason to look, not a verdict/);
+    expect(merchantText).toMatch(/a reason to look/);
+    expect(merchantText).not.toMatch(/fraud|manipulation suspected|fake|forg/i);
   });
 
   it("forces needsHuman when the order found is not the one quoted", () => {

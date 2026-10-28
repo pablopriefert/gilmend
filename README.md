@@ -82,7 +82,7 @@ What has been run live, and what has not (details in [Limitations](#limitations)
 | Public deployment on Vercel with a private Blob store: a real report filed on the deployed URL on 27 Oct 2026 (Muse Spark 1.3 + SAM 3.1, 54 s), its case, annotated photo and PDF read back on several requests | |
 | OpenRouter test engine: one real photo call | |
 
-1008 tests, `tsc` and `eslint` pass. `next build` last passed before the follow-up loop (28 Oct 2026): the loop was written in a worktree where `next dev` and `next build` cannot run, so its page was only looked at through a local harness (the real route handlers and components, without Next), not through Next itself.
+1739 tests, `tsc`, `eslint` and `next build` pass on the merged `main` (28 Oct 2026, after `feat/europe`, `feat/sweep` and `feat/assets` were merged). The page of the follow-up loop was looked at through a local harness (the real route handlers and components, without Next) before the merge; no browser run of the merged build was made.
 
 ## The problem
 
@@ -214,13 +214,13 @@ and what to conclude from what the tools return.
 
 **Guardrails run in code after the model answers and can only make a decision stricter.** A human
 is required when the confidence is below 0.7, the order is above 300 EUR, the order match is
-doubtful, there are fraud signals, the photo integrity check found a signal (a photo reused for
+doubtful, the model flagged something that needs a check, the photo integrity check found a signal (a photo reused for
 another order, a capture date before the delivery), the photos are too blurry, a tool failed, the customer reply
 quotes a figure the tools did not return, or Muse read the packaging as inadequate on a claim that
 is kept (the claim is not cancelled on that reading: it stays, with a merchant-only warning to check
 the packing before filing, and the carrier file says nothing about it: neither the reading nor the
 model's notes about the packing). Customer text is treated as untrusted data; a
-prompt-injection attempt counts as a fraud signal.
+prompt-injection attempt makes the case need a check (the page says "a reason to look, not a verdict").
 
 ## Impact
 
@@ -354,7 +354,7 @@ and guardrails as a report, on the same case:
   round before (decision, reading of the photos, order, reasons), the reply the customer was sent, the
   new message (delimited and neutralised like any customer text, so it is data, never instructions) and
   the new photos. The prompt tells it to compare the new photos with the earlier ones: another item or
-  another story is a fraud signal.
+  another story needs a check by a person.
 - **Deadlines never move with the date of the reply.** The order found in round 1 is reused (same
   delivery date), the reserve window is judged on the date of the ORIGINAL report, and the filing
   deadline is the delivery date plus the carrier's term, checked against today's clock by

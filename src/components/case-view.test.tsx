@@ -409,6 +409,57 @@ describe("case page: the decision card and the layout", () => {
     expect(within(card).getByText("No deadline")).toBeInTheDocument();
   });
 
+  it("does not present the computed maximum as something to claim when the agent did not claim (28 Oct 2026)", () => {
+    // An integrity signal with "ask for more photos": compute_claim ran and found the claim eligible
+    // (89 EUR, 2 days left), the decision has carrierClaim=false. The page used to say "nothing to file"
+    // and, right under it, "Maximum compensation 89 EUR - 2 days left - Claim by ...".
+    const base = makeCase();
+    const c = makeCase({
+      decision: {
+        ...base.decision!,
+        decision: "ask_more_photos",
+        carrierClaim: false,
+        needsHuman: true,
+        reasons: ["Guardrail: photo integrity: a photo already filed in another case."],
+      },
+      claim: { ...base.claim!, eligible: true, maxCompensationEur: 89, claimDeadline: "2026-10-30T16:00:00.000Z", daysLeft: 2 },
+      document: null,
+    });
+    render(<CaseView caseRecord={c} rules={makeRules()} now={NOW} />);
+
+    const card = screen.getByRole("region", { name: "Decision" });
+    expect(within(card).getByText("no")).toBeInTheDocument();
+    expect(within(card).getByText("Not claimed")).toBeInTheDocument();
+    expect(card).toHaveTextContent(/The agent did not prepare a claim for this case \(would have been up to\s*€89\)/);
+    expect(within(card).queryByText("Maximum compensation")).not.toBeInTheDocument();
+    expect(card).not.toHaveTextContent(/Claim by/);
+    expect(card).not.toHaveTextContent(/days? left/);
+    expect(card).not.toHaveTextContent(/Not a promise of payment/);
+
+    const claim = screen.getByRole("region", { name: "Carrier claim" });
+    expect(within(claim).getByText("Not claimed")).toBeInTheDocument();
+    expect(within(claim).queryByText("Eligible")).not.toBeInTheDocument();
+    expect(within(claim).getByText("Would have been up to")).toBeInTheDocument();
+    expect(within(claim).queryByText("Claim deadline")).not.toBeInTheDocument();
+    expect(claim).toHaveTextContent("€89");
+  });
+
+  it("keeps the claim block as it was when the agent does claim, and when there is no decision yet", () => {
+    const { unmount } = render(<CaseView caseRecord={makeCase()} rules={makeRules()} now={NOW} />);
+    expect(screen.queryByTestId("claim-not-claimed")).not.toBeInTheDocument();
+    unmount();
+    render(<CaseView caseRecord={makeCase({ status: "new", decision: null })} rules={null} now={NOW} />);
+    expect(screen.queryByTestId("claim-not-claimed")).not.toBeInTheDocument();
+  });
+
+  it("words the human flag as a reason to look, not as suspicion of fraud", () => {
+    const base = makeCase();
+    render(<CaseView caseRecord={makeCase({ decision: { ...base.decision!, needsHuman: true } })} rules={makeRules()} now={NOW} />);
+    const note = screen.getByRole("note");
+    expect(note).toHaveTextContent(/a reason to look, not a verdict/);
+    expect(note).not.toHaveTextContent(/fraud/i);
+  });
+
   it("reads a past deadline as overdue, and a recorded run as of the recording", () => {
     const late = new Date("2026-11-10T09:00:00.000Z");
     const { unmount } = render(<CaseView caseRecord={makeCase()} rules={makeRules()} now={late} />);
